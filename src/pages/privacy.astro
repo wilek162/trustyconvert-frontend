@@ -1,0 +1,30 @@
+---
+import MainLayout from "@/layouts/mainLayout.astro";
+const title = "Privacy Policy - TrustyConvert";
+const description =
+  "Read our privacy policy to learn how we protect your data.";
+const canonical = "https://trustyconvert.com/privacy";
+const ogImage = "https://trustyconvert.com/og-image.png";
+---
+
+<MainLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage={ogImage}
+>
+  <section class="max-w-xl mx-auto py-12 px-4">
+    <h1 class="text-3xl font-bold mb-4">Privacy Policy</h1>
+    <p>
+      TrustyConvert values your privacy. We do not store your files or personal
+      data. All conversions are processed securely and deleted immediately after
+      completion.
+    </p>
+    <p>
+      For questions, contact us at <a
+        href="mailto:support@trustyconvert.com"
+        class="underline text-primary">support@trustyconvert.com</a
+      >.
+    </p>
+  </section>
+</MainLayout>

@@ -1,0 +1,39 @@
+---
+import MainLayout from "@/layouts/mainLayout.astro";
+const title = "FAQ - TrustyConvert";
+const description =
+  "Frequently asked questions about TrustyConvert and supported file types.";
+const canonical = "https://trustyconvert.com/faq";
+const ogImage = "https://trustyconvert.com/og-image.png";
+---
+
+<MainLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage={ogImage}
+>
+  <section class="max-w-xl mx-auto py-12 px-4">
+    <h1 class="text-3xl font-bold mb-4">Frequently Asked Questions</h1>
+    <h2 class="text-xl font-semibold mt-8 mb-2">
+      What file types are supported?
+    </h2>
+    <p>
+      We support a wide range of file types for conversion. Please see the full
+      list below:
+    </p>
+    <ul class="list-disc ml-6 mb-4">
+      <li>PDF, DOCX, XLSX, PPTX</li>
+      <li>JPG, PNG, GIF, SVG</li>
+      <li>MP3, WAV, OGG</li>
+      <li>...and many more!</li>
+    </ul>
+    <h2 class="text-xl font-semibold mt-8 mb-2">Is my data safe?</h2>
+    <p>
+      Yes! We never store your files. All conversions are processed securely and
+      deleted immediately after conversion.
+    </p>
+    <h2 class="text-xl font-semibold mt-8 mb-2">How fast is the conversion?</h2>
+    <p>Most files are converted in seconds, depending on size and type.</p>
+  </section>
+</MainLayout>

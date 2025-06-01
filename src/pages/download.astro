@@ -1,0 +1,69 @@
+---
+import MainLayout from "@/layouts/mainLayout.astro";
+import { downloadFile } from "@/lib/api";
+
+const { searchParams } = new URL(Astro.request.url);
+const filename = searchParams.get("filename");
+
+console.log("Download page accessed");
+console.log("Request URL:", Astro.request.url);
+console.log("Parsed filename from query param:", filename);
+
+const title = "Download your converted file - TrustyConvert";
+const description = "Your file is ready to download!";
+const canonical = "https://trustyconvert.com/download";
+const ogImage = "https://trustyconvert.com/og-image.png";
+---
+
+<MainLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage={ogImage}
+>
+  <section class="max-w-xl mx-auto py-24 px-4 text-center">
+    <h1 class="text-3xl font-bold mb-4">Your file is ready!</h1>
+    <div id="download-area">
+      {
+        filename ? (
+          <button
+            id="download-btn"
+            class="inline-block px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition"
+          >
+            Download {filename}
+          </button>
+        ) : (
+          <p>No file found. Please try converting again.</p>
+        )
+      }
+    </div>
+    <p class="mt-4 text-muted-foreground">Thank you for using TrustyConvert!</p>
+    <script type="module" is:inline>
+      const btn = document.getElementById("download-btn");
+      const filename = "{filename}";
+      if (btn && filename) {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "Downloading...";
+          try {
+            const mod = await import("/src/lib/api.ts");
+            const blob = await mod.downloadFile(filename);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            btn.textContent = "Download again";
+            btn.disabled = false;
+          } catch (err) {
+            btn.textContent = "Download failed";
+            btn.classList.add("bg-red-600");
+          }
+        });
+      }
+    </script>
+  </section>
+</MainLayout>
