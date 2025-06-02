@@ -51,7 +51,9 @@ export default function FileUpload() {
         setProgress
       );
       // Redirect to download page with filename as query param
-      window.location.href = `/download?filename=${encodeURIComponent(filename)}`;
+      window.location.href = `/download?filename=${encodeURIComponent(
+        filename
+      )}`;
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "An unknown error occurred.";

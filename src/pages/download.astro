@@ -5,6 +5,9 @@ import { downloadFile } from "@/lib/api";
 const { searchParams } = new URL(Astro.request.url);
 const filename = searchParams.get("filename");
 
+// Fix: Astro injects variables as strings, so check for null/empty
+const hasFilename = filename && filename !== "null" && filename !== "undefined";
+
 console.log("Download page accessed");
 console.log("Request URL:", Astro.request.url);
 console.log("Parsed filename from query param:", filename);
@@ -24,45 +27,54 @@ const ogImage = "https://trustyconvert.com/og-image.png";
   <section class="max-w-xl mx-auto py-24 px-4 text-center">
     <h1 class="text-3xl font-bold mb-4">Your file is ready!</h1>
     <div id="download-area">
-      {
-        filename ? (
-          <button
-            id="download-btn"
-            class="inline-block px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition"
-          >
-            Download {filename}
-          </button>
-        ) : (
-          <p>No file found. Please try converting again.</p>
-        )
-      }
+      <button
+        id="download-btn"
+        class="inline-block px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition hidden"
+      >
+        Download
+      </button>
+      <p id="no-file-msg">No file found. Please try converting again.</p>
     </div>
     <p class="mt-4 text-muted-foreground">Thank you for using TrustyConvert!</p>
     <script type="module" is:inline>
       const btn = document.getElementById("download-btn");
-      const filename = "{filename}";
-      if (btn && filename) {
-        btn.addEventListener("click", async () => {
-          btn.disabled = true;
-          btn.textContent = "Downloading...";
-          try {
-            const mod = await import("/src/lib/api.ts");
-            const blob = await mod.downloadFile(filename);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            btn.textContent = "Download again";
-            btn.disabled = false;
-          } catch (err) {
-            btn.textContent = "Download failed";
-            btn.classList.add("bg-red-600");
-          }
-        });
+      const msg = document.getElementById("no-file-msg");
+      const filename = new URL(window.location.href).searchParams.get(
+        "filename"
+      );
+      if (btn && msg) {
+        if (filename) {
+          btn.classList.remove("hidden");
+          btn.textContent = `Download ${filename}`;
+          msg.style.display = "none";
+          btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            btn.textContent = "Downloading...";
+            try {
+              const mod = await import("/src/lib/api.ts");
+              const blob = await mod.downloadFile(filename);
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+              btn.textContent = `Download again`;
+              btn.disabled = false;
+            } catch (err) {
+              btn.textContent = "Download failed (file not found)";
+              btn.classList.add("bg-red-600");
+              msg.style.display = "block";
+              msg.textContent =
+                "File not found. Please try converting again in the same browser tab/window.";
+            }
+          });
+        } else {
+          btn.classList.add("hidden");
+          msg.style.display = "block";
+        }
       }
     </script>
   </section>
