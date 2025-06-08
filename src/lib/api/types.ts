@@ -1,87 +1,55 @@
 /**
- * API Response Types
+ * API Types for TrustyConvert
  */
-export interface ApiResponse<T> {
-  data: T;
-  success: boolean;
-  meta?: {
-    page?: number;
-    limit?: number;
-    total?: number;
-  };
-}
 
-/**
- * Error Response Type
- */
-export interface ApiErrorResponse {
-  error: string;
-  code: string;
-  details?: unknown;
-  status: number;
-}
-
-/**
- * API Configuration
- */
-export interface ApiConfig {
-  baseUrl: string;
-  apiKey?: string;
-  timeout?: number;
-  retryAttempts?: number;
-  csrfTokenHeader?: string;
-}
-
-/**
- * File Conversion Types
- */
-export interface ConversionTask {
-  taskId: string;
-  status: TaskStatus["status"];
+export type TaskStatus = {
+  task_id: string;
+  file_id: string;
+  status: "idle" | "uploading" | "processing" | "completed" | "failed";
   progress: number;
-  error?: string;
-  status_url?: string;
-  download_url?: string;
   filename?: string;
-  inputFile: {
-    name: string;
-    size: number;
-    type: string;
-  };
-  outputFile?: {
-    url: string;
-    name: string;
-    size: number;
-    type: string;
-  };
-}
+  error?: string;
+  error_details?: Record<string, unknown>;
+  download_url?: string;
+  created_at: string;
+  updated_at: string;
+};
 
-export interface ConversionFormat {
+export type ConversionFormat = {
   id: string;
   name: string;
-  description: string;
   inputFormats: string[];
   outputFormats: string[];
-  maxSize: number; // in bytes
-  features: string[];
-}
+  maxSize: number;
+  features?: string[];
+};
 
-export interface TaskStatus {
-  status: "pending" | "processing" | "completed" | "failed";
-  file_id: string;
+export type ApiResponse<T> = {
+  data: T;
   error?: string;
-  download_url?: string;
-  filename?: string;
+};
+
+export type ConversionResponse = {
+  task_id: string;
+  file_id: string;
+  status: TaskStatus["status"];
+};
+
+export interface APIErrorResponse {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
 }
 
-export interface UploadProgressCallback {
-  (progress: number): void;
+export interface APIResponse<T> {
+  data: T;
+  meta?: {
+    page?: number;
+    total?: number;
+    limit?: number;
+  };
 }
 
-export interface TaskStatusCallback {
-  (status: ConversionTask): void;
-}
-
-export interface ErrorCallback {
-  (error: Error): void;
-}
+export type UploadProgressCallback = (progress: number) => void;
+export type TaskStatusCallback = (status: TaskStatus) => void;
+export type ErrorCallback = (error: Error) => void;

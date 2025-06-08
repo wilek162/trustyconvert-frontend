@@ -1,9 +1,9 @@
 ---
 import "@styles/global.css";
-import "@styles/utilities.css";
 import { ModeToggle } from "@/components/common/ModeToggle";
 import SEO from "@/components/seo/SEO.astro";
-
+import { QueryProvider } from "@/lib/providers/QueryProvider";
+import { Toaster } from "sonner";
 /**
  * Props:
  * - title: string
@@ -93,6 +93,18 @@ const structuredDataOrg = {
         />
       ) : null
     }
+
+    <!-- Performance optimizations -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TrustyConvert" />
+    <meta name="application-name" content="TrustyConvert" />
+    <meta name="msapplication-TileColor" content="#6366f1" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
   </head>
   <body class="min-h-screen bg-background text-foreground antialiased">
     <a
@@ -119,6 +131,7 @@ const structuredDataOrg = {
             class="w-6 h-6"
             width="24"
             height="24"
+            loading="eager"
           />
           TrustyConvert
         </a>
@@ -146,7 +159,10 @@ const structuredDataOrg = {
     </header>
 
     <main id="main-content" class="flex-1">
-      <slot />
+      <QueryProvider client:load>
+        <slot />
+        <Toaster client:load />
+      </QueryProvider>
     </main>
 
     <footer class="w-full border-t bg-muted/40">
@@ -201,35 +217,39 @@ const structuredDataOrg = {
         </div>
       </div>
     </footer>
+    <style>
+      /* Add smooth scrolling and better text rendering */
+      html {
+        scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Improve focus styles for accessibility */
+      :focus-visible {
+        outline: 2px solid hsl(var(--primary));
+        outline-offset: 2px;
+      }
+
+      /* Add loading state styles */
+      .file-upload-loading {
+        opacity: 0;
+        animation: fadeIn 0.3s ease-in forwards;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Performance optimizations */
+      img {
+        content-visibility: auto;
+      }
+    </style>
   </body>
 </html>
-
-<style is:global>
-  /* Add smooth scrolling and better text rendering */
-  html {
-    scroll-behavior: smooth;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Improve focus styles for accessibility */
-  :focus-visible {
-    outline: 2px solid hsl(var(--primary));
-    outline-offset: 2px;
-  }
-
-  /* Add loading state styles */
-  .file-upload-loading {
-    opacity: 0;
-    animation: fadeIn 0.3s ease-in forwards;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-</style>

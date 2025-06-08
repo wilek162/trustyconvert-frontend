@@ -45,7 +45,6 @@ Use React components only when interactivity is required. These components are h
 
 ```tsx
 // src/components/FileUpload.tsx
-"use client";
 
 export function FileUpload() {
   // Interactive logic here

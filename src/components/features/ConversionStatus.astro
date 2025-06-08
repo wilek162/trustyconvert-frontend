@@ -1,0 +1,174 @@
+---
+import Progress from "@/components/ui/progress.astro";
+import Button from "@/components/ui/button.astro";
+import { Alert } from "@/components/ui/alert.astro";
+---
+
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <div id="statusIcon" class="w-6 h-6">
+        <!-- Status icon will be set by JavaScript -->
+      </div>
+      <span id="statusText" class="font-medium">Converting...</span>
+    </div>
+    <div id="progressContainer" class="w-32">
+      <Progress value={0} />
+    </div>
+  </div>
+
+  <div id="errorContainer" class="hidden">
+    <Alert type="error">
+      <p id="errorMessage"></p>
+    </Alert>
+  </div>
+
+  <div id="downloadContainer" class="hidden">
+    <Alert type="success">
+      <p>Conversion complete! Your file is ready to download.</p>
+      <Button id="downloadButton" class="mt-2"> Download File </Button>
+    </Alert>
+  </div>
+
+  <div class="flex justify-end space-x-2">
+    <Button id="cancelButton" variant="outline"> Cancel </Button>
+    <Button id="retryButton" variant="outline" class="hidden">
+      Try Again
+    </Button>
+  </div>
+</div>
+
+<script>
+  const statusIcon = document.getElementById("statusIcon") as HTMLDivElement;
+  const statusText = document.getElementById("statusText") as HTMLSpanElement;
+  const progressContainer = document.getElementById(
+    "progressContainer"
+  ) as HTMLDivElement;
+  const errorContainer = document.getElementById(
+    "errorContainer"
+  ) as HTMLDivElement;
+  const errorMessage = document.getElementById(
+    "errorMessage"
+  ) as HTMLParagraphElement;
+  const downloadContainer = document.getElementById(
+    "downloadContainer"
+  ) as HTMLDivElement;
+  const downloadButton = document.getElementById(
+    "downloadButton"
+  ) as HTMLButtonElement;
+  const cancelButton = document.getElementById(
+    "cancelButton"
+  ) as HTMLButtonElement;
+  const retryButton = document.getElementById(
+    "retryButton"
+  ) as HTMLButtonElement;
+
+  function updateStatus(status: string, progress: number = 0) {
+    // Update status icon
+    statusIcon.innerHTML = getStatusIcon(status);
+
+    // Update status text
+    statusText.textContent = getStatusText(status);
+
+    // Update progress
+    const progressBar = progressContainer.querySelector(
+      "progress"
+    ) as HTMLProgressElement;
+    if (progressBar) {
+      progressBar.value = progress;
+    }
+
+    // Show/hide containers based on status
+    errorContainer.classList.toggle("hidden", status !== "error");
+    downloadContainer.classList.toggle("hidden", status !== "completed");
+    cancelButton.classList.toggle(
+      "hidden",
+      status === "completed" || status === "error"
+    );
+    retryButton.classList.toggle("hidden", status !== "error");
+  }
+
+  function getStatusIcon(status: string): string {
+    switch (status) {
+      case "completed":
+        return '<svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+      case "error":
+        return '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+      default:
+        return '<svg class="w-6 h-6 text-blue-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>';
+    }
+  }
+
+  function getStatusText(status: string): string {
+    switch (status) {
+      case "completed":
+        return "Conversion Complete";
+      case "error":
+        return "Conversion Failed";
+      default:
+        return "Converting...";
+    }
+  }
+
+  // Event listeners
+  cancelButton.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/api/cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ taskId: window.location.search.split("=")[1] }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to cancel conversion");
+      }
+
+      window.location.href = "/";
+    } catch (err) {
+      errorMessage.textContent =
+        err instanceof Error ? err.message : "Failed to cancel conversion";
+      errorContainer.classList.remove("hidden");
+    }
+  });
+
+  retryButton.addEventListener("click", () => {
+    window.location.href = "/";
+  });
+
+  downloadButton.addEventListener("click", () => {
+    const taskId = window.location.search.split("=")[1];
+    window.location.href = `/api/download/${taskId}`;
+  });
+
+  // Poll for status updates
+  async function pollStatus() {
+    const taskId = window.location.search.split("=")[1];
+    if (!taskId) return;
+
+    try {
+      const response = await fetch(`/api/status/${taskId}`);
+      if (!response.ok) {
+        throw new Error("Failed to get conversion status");
+      }
+
+      const data = await response.json();
+      updateStatus(data.status, data.progress);
+
+      if (data.status === "completed" || data.status === "error") {
+        return;
+      }
+
+      // Continue polling
+      setTimeout(pollStatus, 2000);
+    } catch (err) {
+      errorMessage.textContent =
+        err instanceof Error ? err.message : "Failed to get conversion status";
+      errorContainer.classList.remove("hidden");
+    }
+  }
+
+  // Start polling when the component is mounted
+  pollStatus();
+</script>

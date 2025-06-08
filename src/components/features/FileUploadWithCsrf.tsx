@@ -1,6 +1,6 @@
 import React from "react";
 import { CsrfProvider } from "@/components/providers/CsrfProvider";
-import FileUpload from "./FileUpload";
+import { FileUpload } from "@/components/features/FileUpload/FileUpload";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function FileUploadWithCsrf() {

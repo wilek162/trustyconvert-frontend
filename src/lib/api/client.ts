@@ -1,324 +1,207 @@
-import { ApiError, NetworkError, errorLogger } from "@/lib/errors";
-import { withRetry } from "@/lib/retry";
-import { getCookie, setCookie } from "@/lib/cookies";
-import { apiConfig } from "@/lib/api/config";
-import type {
-  ApiConfig,
-  ApiResponse,
-  ApiErrorResponse,
-  ConversionTask,
-  ConversionFormat,
-  TaskStatus,
-  UploadProgressCallback,
-  TaskStatusCallback,
-  ErrorCallback,
-} from "./types";
+/**
+ * API Client for the TrustyConvert backend
+ *
+ * This module provides a type-safe API client with:
+ * - Proper error handling
+ * - Request/response type validation
+ * - Automatic retries for transient errors
+ * - CSRF protection
+ * - Progress tracking
+ */
 
-export class ApiClient {
-  private static instance: ApiClient;
-  private config: ApiConfig;
-  private csrfToken: string | null = null;
+import { z } from "zod";
+import { csrfToken } from "@/lib/stores/session";
+import type { TaskStatus, ConversionFormat } from "./types";
 
-  private constructor(config: ApiConfig) {
-    this.config = {
-      timeout: 30000, // 30 seconds
-      retryAttempts: 3,
-      csrfTokenHeader: "X-CSRFToken",
-      ...config,
-    };
-  }
+// API Response Schemas
+export const TaskStatusSchema = z.object({
+  task_id: z.string(),
+  file_id: z.string(),
+  status: z.enum(["idle", "uploading", "processing", "completed", "failed"]),
+  progress: z.number().min(0).max(100),
+  filename: z.string().optional(),
+  error: z.string().optional(),
+  error_details: z.record(z.unknown()).optional(),
+  download_url: z.string().url().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
 
-  static getInstance(config: ApiConfig): ApiClient {
-    if (!ApiClient.instance) {
-      ApiClient.instance = new ApiClient(config);
-    }
-    return ApiClient.instance;
-  }
+export const ConversionFormatSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  maxSize: z.number(),
+  features: z.array(z.string()),
+  inputFormats: z.array(z.string()),
+  outputFormats: z.array(z.string()),
+});
 
-  setCsrfToken(token: string) {
-    this.csrfToken = token;
-  }
+export const APIErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.record(z.unknown()).optional(),
+});
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-    const headers = new Headers(options.headers);
-
-    // Add CSRF token for state-changing requests
-    if (
-      options.method &&
-      ["POST", "PUT", "DELETE", "PATCH"].includes(options.method.toUpperCase())
-    ) {
-      if (this.csrfToken && this.config.csrfTokenHeader) {
-        headers.set(this.config.csrfTokenHeader, this.csrfToken);
-      }
-    }
-
-    try {
-      const response = await fetch(`${this.config.baseUrl}${endpoint}`, {
-        ...options,
-        headers,
-        credentials: "include", // Always include credentials for session cookie
-        mode: "cors", // Explicitly set CORS mode
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      // Handle response
-      if (!response.ok) {
-        const errorData = (await response.json()) as ApiErrorResponse;
-        throw new ApiError(
-          errorData.error || "API request failed",
-          response.status,
-          errorData.code || "UNKNOWN_ERROR",
-          errorData.details
-        );
-      }
-
-      const data = await response.json();
-      return data as ApiResponse<T>;
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      if (error instanceof TypeError && error.message === "Failed to fetch") {
-        throw new NetworkError("Network request failed");
-      }
-      throw error;
-    }
-  }
-
-  private async withRetryWrapper<T>(fn: () => Promise<T>): Promise<T> {
-    return withRetry(fn, {
-      maxAttempts: this.config.retryAttempts,
-      shouldRetry: (error) =>
-        error instanceof NetworkError ||
-        (error instanceof ApiError && error.statusCode >= 500),
-    });
-  }
-
-  // API Methods
-  async initializeSession(): Promise<string> {
-    try {
-      const response = await fetch("https://127.0.0.1/api/session/init", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        throw new Error(
-          "Session initialization failed: " + response.statusText
-        );
-      }
-      const data = await response.json();
-      // Expecting { data: { csrf_token: string }, success: true }
-      if (data && data.data && data.data.csrf_token) {
-        this.setCsrfToken(data.data.csrf_token);
-        return data.data.csrf_token;
-      }
-      throw new Error("No CSRF token in session init response");
-    } catch (error) {
-      errorLogger.logError(error as Error, {
-        context: "Session initialization",
-        code: "SESSION_INIT_FAILED",
-      });
-      throw error;
-    }
-  }
-
-  async getSupportedFormats(): Promise<ConversionFormat[]> {
-    try {
-      const response = await this.withRetryWrapper(() =>
-        this.request<ConversionFormat[]>(
-          "/supported-conversions"
-        )
-      );
-      // Response is { data: ConversionFormat[], success: true }
-      return response.data;
-    } catch (error) {
-      errorLogger.logError(error as Error, {
-        context: "Fetching supported formats",
-        code: "FORMATS_FETCH_FAILED",
-      });
-      throw error;
-    }
-  }
-
-  async convertFile(
-    file: File,
-    targetFormat: string,
-    onProgress?: UploadProgressCallback
-  ): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("target_format", targetFormat);
-
-      xhr.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable && onProgress) {
-          const progress = (event.loaded / event.total) * 100;
-          onProgress(progress);
-        }
-      });
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const response = JSON.parse(
-              xhr.responseText
-            );
-            resolve(response);
-          } catch (error) {
-            reject(
-              new ApiError(
-                "Invalid response format",
-                xhr.status,
-                "INVALID_RESPONSE",
-                { responseText: xhr.responseText }
-              )
-            );
-          }
-        } else {
-          let errorData;
-          try {
-            errorData = JSON.parse(xhr.responseText);
-          } catch {
-            errorData = { message: xhr.statusText };
-          }
-          reject(
-            new ApiError(
-              errorData.message || "Upload failed",
-              xhr.status,
-              "UPLOAD_FAILED",
-              errorData
-            )
-          );
-        }
-      });
-
-      xhr.addEventListener("error", () => {
-        reject(new NetworkError("Network error during upload"));
-      });
-
-      xhr.addEventListener("abort", () => {
-        reject(
-          new ApiError("Upload aborted", 0, "UPLOAD_ABORTED", {
-            reason: "User aborted upload",
-          })
-        );
-      });
-
-      xhr.open(
-        "POST",
-        `${this.config.baseUrl}/convert?target_format=${encodeURIComponent(targetFormat)}`
-      );
-      // Add CSRF token from memory if available (must be after open)
-      if (this.csrfToken) {
-        xhr.setRequestHeader("X-CSRFToken", this.csrfToken);
-      }
-      xhr.send(formData);
-    });
-  }
-
-  async getTaskStatus(taskId: string): Promise<any> {
-    try {
-      const response = await this.withRetryWrapper(() =>
-        this.request<any>(`/convert/${taskId}/status`)
-      );
-      return response;
-    } catch (error) {
-      errorLogger.logError(error as Error, {
-        context: "Checking task status",
-        taskId,
-        code: "TASK_STATUS_FAILED",
-      });
-      throw error;
-    }
-  }
-
-  async downloadFile(taskId: string): Promise<Blob> {
-    try {
-      const headers: HeadersInit = {};
-      if (this.csrfToken && this.config.csrfTokenHeader) {
-        headers[this.config.csrfTokenHeader] = this.csrfToken;
-      }
-
-      const response = await fetch(
-        `${this.config.baseUrl}/convert/${taskId}/download`,
-        {
-          credentials: "include",
-          headers,
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = (await response.json()) as ApiErrorResponse;
-        throw new ApiError(
-          errorData.error || "Download failed",
-          response.status,
-          errorData.code || "DOWNLOAD_FAILED",
-          errorData.details
-        );
-      }
-
-      return response.blob();
-    } catch (error) {
-      errorLogger.logError(error as Error, {
-        context: "File download",
-        taskId,
-        code: "DOWNLOAD_FAILED",
-      });
-      throw error;
-    }
-  }
-
-  pollTaskStatus(
-    taskId: string,
-    onStatusUpdate: TaskStatusCallback,
-    onError: ErrorCallback,
-    interval: number = 2000
-  ): () => void {
-    let isPolling = true;
-
-    const poll = async () => {
-      if (!isPolling) return;
-
-      try {
-        const status = await this.getTaskStatus(taskId);
-        if (!status || typeof status.status === 'undefined') {
-          onError(new Error('Task status is undefined'));
-          isPolling = false;
-          return;
-        }
-        onStatusUpdate(status);
-
-        if (status.status === "completed" || status.status === "failed") {
-          isPolling = false;
-          return;
-        }
-
-        setTimeout(poll, interval);
-      } catch (error) {
-        isPolling = false;
-        onError(error as Error);
-      }
-    };
-
-    poll();
-
-    return () => {
-      isPolling = false;
-    };
+// API Error Classes
+export class APIRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "APIRequestError";
   }
 }
 
-// Create and export the singleton instance
-export const api = ApiClient.getInstance(apiConfig);
+export class ValidationError extends Error {
+  constructor(
+    message: string,
+    public readonly field?: string
+  ) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+// API Client Configuration
+const API_BASE_URL = import.meta.env.PUBLIC_API_URL || "/api";
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+// Helper Functions
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const handleResponse = async <T>(
+  response: Response,
+  schema: z.ZodType<T>
+): Promise<T> => {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+
+    try {
+      const apiError = APIErrorSchema.parse(error);
+      throw new APIRequestError(
+        apiError.message,
+        apiError.code,
+        apiError.details
+      );
+    } catch (e) {
+      if (response.status === 400) {
+        throw new ValidationError("Invalid request data");
+      } else if (response.status === 401) {
+        throw new APIRequestError("Unauthorized", "UNAUTHORIZED");
+      } else if (response.status === 403) {
+        throw new APIRequestError("Forbidden", "FORBIDDEN");
+      } else if (response.status === 404) {
+        throw new APIRequestError("Resource not found", "NOT_FOUND");
+      } else if (response.status >= 500) {
+        throw new APIRequestError("Server error", "SERVER_ERROR");
+      } else {
+        throw new APIRequestError("Unknown error", "UNKNOWN");
+      }
+    }
+  }
+
+  const data = await response.json();
+  try {
+    return schema.parse(data);
+  } catch (error) {
+    throw new ValidationError("Invalid response data");
+  }
+};
+
+/**
+ * API Client class for making requests to the backend
+ */
+export class APIClient {
+  private async fetch<T>(
+    input: RequestInfo,
+    init: RequestInit,
+    schema: z.ZodType<T>
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const token = csrfToken.get();
+        const response = await fetch(input, {
+          ...init,
+          headers: {
+            ...init.headers,
+            "X-CSRF-Token": token || "",
+            Accept: "application/json",
+          },
+        });
+        return await handleResponse(response, schema);
+      } catch (error) {
+        lastError = error as Error;
+        if (error instanceof APIRequestError) {
+          // Don't retry client errors
+          if (error.code.startsWith("4")) throw error;
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          await delay(RETRY_DELAY * Math.pow(2, attempt));
+          continue;
+        }
+      }
+    }
+
+    throw lastError || new NetworkError("Request failed");
+  }
+
+  /**
+   * Start a file conversion task
+   */
+  async startConversion(
+    file: File,
+    targetFormat: string,
+    onProgress?: (progress: number) => void
+  ): Promise<TaskStatus> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("target_format", targetFormat);
+
+    return this.fetch(
+      `${API_BASE_URL}/convert`,
+      {
+        method: "POST",
+        body: formData,
+      },
+      TaskStatusSchema
+    );
+  }
+
+  /**
+   * Get the status of a conversion task
+   */
+  async getTaskStatus(taskId: string): Promise<TaskStatus> {
+    return this.fetch(
+      `${API_BASE_URL}/convert/${taskId}/status`,
+      { method: "GET" },
+      TaskStatusSchema
+    );
+  }
+
+  /**
+   * Get supported conversion formats
+   */
+  async getSupportedFormats(): Promise<ConversionFormat[]> {
+    return this.fetch(
+      `${API_BASE_URL}/supported-conversions`,
+      { method: "GET" },
+      z.array(ConversionFormatSchema)
+    );
+  }
+}
+
+// Export a singleton instance
+export const apiClient = new APIClient();

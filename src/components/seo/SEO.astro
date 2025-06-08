@@ -1,16 +1,71 @@
 ---
-const { title, description, canonical, ogImage } = Astro.props;
+interface Props {
+  title: string;
+  description: string;
+  canonical: string;
+  ogImage?: string;
+  noindex?: boolean;
+  alternateUrls?: { lang: string; url: string }[];
+}
+
+const {
+  title,
+  description,
+  canonical,
+  ogImage = "https://trustyconvert.com/og-image.png",
+  noindex = false,
+  alternateUrls = [],
+} = Astro.props;
+
+// Ensure title is not too long for SEO
+const seoTitle = title.length > 60 ? title.substring(0, 57) + "..." : title;
+
+// Ensure description is not too long for SEO
+const seoDescription =
+  description.length > 160
+    ? description.substring(0, 157) + "..."
+    : description;
 ---
 
-<title>{title}</title>
-<meta name="description" content={description} />
+<!-- Primary Meta Tags -->
+<title>{seoTitle}</title>
+<meta name="title" content={seoTitle} />
+<meta name="description" content={seoDescription} />
+{noindex && <meta name="robots" content="noindex,nofollow" />}
 <link rel="canonical" href={canonical} />
-<meta property="og:title" content={title} />
-<meta property="og:description" content={description} />
+
+<!-- Open Graph / Facebook -->
 <meta property="og:type" content="website" />
 <meta property="og:url" content={canonical} />
+<meta property="og:title" content={seoTitle} />
+<meta property="og:description" content={seoDescription} />
 <meta property="og:image" content={ogImage} />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content={title} />
-<meta name="twitter:description" content={description} />
-<meta name="twitter:image" content={ogImage} />
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:url" content={canonical} />
+<meta property="twitter:title" content={seoTitle} />
+<meta property="twitter:description" content={seoDescription} />
+<meta property="twitter:image" content={ogImage} />
+
+<!-- Alternate Language URLs -->
+{
+  alternateUrls.map(({ lang, url }) => (
+    <link rel="alternate" hreflang={lang} href={url} />
+  ))
+}
+
+<!-- Additional Meta Tags -->
+<meta name="format-detection" content="telephone=no" />
+<meta name="theme-color" content="#6366f1" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+<!-- Preconnect to API -->
+<link rel="preconnect" href={import.meta.env.PUBLIC_API_URL || "/api"} />
+
+<!-- PWA Tags -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="application-name" content="TrustyConvert" />
+<meta name="apple-mobile-web-app-title" content="TrustyConvert" />

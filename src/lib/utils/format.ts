@@ -4,16 +4,11 @@
  * @returns A formatted string (e.g., "1.5 MB", "800 KB", etc.)
  */
 export function formatFileSize(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let size = bytes;
-  let unitIndex = 0;
+  if (bytes === 0) return "0 Bytes";
 
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex++;
-  }
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return `${size.toFixed(size < 10 && unitIndex > 0 ? 1 : 0)} ${
-    units[unitIndex]
-  }`;
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }

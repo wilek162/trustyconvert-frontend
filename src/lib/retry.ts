@@ -1,11 +1,17 @@
 import { errorLogger } from "@/lib/errors/error-logger";
+import type { APIRequestError } from "@/lib/api/client";
 
 interface RetryOptions {
   maxAttempts?: number;
   initialDelay?: number;
   maxDelay?: number;
   backoffFactor?: number;
-  shouldRetry?: (error: Error) => boolean;
+  shouldRetry?: (error: Error | APIRequestError) => boolean;
+  onRetry?: (
+    error: Error | APIRequestError,
+    attempt: number,
+    delay: number
+  ) => void;
 }
 
 const defaultOptions: Required<RetryOptions> = {
@@ -15,10 +21,22 @@ const defaultOptions: Required<RetryOptions> = {
   backoffFactor: 2,
   shouldRetry: (error) => {
     // Retry on network errors or 5xx server errors
-    return (
-      error.name === "NetworkError" ||
-      (error.name === "ApiError" && (error as any).statusCode >= 500)
-    );
+    if (error instanceof Error && error.name === "NetworkError") {
+      return true;
+    }
+    if ("code" in error && typeof error.code === "string") {
+      return error.code.startsWith("5");
+    }
+    return false;
+  },
+  onRetry: (error, attempt, delay) => {
+    // Log retry attempt
+    errorLogger.logError(error, {
+      attempt,
+      maxAttempts: defaultOptions.maxAttempts,
+      delay,
+      willRetry: true,
+    });
   },
 };
 
@@ -42,19 +60,15 @@ export async function withRetry<T>(
     } catch (error) {
       attempt++;
       const shouldRetry =
-        attempt < opts.maxAttempts && opts.shouldRetry(error as Error);
+        attempt < opts.maxAttempts &&
+        opts.shouldRetry(error as Error | APIRequestError);
 
       if (!shouldRetry) {
         throw error;
       }
 
-      // Log retry attempt
-      errorLogger.logError(error as Error, {
-        attempt,
-        maxAttempts: opts.maxAttempts,
-        delay,
-        willRetry: true,
-      });
+      // Call onRetry callback
+      opts.onRetry(error as Error | APIRequestError, attempt, delay);
 
       // Wait before retrying
       await new Promise((resolve) => setTimeout(resolve, delay));
