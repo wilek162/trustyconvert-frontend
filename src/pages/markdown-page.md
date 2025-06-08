@@ -1,7 +1,10 @@
 ---
-title: 'Markdown + Tailwind'
-layout: ../layouts/main.astro
+title: "Markdown + Tailwind"
+layout: ../layouts/mainLayout.astro
 ---
+
+import "@styles/global.css";
+import "@styles/utilities.css";
 
 <div class="grid place-items-center h-screen content-center">
  <div class="py-2 px-4 bg-purple-500 text-white font-semibold rounded-lg shadow-md">

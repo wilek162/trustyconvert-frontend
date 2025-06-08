@@ -1,0 +1,29 @@
+---
+import ErrorLayout from "@/layouts/ErrorLayout.astro";
+
+/**
+ * Error page for displaying error messages and status codes.
+ * Accepts ?message=...&status=... in the URL.
+ */
+const url = new URL(Astro.request.url);
+const message =
+  url.searchParams.get("message") || "An unexpected error occurred";
+const status = url.searchParams.get("status") || "500";
+const statusCode = parseInt(status, 10);
+
+const titles: Record<number, string> = {
+  400: "Bad Request",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "Page Not Found",
+  500: "Internal Server Error",
+  502: "Bad Gateway",
+  503: "Service Unavailable",
+  504: "Gateway Timeout",
+};
+
+const title = `${statusCode} - ${titles[statusCode] || "Error"}`;
+const error = { message };
+---
+
+<ErrorLayout title={title} error={error} statusCode={statusCode} />

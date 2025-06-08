@@ -1,0 +1,80 @@
+---
+import "@styles/global.css";
+import "@styles/utilities.css";
+import Alert from "@/components/ui/alert.astro";
+import { errorLogger } from "@/lib/errors_legacy";
+
+/**
+ * ErrorDisplay component for showing error messages in a consistent, accessible way.
+ * @prop error - The error to display (string, Error, or { message: string })
+ * @prop showDetails - Whether to show the error stack (default: DEV only)
+ * @prop class - Additional classes for the wrapper
+ */
+interface Props {
+  error: unknown;
+  showDetails?: boolean;
+  class?: string;
+}
+
+const {
+  error,
+  showDetails = import.meta.env.DEV,
+  class: className = "",
+} = Astro.props;
+
+// Normalize error
+let errorObj: Error | { message: string; stack?: string };
+if (error instanceof Error) {
+  errorObj = error;
+} else if (typeof error === "string") {
+  errorObj = new Error(error);
+} else if (error && typeof error === "object" && "message" in error) {
+  errorObj = error as { message: string; stack?: string };
+} else {
+  errorObj = { message: "An unexpected error occurred" };
+}
+
+// Log the error server-side (only once per render)
+errorLogger.logError(errorObj as Error);
+---
+
+<div
+  class:list={["error-display", className]}
+  role="alert"
+  aria-live="assertive"
+>
+  <Alert
+    variant="error"
+    title="Error"
+    icon={`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`}
+    class="mb-2"
+  >
+    <p>{errorObj.message || "An unexpected error occurred"}</p>
+    {
+      showDetails && errorObj.stack && (
+        <pre
+          class="mt-4 p-4 bg-destructive/10 rounded-lg overflow-auto text-xs"
+          tabindex="0"
+        >
+          {errorObj.stack}
+        </pre>
+      )
+    }
+  </Alert>
+</div>
+
+<style>
+  .error-display {
+    animation: error-fade-in 0.3s ease-in;
+  }
+  @keyframes error-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

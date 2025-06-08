@@ -1,0 +1,148 @@
+---
+import "@styles/global.css";
+import "@styles/utilities.css";
+
+interface Props {
+  /**
+   * The variant of the badge
+   */
+  variant?: "default" | "primary" | "secondary" | "outline" | "destructive";
+  /**
+   * The size of the badge
+   */
+  size?: "sm" | "md" | "lg";
+  /**
+   * Whether the badge is rounded
+   */
+  rounded?: boolean;
+  /**
+   * The icon to display before the text
+   */
+  icon?: string;
+  /**
+   * The icon to display after the text
+   */
+  iconAfter?: string;
+  /**
+   * Additional classes to apply to the badge
+   */
+  class?: string;
+  /**
+   * The aria-label for accessibility
+   */
+  "aria-label"?: string;
+}
+
+const {
+  variant = "default",
+  size = "md",
+  rounded = false,
+  icon,
+  iconAfter,
+  class: className = "",
+  "aria-label": ariaLabel,
+} = Astro.props;
+
+const variantClasses = {
+  default: "bg-primary/10 text-primary hover:bg-primary/20",
+  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  outline:
+    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+  destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+};
+
+const sizeClasses = {
+  sm: "px-2 py-0.5 text-xs",
+  md: "px-2.5 py-0.5 text-sm",
+  lg: "px-3 py-1 text-base",
+};
+
+const badgeClasses = [
+  "inline-flex items-center gap-1.5 font-medium transition-colors",
+  rounded ? "rounded-full" : "rounded-md",
+  variantClasses[variant],
+  sizeClasses[size],
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const iconClasses = [
+  "inline-block",
+  size === "sm" ? "h-3 w-3" : size === "md" ? "h-4 w-4" : "h-5 w-5",
+].join(" ");
+---
+
+<span class={badgeClasses} aria-label={ariaLabel}>
+  {
+    icon && (
+      <span class={iconClasses} aria-hidden="true">
+        <Fragment set:html={icon} />
+      </span>
+    )
+  }
+
+  <slot />
+
+  {
+    iconAfter && (
+      <span class={iconClasses} aria-hidden="true">
+        <Fragment set:html={iconAfter} />
+      </span>
+    )
+  }
+</span>
+
+<style>
+  /* Improve badge text rendering */
+  .badge {
+    @apply text-balance;
+  }
+
+  /* Improve badge focus styles */
+  .badge:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Improve badge transitions */
+  .badge {
+    @apply transition-all duration-200;
+  }
+
+  /* Improve badge hover styles */
+  .badge:hover {
+    @apply transition-colors duration-200;
+  }
+
+  /* Improve badge active styles */
+  .badge:active {
+    @apply scale-[0.98] transition-transform duration-100;
+  }
+
+  /* Improve badge icon styles */
+  .badge-icon {
+    @apply inline-block;
+  }
+
+  /* Improve badge accessibility */
+  .badge[aria-label] {
+    @apply cursor-default;
+  }
+
+  /* Improve badge animations */
+  .badge {
+    animation: badge-in 0.2s ease-out;
+  }
+
+  @keyframes badge-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+</style>

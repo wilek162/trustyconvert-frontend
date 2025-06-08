@@ -1,23 +1,139 @@
 ---
 // src/pages/index.astro
 import MainLayout from "@/layouts/mainLayout.astro";
-import FileUpload from "@/components/FileUpload.js";
+import FileUpload from "@/components/features/FileUpload.tsx";
+import { Check, Lock, Zap } from "@lucide/astro";
+import FileUploadWithCsrf from "@/components/features/FileUploadWithCsrf.tsx";
+import SupportedFormatsList from "@/components/features/SupportedFormatsList.tsx";
+
 const title = "TrustyConvert - Fast, Modern File Converter";
-const description = "Convert your files quickly and securely. Free, fast, and privacy-focused file conversion.";
+const description =
+  "Convert your files quickly and securely. Free, fast, and privacy-focused file conversion.";
 const canonical = "https://trustyconvert.com/";
 const ogImage = "https://trustyconvert.com/og-image.png";
+
+// Enhanced structured data for better SEO
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "TrustyConvert",
+  url: canonical,
+  description: description,
+  applicationCategory: "UtilityApplication",
+  operatingSystem: "Any",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+  },
+  featureList: [
+    "Fast file conversion",
+    "Secure processing",
+    "Privacy focused",
+    "Multiple file formats",
+  ],
+  sameAs: [
+    "https://twitter.com/trustyconvert",
+    "https://github.com/trustyconvert",
+  ],
+};
 ---
-<MainLayout title={title} description={description} canonical={canonical} ogImage={ogImage}>
-  <script type="application/ld+json" is:inline>
-    {JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "TrustyConvert",
-      "url": canonical,
-      "logo": "https://trustyconvert.com/favicon.svg"
-    })}
-  </script>
-  <section class="flex items-center justify-center min-h-[70vh]">
-    <FileUpload client:load/>
+
+<MainLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage={ogImage}
+  extraStructuredData={structuredData}
+>
+  <section class="container mx-auto px-4 py-12 md:py-24">
+    <div class="max-w-3xl mx-auto text-center mb-12">
+      <h1
+        class="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent"
+      >
+        Convert Files Fast & Secure
+      </h1>
+      <p class="text-xl text-muted-foreground mb-8">
+        Transform your files instantly with our free, privacy-focused converter.
+        No registration required.
+      </p>
+      <div class="flex flex-wrap justify-center gap-4 mb-12">
+        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Check class="w-5 h-5 text-green-500" />
+          <span>Free & Secure</span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Lock class="w-5 h-5 text-green-500" />
+          <span>No Registration</span>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Zap class="w-5 h-5 text-green-500" />
+          <span>Instant Conversion</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="max-w-xl mx-auto">
+      <FileUploadWithCsrf client:visible />
+    </div>
+
+    <div class="max-w-xl mx-auto mt-12">
+      <h2 class="text-lg font-semibold mb-4">Supported Conversion Formats</h2>
+      <SupportedFormatsList client:visible />
+    </div>
+
+    <div class="max-w-3xl mx-auto mt-24 grid gap-8 md:grid-cols-3">
+      <div class="text-center">
+        <div
+          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
+        >
+          <Lock class="w-6 h-6 text-primary" />
+        </div>
+        <h2 class="text-lg font-semibold mb-2">Secure Processing</h2>
+        <p class="text-sm text-muted-foreground">
+          Your files are processed securely and deleted immediately after
+          conversion.
+        </p>
+      </div>
+      <div class="text-center">
+        <div
+          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
+        >
+          <Zap class="w-6 h-6 text-primary" />
+        </div>
+        <h2 class="text-lg font-semibold mb-2">Fast Conversion</h2>
+        <p class="text-sm text-muted-foreground">
+          Convert your files in seconds with our optimized processing system.
+        </p>
+      </div>
+      <div class="text-center">
+        <div
+          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
+        >
+          <Check class="w-6 h-6 text-primary" />
+        </div>
+        <h2 class="text-lg font-semibold mb-2">Privacy First</h2>
+        <p class="text-sm text-muted-foreground">
+          We never store your files. Your privacy is our top priority.
+        </p>
+      </div>
+    </div>
   </section>
 </MainLayout>
+
+<style is:global>
+  /* Add loading state styles */
+  .file-upload-loading {
+    opacity: 0;
+    animation: fadeIn 0.3s ease-in forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+</style>

@@ -1,16 +1,24 @@
 ---
 import MainLayout from "@/layouts/mainLayout.astro";
 const title = "About TrustyConvert";
-const description = "Learn more about TrustyConvert, our mission, and our team.";
+const description =
+  "Learn more about TrustyConvert, our mission, and our team.";
 const canonical = "https://trustyconvert.com/about";
 const ogImage = "https://trustyconvert.com/og-image.png";
 ---
-<MainLayout title={title} description={description} canonical={canonical} ogImage={ogImage}>
+
+<MainLayout
+  title={title}
+  description={description}
+  canonical={canonical}
+  ogImage={ogImage}
+>
   <section class="max-w-xl mx-auto py-12 px-4">
     <h1 class="text-3xl font-bold mb-4">About TrustyConvert</h1>
     <p>
-      TrustyConvert is dedicated to providing fast, secure, and privacy-focused file conversion for everyone.
-      Our mission is to make file conversion simple, accessible, and safe for all users.
+      TrustyConvert is dedicated to providing fast, secure, and privacy-focused
+      file conversion for everyone. Our mission is to make file conversion
+      simple, accessible, and safe for all users.
     </p>
   </section>
 </MainLayout>

@@ -1,0 +1,113 @@
+// ESLint Flat Config for Astro, TypeScript, React, and A11Y
+// See: https://ota-meshi.github.io/eslint-plugin-astro/user-guide/
+import js from '@eslint/js';
+import astroPlugin from 'eslint-plugin-astro';
+import typescript from '@typescript-eslint/eslint-plugin';
+import typescriptParser from '@typescript-eslint/parser';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import prettier from 'eslint-config-prettier';
+import globals from 'globals';
+
+export default [
+       // Base JS rules
+       {
+              ...js.configs.recommended,
+              languageOptions: {
+                     ...js.configs.recommended.languageOptions,
+                     globals: {
+                            ...globals.browser,
+                            ...globals.es2021,
+                     },
+              },
+       },
+
+       // Astro recommended config (handles .astro files)
+       ...astroPlugin.configs.recommended,
+
+       // TypeScript for .ts/.tsx files
+       {
+              files: ['**/*.ts', '**/*.tsx'],
+              languageOptions: {
+                     parser: typescriptParser,
+                     parserOptions: {
+                            project: './tsconfig.json',
+                            sourceType: 'module',
+                            ecmaVersion: 2020,
+                     },
+                     globals: {
+                            ...globals.browser,
+                            ...globals.es2021,
+                     },
+              },
+              plugins: {
+                     '@typescript-eslint': typescript,
+              },
+              rules: {
+                     ...typescript.configs.recommended.rules,
+                     ...typescript.configs['recommended-type-checked'].rules,
+              },
+       },
+
+       // React for .jsx/.tsx files
+       {
+              files: ['**/*.jsx', '**/*.tsx'],
+              plugins: {
+                     react,
+                     'react-hooks': reactHooks,
+              },
+              languageOptions: {
+                     globals: {
+                            ...globals.browser,
+                            ...globals.es2021,
+                     },
+              },
+              rules: {
+                     ...react.configs.recommended.rules,
+                     ...reactHooks.configs.recommended.rules,
+                     'react/react-in-jsx-scope': 'off', // Not needed with React 17+
+              },
+              settings: {
+                     react: {
+                            version: 'detect',
+                     },
+              },
+       },
+
+       // Accessibility (jsx-a11y) for React and Astro
+       {
+              files: ['**/*.astro', '**/*.jsx', '**/*.tsx'],
+              plugins: {
+                     'jsx-a11y': jsxA11y,
+              },
+              rules: {
+                     ...jsxA11y.configs.recommended.rules,
+              },
+       },
+
+       // Node/config/middleware files
+       {
+              files: [
+                     'astro.config.*',
+                     'eslint.config.*',
+                     'tailwind.config.*',
+                     '*.config.*',
+                     'scripts/**/*.{js,ts}',
+                     'src/middleware/**/*.{js,ts}',
+              ],
+              languageOptions: {
+                     globals: {
+                            ...globals.node,
+                            ...globals.es2021,
+                     },
+              },
+       },
+
+       // Prettier (always last)
+       {
+              rules: {
+                     ...prettier.rules,
+              },
+       },
+];

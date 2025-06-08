@@ -1,16 +1,16 @@
 ---
 import MainLayout from "@/layouts/mainLayout.astro";
-import { downloadFile } from "@/lib/api";
 
 const { searchParams } = new URL(Astro.request.url);
-const filename = searchParams.get("filename");
-
-// Fix: Astro injects variables as strings, so check for null/empty
-const hasFilename = filename && filename !== "null" && filename !== "undefined";
-
-console.log("Download page accessed");
-console.log("Request URL:", Astro.request.url);
-console.log("Parsed filename from query param:", filename);
+const fileId = searchParams.get("id");
+const displayFilename = searchParams.get("filename");
+const isValidDownloadLink =
+  fileId &&
+  fileId !== "null" &&
+  fileId !== "undefined" &&
+  displayFilename &&
+  displayFilename !== "null" &&
+  displayFilename !== "undefined";
 
 const title = "Download your converted file - TrustyConvert";
 const description = "Your file is ready to download!";
@@ -29,30 +29,45 @@ const ogImage = "https://trustyconvert.com/og-image.png";
     <div id="download-area">
       <button
         id="download-btn"
-        class="inline-block px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition hidden"
+        type="button"
+        class="inline-block px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed hidden"
       >
         Download
       </button>
       <p id="no-file-msg">No file found. Please try converting again.</p>
+      <div id="error-msg" class="text-red-600 mt-4 hidden"></div>
     </div>
     <p class="mt-4 text-muted-foreground">Thank you for using TrustyConvert!</p>
     <script type="module" is:inline>
       const btn = document.getElementById("download-btn");
       const msg = document.getElementById("no-file-msg");
-      const filename = new URL(window.location.href).searchParams.get(
-        "filename"
-      );
+      const errorMsg = document.getElementById("error-msg");
+      const urlParams = new URLSearchParams(window.location.search);
+      const fileId = urlParams.get("id");
+      const filename = urlParams.get("filename");
       if (btn && msg) {
-        if (filename) {
+        if (fileId && filename) {
           btn.classList.remove("hidden");
           btn.textContent = `Download ${filename}`;
           msg.style.display = "none";
           btn.addEventListener("click", async () => {
             btn.disabled = true;
             btn.textContent = "Downloading...";
+            errorMsg.classList.add("hidden");
             try {
-              const mod = await import("/src/lib/api.ts");
-              const blob = await mod.downloadFile(filename);
+              const response = await fetch(
+                `/api/download_secure?id=${encodeURIComponent(fileId)}`,
+                { credentials: "include" }
+              );
+              if (!response.ok) {
+                let message = "Download failed";
+                try {
+                  const data = await response.json();
+                  message = data.detail || message;
+                } catch {}
+                throw new Error(message);
+              }
+              const blob = await response.blob();
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
@@ -61,14 +76,17 @@ const ogImage = "https://trustyconvert.com/og-image.png";
               a.click();
               a.remove();
               URL.revokeObjectURL(url);
-              btn.textContent = `Download again`;
+              btn.textContent = "Download again";
               btn.disabled = false;
             } catch (err) {
-              btn.textContent = "Download failed (file not found)";
+              btn.textContent = "Download failed";
               btn.classList.add("bg-red-600");
-              msg.style.display = "block";
-              msg.textContent =
-                "File not found. Please try converting again in the same browser tab/window.";
+              errorMsg.textContent =
+                err instanceof Error
+                  ? err.message
+                  : "Download failed. Please try again.";
+              errorMsg.classList.remove("hidden");
+              btn.disabled = false;
             }
           });
         } else {
@@ -79,3 +97,18 @@ const ogImage = "https://trustyconvert.com/og-image.png";
     </script>
   </section>
 </MainLayout>
+
+<style>
+  .file-upload-loading {
+    opacity: 0;
+    animation: fadeIn 0.3s ease-in forwards;
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+</style>

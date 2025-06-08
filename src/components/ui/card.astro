@@ -1,0 +1,107 @@
+---
+import "@styles/global.css";
+import "@styles/utilities.css";
+
+interface Props {
+  /**
+   * The title of the card
+   */
+  title?: string;
+  /**
+   * The description of the card
+   */
+  description?: string;
+  /**
+   * The content of the card
+   */
+  content?: string;
+  /**
+   * Additional classes to apply to the card
+   */
+  class?: string;
+  /**
+   * Whether the card is interactive (adds hover styles)
+   */
+  interactive?: boolean;
+  /**
+   * The icon to display in the card
+   */
+  icon?: string;
+}
+
+const {
+  title,
+  description,
+  content,
+  class: className = "",
+  interactive = false,
+  icon,
+} = Astro.props;
+
+const cardClasses = [
+  "card",
+  "p-6",
+  interactive && "transition-all hover:shadow-md hover:border-primary/50",
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+---
+
+<div class={cardClasses}>
+  {
+    icon && (
+      <div class="mb-4 text-primary">
+        <Fragment set:html={icon} />
+      </div>
+    )
+  }
+
+  {title && <h3 class="text-lg font-semibold text-card-foreground">{title}</h3>}
+
+  {
+    description && (
+      <p class="mt-2 text-sm text-muted-foreground">{description}</p>
+    )
+  }
+
+  {
+    content && (
+      <div class="mt-4 prose prose-sm dark:prose-invert">
+        <Fragment set:html={content} />
+      </div>
+    )
+  }
+
+  <slot />
+</div>
+
+<style>
+  /* Card hover animation */
+  .card {
+    @apply relative overflow-hidden;
+  }
+
+  .card::after {
+    content: "";
+    @apply absolute inset-0 bg-primary/0 transition-colors duration-200;
+  }
+
+  .card:hover::after {
+    @apply bg-primary/5;
+  }
+
+  /* Improve focus styles for interactive cards */
+  .card:focus-within {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Improve text rendering */
+  .card h3 {
+    @apply text-balance;
+  }
+
+  .card p {
+    @apply text-pretty;
+  }
+</style>

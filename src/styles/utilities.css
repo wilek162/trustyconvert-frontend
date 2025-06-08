@@ -1,0 +1,68 @@
+/* Improved focus styles */
+.focus-ring {
+       @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+}
+
+/* Improved transitions */
+.transition-base {
+       @apply transition-all duration-200 ease-in-out;
+}
+
+/* Improved hover states */
+.hover-opacity {
+       @apply hover:opacity-80 transition-opacity;
+}
+
+/* Improved text rendering */
+.text-rendering {
+       -webkit-font-smoothing: antialiased;
+       -moz-osx-font-smoothing: grayscale;
+       text-rendering: optimizeLegibility;
+}
+
+/* Improved animations */
+.animate-fade-in {
+       animation: fadeIn 0.2s ease-in-out;
+}
+
+.animate-slide-up {
+       animation: slideUp 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+       from {
+              opacity: 0;
+       }
+
+       to {
+              opacity: 1;
+       }
+}
+
+@keyframes slideUp {
+       from {
+              transform: translateY(0.5rem);
+              opacity: 0;
+       }
+
+       to {
+              transform: translateY(0);
+              opacity: 1;
+       }
+}
+
+/* Improved loading states */
+.loading {
+       @apply animate-pulse bg-muted;
+}
+
+/* Improved aspect ratios */
+.aspect-video {
+       @apply aspect-w-16 aspect-h-9;
+}
+
+.aspect-square {
+       @apply aspect-w-1 aspect-h-1;
+}
+
+/* Removed .container-adaptive due to Tailwind limitation */

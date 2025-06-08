@@ -1,0 +1,210 @@
+---
+import "@styles/global.css";
+import "@styles/utilities.css";
+
+type AlertVariant = "info" | "success" | "warning" | "error";
+
+interface Props {
+  /**
+   * The variant of the alert
+   */
+  variant?: AlertVariant;
+  /**
+   * The title of the alert
+   */
+  title?: string;
+  /**
+   * The icon to display in the alert
+   */
+  icon?: string;
+  /**
+   * Whether the alert is dismissible
+   */
+  dismissible?: boolean;
+  /**
+   * Additional classes to apply to the alert
+   */
+  class?: string;
+  /**
+   * The role of the alert
+   */
+  role?: "alert" | "status";
+  /**
+   * Whether the alert is visible
+   */
+  visible?: boolean;
+}
+
+const {
+  variant = "info",
+  title,
+  icon,
+  dismissible = false,
+  class: className = "",
+  role = "alert",
+  visible = true,
+} = Astro.props;
+
+const variantClasses: Record<
+  AlertVariant,
+  { container: string; icon: string }
+> = {
+  info: {
+    container: "bg-primary/10 text-primary border-primary/20",
+    icon: "text-primary",
+  },
+  success: {
+    container:
+      "bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400",
+    icon: "text-green-600 dark:text-green-400",
+  },
+  warning: {
+    container:
+      "bg-yellow-500/10 text-yellow-600 border-yellow-500/20 dark:text-yellow-400",
+    icon: "text-yellow-600 dark:text-yellow-400",
+  },
+  error: {
+    container: "bg-destructive/10 text-destructive border-destructive/20",
+    icon: "text-destructive",
+  },
+};
+
+const alertClasses = [
+  "alert",
+  "relative w-full rounded-lg border p-4",
+  variantClasses[variant].container,
+  dismissible && "pr-12",
+  !visible && "hidden",
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const iconClasses = ["inline-block h-5 w-5", variantClasses[variant].icon].join(
+  " "
+);
+---
+
+<div class={alertClasses} role={role}>
+  <div class="flex items-start gap-3">
+    {
+      icon && (
+        <div class={iconClasses} aria-hidden="true">
+          <Fragment set:html={icon} />
+        </div>
+      )
+    }
+
+    <div class="flex-1">
+      {title && <h5 class="mb-1 font-medium">{title}</h5>}
+
+      <div class="text-sm [&_p]:leading-relaxed">
+        <slot />
+      </div>
+    </div>
+  </div>
+
+  {
+    dismissible && (
+      <button
+        type="button"
+        class="absolute right-4 top-4 rounded-md p-1 text-current opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        aria-label="Dismiss"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="h-4 w-4"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    )
+  }
+</div>
+
+<style>
+  /* Improve alert text rendering */
+  .alert {
+    @apply text-balance;
+  }
+
+  /* Improve alert focus styles */
+  .alert:focus-within {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Improve alert transitions */
+  .alert {
+    @apply transition-all duration-200;
+  }
+
+  /* Improve alert animations */
+  .alert {
+    animation: alert-in 0.2s ease-out;
+  }
+
+  @keyframes alert-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Improve alert dismissible button */
+  .alert button {
+    @apply transition-opacity duration-200;
+  }
+
+  .alert button:hover {
+    @apply opacity-100;
+  }
+
+  .alert button:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Add dismiss animation */
+  .alert-dismissing {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+    transition:
+      opacity 0.2s ease-out,
+      transform 0.2s ease-out;
+  }
+</style>
+
+<script>
+  // Handle dismissible alerts
+  document.addEventListener("DOMContentLoaded", () => {
+    const alerts = document.querySelectorAll<HTMLButtonElement>(
+      '.alert button[aria-label="Dismiss"]'
+    );
+
+    alerts.forEach((button) => {
+      button.addEventListener("click", () => {
+        const alert = button.closest<HTMLDivElement>(".alert");
+        if (alert) {
+          // Use classList for animations instead of style
+          alert.classList.add("alert-dismissing");
+
+          setTimeout(() => {
+            alert.remove();
+          }, 200);
+        }
+      });
+    });
+  });
+</script>

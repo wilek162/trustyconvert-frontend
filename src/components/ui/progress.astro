@@ -1,0 +1,168 @@
+---
+import "@styles/global.css";
+import "@styles/utilities.css";
+
+interface Props {
+  /**
+   * The current progress value (0-100)
+   */
+  value?: number;
+  /**
+   * The maximum progress value
+   */
+  max?: number;
+  /**
+   * The size of the progress bar
+   */
+  size?: "sm" | "md" | "lg";
+  /**
+   * The variant of the progress bar
+   */
+  variant?: "default" | "primary" | "success" | "warning" | "error";
+  /**
+   * Whether to show the progress value
+   */
+  showValue?: boolean;
+  /**
+   * Whether the progress is indeterminate
+   */
+  indeterminate?: boolean;
+  /**
+   * Additional classes to apply to the progress bar
+   */
+  class?: string;
+  /**
+   * The aria-label for accessibility
+   */
+  "aria-label"?: string;
+  /**
+   * The aria-describedby for accessibility
+   */
+  "aria-describedby"?: string;
+}
+
+const {
+  value = 0,
+  max = 100,
+  size = "md",
+  variant = "default",
+  showValue = false,
+  indeterminate = false,
+  class: className = "",
+  "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedby,
+} = Astro.props;
+
+const sizeClasses = {
+  sm: "h-1",
+  md: "h-2",
+  lg: "h-3",
+};
+
+const variantClasses = {
+  default: "bg-primary",
+  primary: "bg-primary",
+  success: "bg-green-500",
+  warning: "bg-yellow-500",
+  error: "bg-destructive",
+};
+
+const progressClasses = [
+  "relative w-full overflow-hidden rounded-full bg-muted",
+  sizeClasses[size],
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const indicatorClasses = [
+  "h-full w-full flex-1 transition-all",
+  variantClasses[variant],
+  indeterminate && "animate-progress-indeterminate",
+]
+  .filter(Boolean)
+  .join(" ");
+
+const valueClasses = [
+  "absolute inset-0 flex items-center justify-center text-xs font-medium text-primary-foreground",
+  size === "sm" && "text-[10px]",
+]
+  .filter(Boolean)
+  .join(" ");
+
+const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+---
+
+<div
+  class={progressClasses}
+  role="progressbar"
+  aria-valuenow={indeterminate ? undefined : value}
+  aria-valuemin={0}
+  aria-valuemax={max}
+  aria-label={ariaLabel}
+  aria-describedby={ariaDescribedby}
+>
+  {
+    indeterminate ? (
+      <div class={indicatorClasses} />
+    ) : (
+      <>
+        <div class={indicatorClasses} style={`width: ${percentage}%`} />
+        {showValue && <div class={valueClasses}>{Math.round(percentage)}%</div>}
+      </>
+    )
+  }
+</div>
+
+<style>
+  /* Improve progress bar transitions */
+  .progress {
+    @apply transition-all duration-200;
+  }
+
+  /* Improve progress bar animations */
+  @keyframes progress-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .animate-progress-indeterminate {
+    animation: progress-indeterminate 1.5s infinite;
+  }
+
+  /* Improve progress bar focus styles */
+  .progress:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Improve progress bar hover styles */
+  .progress:hover .progress-indicator {
+    @apply brightness-110;
+  }
+
+  /* Improve progress bar active styles */
+  .progress:active .progress-indicator {
+    @apply brightness-90;
+  }
+
+  /* Improve progress bar text rendering */
+  .progress-value {
+    @apply text-balance;
+  }
+
+  /* Improve progress bar accessibility */
+  .progress[aria-valuenow] {
+    @apply cursor-default;
+  }
+
+  .progress:not([aria-valuenow]) {
+    @apply cursor-wait;
+  }
+</style>

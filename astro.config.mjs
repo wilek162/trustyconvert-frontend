@@ -1,21 +1,97 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-import tailwindcss from '@tailwindcss/vite';
-import sitemapPlugin from '@astrojs/sitemap';
-
 import react from '@astrojs/react';
+import tailwind from '@astrojs/tailwind';
+import sitemap from '@astrojs/sitemap';
+import { fileURLToPath } from 'node:url';
+import mkcert from 'vite-plugin-mkcert'
+
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://trustyconvert.com", // <-- Set your real production domain here!
+  site: 'https://trustyconvert.com',
+  // Enable in-browser dev tools in development
+  devToolbar: {
+    enabled: true,
+  },
+  // Configure build output
+  output: 'static', // Use 'static' or 'server' for Astro v5
+  compressHTML: true, // Compress HTML output
+  // Configure integrations
+  integrations: [
+    react({
+      // Only hydrate components that need interactivity
+      include: ['**/features/**/*', '**/ui/**/*'],
+      // Exclude static components
+      exclude: ['**/common/**/*', '**/seo/**/*', '**/*.stories.*'],
+    }),
+    tailwind({
+      // Apply Tailwind to all files
+      applyBaseStyles: false,
+      // Use the config file we created
+      configFile: './tailwind.config.mjs',
+    }),
+    sitemap({
+      // Generate sitemap for better SEO
+      changefreq: 'weekly',
+      priority: 0.7,
+      lastmod: new Date(),
+      // Customize sitemap entries
+      customPages: ['https://trustyconvert.com'],
+      // Exclude specific pages if needed
+      filter: (page) => !page.includes('/admin/'),
+    }),
+  ],
+  // Configure Vite
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [mkcert()],
+    // Enable CSS modules for all .module.css files
+    css: {
+      modules: {
+        localsConvention: 'camelCaseOnly',
+      },
+    },
+    // Build optimizations
+    build: {
+      cssMinify: 'lightningcss', // Use Lightning CSS for faster builds
+      minify: 'terser', // Use Terser for better minification
+      sourcemap: true, // Generate source maps for better debugging
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            // Split vendor chunks for better caching
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'react-vendor';
+              }
+              if (id.includes('@radix-ui')) {
+                return 'ui-vendor';
+              }
+              return 'vendor';
+            }
+          },
+        },
+      },
+    },
+    // Resolve aliases for cleaner imports
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
+        '@lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
+        '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
+      },
+    },
+    // Add dev server proxy for API
     server: {
       proxy: {
-        '/api': 'http://127.0.0.1:8000'
-      }
-    }
+        '/api': 'https://127.0.0.1',
+      },
+    },
   },
-
-  integrations: [react(), sitemapPlugin()]
+  // Astro v5 image config (optional, remove if not using @astrojs/image)
+  // image: {
+  //   service: import('@astrojs/image/sharp'),
+  //   domains: ['trustyconvert.com'],
+  // },
 });

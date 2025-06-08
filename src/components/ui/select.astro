@@ -1,0 +1,264 @@
+---
+import "@styles/global.css";
+import "@styles/utilities.css";
+
+interface Option {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+interface Props {
+  /**
+   * The name of the select
+   */
+  name?: string;
+  /**
+   * The id of the select
+   */
+  id?: string;
+  /**
+   * The value of the select
+   */
+  value?: string;
+  /**
+   * The options for the select
+   */
+  options: Option[];
+  /**
+   * The placeholder text
+   */
+  placeholder?: string;
+  /**
+   * Whether the select is required
+   */
+  required?: boolean;
+  /**
+   * Whether the select is disabled
+   */
+  disabled?: boolean;
+  /**
+   * The label text
+   */
+  label?: string;
+  /**
+   * The helper text
+   */
+  helper?: string;
+  /**
+   * The error message to display
+   */
+  error?: string;
+  /**
+   * The icon to display before the select
+   */
+  icon?: string;
+  /**
+   * The icon to display after the select
+   */
+  iconAfter?: string;
+  /**
+   * Additional classes to apply to the select
+   */
+  class?: string;
+  /**
+   * The aria-label for accessibility
+   */
+  "aria-label"?: string;
+  /**
+   * The aria-describedby for accessibility
+   */
+  "aria-describedby"?: string;
+}
+
+const {
+  name,
+  id,
+  value,
+  options,
+  placeholder,
+  required = false,
+  disabled = false,
+  label,
+  helper,
+  error,
+  icon,
+  iconAfter,
+  class: className = "",
+  "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedby,
+} = Astro.props;
+
+const selectId = id ?? name;
+const errorId = selectId ? `${selectId}-error` : undefined;
+const helperId = selectId ? `${selectId}-helper` : undefined;
+
+const selectClasses = [
+  "form-select",
+  "w-full",
+  "appearance-none",
+  icon && "pl-10",
+  iconAfter && "pr-10",
+  error && "border-destructive focus-visible:ring-destructive",
+  className,
+]
+  .filter(Boolean)
+  .join(" ");
+
+const wrapperClasses = ["relative", "w-full"].join(" ");
+---
+
+<div class={wrapperClasses}>
+  {
+    label && (
+      <label
+        for={selectId}
+        class="form-label mb-2 block text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+      >
+        {label}
+        {required && <span class="text-destructive ml-1">*</span>}
+      </label>
+    )
+  }
+
+  <div class="relative">
+    {
+      icon && (
+        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+          <Fragment set:html={icon} />
+        </div>
+      )
+    }
+
+    <select
+      name={name}
+      id={selectId}
+      value={value}
+      required={required}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      aria-describedby={[errorId, helperId, ariaDescribedby]
+        .filter(Boolean)
+        .join(" ") || undefined}
+      aria-invalid={error ? "true" : undefined}
+      class={selectClasses}
+    >
+      {
+        placeholder && (
+          <option value="" disabled selected>
+            {placeholder}
+          </option>
+        )
+      }
+
+      {
+        options.map((option) => (
+          <option
+            value={option.value}
+            disabled={option.disabled}
+            selected={option.value === value}
+          >
+            {option.label}
+          </option>
+        ))
+      }
+    </select>
+
+    {
+      iconAfter && (
+        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
+          <Fragment set:html={iconAfter} />
+        </div>
+      )
+    }
+
+    <div
+      class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-muted-foreground"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="h-4 w-4"
+      >
+        <path d="m6 9 6 6 6-6"></path>
+      </svg>
+    </div>
+  </div>
+
+  {
+    error && (
+      <p id={errorId} class="mt-2 text-sm text-destructive" role="alert">
+        {error}
+      </p>
+    )
+  }
+
+  {
+    helper && !error && (
+      <p id={helperId} class="mt-2 text-sm text-muted-foreground">
+        {helper}
+      </p>
+    )
+  }
+</div>
+
+<style>
+  /* Improve select text rendering */
+  .form-select {
+    @apply text-balance;
+  }
+
+  /* Improve select focus styles */
+  .form-select:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Improve select transitions */
+  .form-select {
+    @apply transition-all duration-200;
+  }
+
+  /* Improve select disabled styles */
+  .form-select:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  /* Improve select option styles */
+  .form-select option {
+    @apply bg-background text-foreground;
+  }
+
+  /* Improve select placeholder styles */
+  .form-select option[value=""] {
+    @apply text-muted-foreground/50;
+  }
+
+  /* Improve select appearance */
+  .form-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  /* Improve select icon styles */
+  .form-select + svg {
+    @apply pointer-events-none;
+  }
+
+  /* Improve select hover styles */
+  .form-select:not(:disabled):hover {
+    @apply border-input/80;
+  }
+
+  /* Improve select active styles */
+  .form-select:not(:disabled):active {
+    @apply border-input/90;
+  }
+</style>
