@@ -1,374 +1,374 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
-import { useDropzone } from "react-dropzone";
-import { useConversionFlow } from "@/lib/hooks/useFileConversion";
-import { QueryProvider } from "@/lib/providers/QueryProvider";
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useDropzone } from 'react-dropzone'
+import { FileIcon, UploadIcon, CheckIcon, XIcon, Loader2Icon } from 'lucide-react'
+
+import { useFileConversion } from '@/lib/hooks/useFileConversion'
+import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
+import { QueryProvider } from '@/lib/providers/QueryProvider'
+import { Button } from '@/components/ui/button'
 import {
-  FileIcon,
-  UploadIcon,
-  CheckIcon,
-  XIcon,
-  Loader2Icon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import type { ConversionFormat } from "@/lib/api/types";
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
+} from '@/components/ui/select'
+import { Progress } from '@/components/ui/progress'
+import { Label } from '@/components/ui/label'
+import { Download, FileUp, Loader2, RefreshCw, Upload, X } from 'lucide-react'
+import type { ConversionFormat } from '@/lib/types'
 
 // Constants
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 const ACCEPTED_FILE_TYPES = {
-  "application/pdf": [".pdf"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
-    ".docx",
-  ],
-  "image/*": [".png", ".jpg", ".jpeg", ".gif"],
-};
+	'application/pdf': ['.pdf'],
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+	'image/*': ['.png', '.jpg', '.jpeg', '.gif']
+}
 
 // Types
 interface FormatOption {
-  id: string;
-  name: string;
+	id: string
+	name: string
 }
 
 interface FileUploadContentProps {
-  onError?: (error: Error) => void;
+	onError?: (error: Error) => void
 }
 
 // Debug logging
 const debug = {
-  log: (message: string, data?: any) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[FileUpload] ${message}`, data || "");
-    }
-  },
-  error: (message: string, error?: any) => {
-    if (process.env.NODE_ENV === "development") {
-      console.error(`[FileUpload] ${message}`, error || "");
-    }
-  },
-};
-
-/**
- * FileUploadContent component handles the file upload and conversion process
- * It uses the useConversionFlow hook for managing the conversion state and API calls
- */
-function FileUploadContent({ onError }: FileUploadContentProps) {
-  // Log component mount/unmount
-  useEffect(() => {
-    debug.log("FileUploadContent mounted");
-    return () => {
-      debug.log("FileUploadContent unmounted");
-    };
-  }, []);
-
-  // Get conversion flow state and handlers
-  const {
-    file,
-    setFile,
-    format,
-    setFormat,
-    startConversion,
-    status,
-    progress,
-    downloadUrl,
-    error,
-    reset,
-    formats,
-    isLoadingFormats,
-  } = useConversionFlow();
-
-  // Log when formats data changes
-  useEffect(() => {
-    debug.log("Formats data changed", {
-      isLoading: isLoadingFormats,
-      count: formats.length,
-    });
-  }, [formats, isLoadingFormats]);
-
-  // Local state for format error
-  const [formatError, setFormatError] = useState<string | null>(null);
-
-  /**
-   * Extract file extension from file name
-   * Returns null if no extension found
-   */
-  const fileExtension = useMemo(() => {
-    if (!file) return null;
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    debug.log("File extension extracted", { file: file.name, extension: ext });
-    return ext || null;
-  }, [file?.name]);
-
-  /**
-   * Calculate available output formats based on input file type
-   * Returns empty array if no formats available
-   */
-  const availableFormats = useMemo(() => {
-    if (!fileExtension || !formats.length) {
-      debug.log("No formats available", {
-        fileExtension,
-        formatsCount: formats.length,
-      });
-      return [];
-    }
-
-    // Find formats that support this file extension as input
-    const supportedFormats = formats.filter((fmt: ConversionFormat) =>
-      fmt.inputFormats.some((input) => input.toLowerCase() === fileExtension)
-    );
-
-    if (supportedFormats.length === 0) {
-      debug.log("No supported formats found", { fileExtension });
-      setFormatError(`File type .${fileExtension} is not supported`);
-      return [];
-    }
-
-    // Get all possible output formats for this file type
-    const outputFormats = supportedFormats.flatMap((fmt: ConversionFormat) =>
-      fmt.outputFormats.map((output) => ({
-        id: output,
-        name: output.toUpperCase(),
-      }))
-    );
-
-    // Remove duplicates and sort alphabetically
-    const uniqueFormats = Array.from(
-      new Map(outputFormats.map((f) => [f.id, f])).values()
-    ).sort((a, b) => a.name.localeCompare(b.name));
-
-    debug.log("Available formats calculated", {
-      fileExtension,
-      supportedCount: supportedFormats.length,
-      outputCount: uniqueFormats.length,
-    });
-
-    return uniqueFormats;
-  }, [fileExtension, formats]);
-
-  /**
-   * Handle file drop or selection
-   * Validates file size and type
-   */
-  const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0];
-      if (!file) return;
-
-      debug.log("File dropped", {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
-
-      if (file.size > MAX_FILE_SIZE) {
-        const error = new Error("File too large (max 100MB)");
-        setFormatError(error.message);
-        onError?.(error);
-        debug.error("File too large", {
-          size: file.size,
-          maxSize: MAX_FILE_SIZE,
-        });
-        return;
-      }
-
-      setFile(file);
-      setFormat(""); // Reset format when new file is uploaded
-      setFormatError(null);
-    },
-    [setFile, setFormat, onError]
-  );
-
-  // Configure dropzone
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: ACCEPTED_FILE_TYPES,
-    maxFiles: 1,
-    multiple: false,
-  });
-
-  /**
-   * Handle format selection change
-   */
-  const handleFormatChange = useCallback(
-    (value: string) => {
-      debug.log("Format changed", { value });
-      setFormat(value);
-      setFormatError(null);
-    },
-    [setFormat]
-  );
-
-  /**
-   * Start the conversion process
-   */
-  const handleStartConversion = useCallback(() => {
-    if (!file || !format) return;
-    debug.log("Starting conversion", { file: file.name, format });
-    startConversion();
-  }, [file, format, startConversion]);
-
-  /**
-   * Handle file download after successful conversion
-   */
-  const handleDownload = useCallback(() => {
-    if (downloadUrl) {
-      debug.log("Downloading file", { url: downloadUrl });
-      window.open(downloadUrl, "_blank");
-    }
-  }, [downloadUrl]);
-
-  // Log status changes
-  useEffect(() => {
-    debug.log("Conversion status changed", { status, progress });
-  }, [status, progress]);
-
-  // Log error changes
-  useEffect(() => {
-    if (error) {
-      debug.error("Conversion error", error);
-    }
-  }, [error]);
-
-  /**
-   * Render the appropriate content based on conversion status
-   */
-  const renderContent = () => {
-    switch (status) {
-      case "idle":
-        return (
-          <div className="space-y-4">
-            {/* File Drop Zone */}
-            <div
-              {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                isDragActive
-                  ? "border-primary bg-primary/5"
-                  : "border-gray-300 hover:border-primary"
-              }`}
-            >
-              <input {...getInputProps()} />
-              <UploadIcon className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">
-                {isDragActive
-                  ? "Drop the file here"
-                  : "Drag and drop a file here, or click to select"}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Max file size: 100MB</p>
-            </div>
-
-            {/* File Info and Format Selection */}
-            {file && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <FileIcon className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm">{file.name}</span>
-                </div>
-
-                {isLoadingFormats ? (
-                  <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
-                ) : formatError ? (
-                  <p className="text-sm text-red-500">{formatError}</p>
-                ) : availableFormats.length > 0 ? (
-                  <Select value={format} onValueChange={handleFormatChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select output format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableFormats.map((fmt) => (
-                        <SelectItem key={fmt.id} value={fmt.id}>
-                          {fmt.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-sm text-red-500">
-                    No conversion formats available for this file type
-                  </p>
-                )}
-
-                <Button
-                  onClick={handleStartConversion}
-                  disabled={!format || isLoadingFormats || !!formatError}
-                  className="w-full"
-                >
-                  Convert
-                </Button>
-              </div>
-            )}
-          </div>
-        );
-
-      case "uploading":
-      case "converting":
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center">
-              <Loader2Icon className="h-8 w-8 animate-spin text-primary" />
-            </div>
-            <Progress value={progress} className="w-full" />
-            <p className="text-center text-sm text-gray-600">
-              {status === "uploading" ? "Uploading..." : "Converting..."}
-            </p>
-          </div>
-        );
-
-      case "completed":
-        return (
-          <div className="space-y-4 text-center">
-            <div className="flex items-center justify-center">
-              <CheckIcon className="h-8 w-8 text-green-500" />
-            </div>
-            <p className="text-sm text-gray-600">
-              Conversion completed successfully!
-            </p>
-            <Button onClick={handleDownload} className="w-full">
-              Download
-            </Button>
-            <Button onClick={reset} variant="outline" className="w-full">
-              Convert Another File
-            </Button>
-          </div>
-        );
-
-      case "error":
-        return (
-          <div className="space-y-4 text-center">
-            <div className="flex items-center justify-center">
-              <XIcon className="h-8 w-8 text-red-500" />
-            </div>
-            <p className="text-sm text-red-600">
-              {error instanceof Error
-                ? error.message
-                : "An error occurred during conversion"}
-            </p>
-            <Button onClick={reset} variant="outline" className="w-full">
-              Try Again
-            </Button>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return <div className="w-full max-w-md mx-auto p-4">{renderContent()}</div>;
+	log: (message: string, data?: any) => {
+		if (process.env.NODE_ENV === 'development') {
+			console.log(`[FileUpload] ${message}`, data || '')
+		}
+	},
+	error: (message: string, error?: any) => {
+		if (process.env.NODE_ENV === 'development') {
+			console.error(`[FileUpload] ${message}`, error || '')
+		}
+	}
 }
 
 /**
- * FileUpload component wrapper that provides the QueryProvider context
+ * Constants for file upload configuration
  */
-export function FileUpload() {
-  return (
-    <QueryProvider>
-      <FileUploadContent />
-    </QueryProvider>
-  );
+const UPLOAD_CONFIG = {
+	acceptedFileTypes: {
+		'application/pdf': ['.pdf'],
+		'application/msword': ['.doc'],
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+		'application/vnd.oasis.opendocument.text': ['.odt'],
+		'application/rtf': ['.rtf'],
+		'text/plain': ['.txt'],
+		'application/vnd.ms-excel': ['.xls'],
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+		'application/vnd.oasis.opendocument.spreadsheet': ['.ods'],
+		'text/csv': ['.csv'],
+		'application/vnd.ms-powerpoint': ['.ppt'],
+		'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+		'application/vnd.oasis.opendocument.presentation': ['.odp'],
+		'image/jpeg': ['.jpg', '.jpeg'],
+		'image/png': ['.png'],
+		'image/bmp': ['.bmp'],
+		'image/tiff': ['.tiff', '.tif'],
+		'image/gif': ['.gif'],
+		'image/webp': ['.webp']
+	},
+	maxFileSize: 100 * 1024 * 1024 // 100MB
+} as const
+
+/**
+ * FileUploadContent component
+ * Handles file upload, format selection, and conversion process
+ */
+export function FileUploadContent({ onError }: FileUploadContentProps) {
+	const { formats, isLoading: isLoadingFormats, error: formatsError } = useSupportedFormats()
+	const { conversion, useConversionStatus } = useFileConversion()
+	const [file, setFile] = useState<File | null>(null)
+	const [formatError, setFormatError] = useState<string | null>(null)
+	const [selectedFormat, setSelectedFormat] = useState<string | null>(null)
+
+	// Debug logging for formats data changes
+	useEffect(() => {
+		debug.log('Formats data changed', {
+			hasData: Boolean(formats),
+			dataLength: formats?.length
+		})
+	}, [formats])
+
+	/**
+	 * Extract file extension from file name
+	 * @returns File extension in lowercase, or null if no extension found
+	 */
+	const fileExtension = useMemo(() => {
+		if (!file) return null
+		const ext = file.name.split('.').pop()?.toLowerCase()
+		debug.log('File extension extracted', { file: file.name, extension: ext })
+		return ext || null
+	}, [file?.name])
+
+	/**
+	 * Calculate available output formats based on input file type
+	 * @returns Array of available output formats, or empty array if none available
+	 */
+	const availableFormats = useMemo(() => {
+		if (!fileExtension || !formats.length) {
+			debug.log('No formats available', {
+				fileExtension,
+				formatsCount: formats.length
+			})
+			return []
+		}
+
+		// Find formats that support this file extension as input
+		const supportedFormats = formats.filter((fmt: ConversionFormat) => {
+			const isSupported = fmt.inputFormats.some((input: string) => {
+				// Backend returns formats without dots (e.g., "docx" not ".docx")
+				const normalizedInput = input.toLowerCase()
+				const normalizedExt = fileExtension.toLowerCase()
+				const matches = normalizedInput === normalizedExt
+				debug.log('Checking format support', {
+					format: fmt.id,
+					inputFormat: input,
+					normalizedInput,
+					fileExtension,
+					normalizedExt,
+					matches
+				})
+				return matches
+			})
+			return isSupported
+		})
+
+		if (supportedFormats.length === 0) {
+			debug.log('No supported formats found', { fileExtension })
+			setFormatError(`File type .${fileExtension} is not supported`)
+			return []
+		}
+
+		// Get all possible output formats for this file type
+		const outputFormats = supportedFormats.flatMap((fmt: ConversionFormat) =>
+			fmt.outputFormats.map((output: string) => ({
+				id: output.toLowerCase(),
+				name: output.toUpperCase()
+			}))
+		)
+
+		// Remove duplicates and sort alphabetically
+		const uniqueFormats = Array.from(new Map(outputFormats.map((f) => [f.id, f])).values()).sort(
+			(a, b) => a.name.localeCompare(b.name)
+		)
+
+		debug.log('Available formats calculated', {
+			fileExtension,
+			supportedCount: supportedFormats.length,
+			outputCount: uniqueFormats.length,
+			formats: uniqueFormats
+		})
+
+		return uniqueFormats
+	}, [fileExtension, formats])
+
+	/**
+	 * Handle file drop event
+	 * @param acceptedFiles Array of accepted files
+	 */
+	const onDrop = useCallback((acceptedFiles: File[]) => {
+		const droppedFile = acceptedFiles[0]
+		if (!droppedFile) return
+
+		// Validate file size
+		if (droppedFile.size > UPLOAD_CONFIG.maxFileSize) {
+			debug.error('File too large', {
+				size: droppedFile.size,
+				maxSize: UPLOAD_CONFIG.maxFileSize
+			})
+			return
+		}
+
+		setFile(droppedFile)
+		setFormatError(null)
+		setSelectedFormat(null)
+	}, [])
+
+	// Configure dropzone
+	const { getRootProps, getInputProps, isDragActive } = useDropzone({
+		onDrop,
+		accept: UPLOAD_CONFIG.acceptedFileTypes,
+		maxFiles: 1,
+		multiple: false
+	})
+
+	// Get conversion status
+	const { data: status, isLoading: isLoadingStatus } = useConversionStatus(
+		conversion.data?.task_id || null
+	)
+
+	/**
+	 * Handle format selection
+	 * @param format Selected output format
+	 */
+	const handleFormatSelect = useCallback((format: string) => {
+		setSelectedFormat(format)
+		setFormatError(null)
+	}, [])
+
+	/**
+	 * Handle conversion start
+	 */
+	const handleConvert = useCallback(async () => {
+		if (!file || !selectedFormat) return
+
+		try {
+			await conversion.mutateAsync({
+				file,
+				targetFormat: selectedFormat
+			})
+		} catch (error) {
+			debug.error('Conversion failed', error)
+		}
+	}, [file, selectedFormat, conversion])
+
+	// Render different states based on conversion status
+	if (status?.status === 'completed') {
+		return (
+			<div className="text-center">
+				<h3 className="mb-4 text-lg font-semibold">Conversion Complete!</h3>
+				<a
+					href={status.download_url}
+					download
+					className="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+				>
+					<Download className="mr-2 h-4 w-4" />
+					Download Converted File
+				</a>
+			</div>
+		)
+	}
+
+	if (status?.status === 'failed') {
+		return (
+			<div className="text-center">
+				<h3 className="mb-4 text-lg font-semibold text-red-600">Conversion Failed</h3>
+				<p className="mb-4 text-gray-600">{status.error}</p>
+				<button
+					onClick={() => {
+						setFile(null)
+						setSelectedFormat(null)
+						setFormatError(null)
+					}}
+					className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+				>
+					<RefreshCw className="mr-2 h-4 w-4" />
+					Try Again
+				</button>
+			</div>
+		)
+	}
+
+	if (status?.status === 'processing' || conversion.isPending) {
+		return (
+			<div className="text-center">
+				<h3 className="mb-4 text-lg font-semibold">Converting...</h3>
+				<Progress value={status?.progress || 0} className="w-full" />
+			</div>
+		)
+	}
+
+	return (
+		<div className="space-y-6">
+			<div
+				{...getRootProps()}
+				className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+					isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+				}`}
+			>
+				<input {...getInputProps()} />
+				<Upload className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+				<p className="text-gray-600">
+					{isDragActive ? 'Drop the file here' : 'Drag and drop a file here, or click to select'}
+				</p>
+				<p className="mt-2 text-sm text-gray-500">
+					Max file size: {UPLOAD_CONFIG.maxFileSize / (1024 * 1024)}MB
+				</p>
+			</div>
+
+			{file && (
+				<div className="space-y-4">
+					<div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
+						<div className="flex items-center space-x-3">
+							<FileIcon className="h-6 w-6 text-gray-500" />
+							<div>
+								<p className="font-medium">{file.name}</p>
+								<p className="text-sm text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+							</div>
+						</div>
+						<button
+							onClick={() => {
+								setFile(null)
+								setSelectedFormat(null)
+								setFormatError(null)
+							}}
+							className="text-gray-500 hover:text-gray-700"
+						>
+							<XIcon className="h-5 w-5" />
+						</button>
+					</div>
+
+					{formatError ? (
+						<div className="text-sm text-red-600">{formatError}</div>
+					) : (
+						<div className="space-y-2">
+							<Label>Select output format:</Label>
+							<Select
+								value={selectedFormat || ''}
+								onValueChange={handleFormatSelect}
+								disabled={isLoadingFormats || !availableFormats.length}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Choose format..." />
+								</SelectTrigger>
+								<SelectContent>
+									{availableFormats.map((format) => (
+										<SelectItem key={format.id} value={format.id}>
+											{format.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+					)}
+
+					<Button
+						onClick={handleConvert}
+						disabled={!selectedFormat || conversion.isPending}
+						className="w-full"
+					>
+						{conversion.isPending ? (
+							<>
+								<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+								Converting...
+							</>
+						) : (
+							<>
+								<FileUp className="mr-2 h-4 w-4" />
+								Convert File
+							</>
+						)}
+					</Button>
+				</div>
+			)}
+		</div>
+	)
+}
+/**
+ * FileUpload component wrapper with QueryProvider
+ */
+export function FileUpload(props: FileUploadContentProps) {
+	return (
+		<QueryProvider>
+			<FileUploadContent {...props} />
+		</QueryProvider>
+	)
 }

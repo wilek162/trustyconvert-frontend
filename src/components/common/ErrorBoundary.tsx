@@ -1,6 +1,7 @@
 import React from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { errorLogger } from "@/lib/errors/error-logger";
 
 interface Props {

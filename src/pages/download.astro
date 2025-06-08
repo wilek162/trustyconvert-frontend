@@ -1,13 +1,14 @@
 ---
-import MainLayout from "@/layouts/mainLayout.astro";
-import { apiClient } from "@/lib/api/client";
-import type { TaskStatus } from "@/lib/api/types";
 import {
   Download as DownloadIcon,
   RefreshCw,
   AlertCircle,
   CheckCircle,
 } from "lucide-react";
+
+import MainLayout from "@/layouts/mainLayout.astro";
+import { apiClient } from "@/lib/api/client";
+import type { TaskStatus } from "@/lib/api/types";
 
 // Get task ID from URL
 const taskId = Astro.url.searchParams.get("id");

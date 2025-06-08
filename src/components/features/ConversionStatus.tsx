@@ -1,10 +1,11 @@
 import React from "react";
+import { CheckCircle, XCircle, Loader2, Download } from "lucide-react";
+
 import type { TaskStatus } from "@/lib/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, XCircle, Loader2, Download } from "lucide-react";
 
 interface ConversionStatusProps {
   status: TaskStatus["status"];

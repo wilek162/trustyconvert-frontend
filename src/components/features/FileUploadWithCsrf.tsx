@@ -1,14 +1,15 @@
-import React from "react";
-import { CsrfProvider } from "@/components/providers/CsrfProvider";
-import { FileUpload } from "@/components/features/FileUpload/FileUpload";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import React from 'react'
+
+import { CsrfProvider } from '@/components/providers/CsrfProvider'
+import { FileUpload } from '@/components/features/FileUpload/FileUpload'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 export default function FileUploadWithCsrf() {
-  return (
-    <CsrfProvider>
-      <TooltipProvider>
-        <FileUpload />
-      </TooltipProvider>
-    </CsrfProvider>
-  );
+	return (
+		<CsrfProvider>
+			<TooltipProvider>
+				<FileUpload />
+			</TooltipProvider>
+		</CsrfProvider>
+	)
 }

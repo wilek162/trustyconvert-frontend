@@ -1,9 +1,11 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FileUpload } from "./FileUpload";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/client";
 import { vi } from "vitest";
+
+import { apiClient } from "@/lib/api/client";
+
+import { FileUpload } from "./FileUpload";
 
 // Mock the API client
 vi.mock("@/lib/api/client", () => ({

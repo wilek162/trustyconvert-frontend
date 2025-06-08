@@ -16,7 +16,10 @@ module.exports = {
        settings: {
               react: { version: "detect" },
               "import/resolver": {
-                     typescript: { project: "./tsconfig.json" }
+                     typescript: { project: "./tsconfig.json" },
+                     node: {
+                            extensions: [".js", ".jsx", ".ts", ".tsx", ".astro", ".css"]
+                     }
               }
        },
        overrides: [
@@ -34,7 +37,9 @@ module.exports = {
                             "react/react-in-jsx-scope": "off",
                             "react/no-unknown-property": "off",
                             "react/jsx-uses-react": "off",
-                            "react/jsx-uses-vars": "off"
+                            "react/jsx-uses-vars": "off",
+                            "react/jsx-key": "off",
+                            "react/jsx-no-undef": "off"
                      }
               },
               {

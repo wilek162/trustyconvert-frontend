@@ -1,19 +1,23 @@
-import React from "react";
-import { useSupportedFormats } from "@/lib/hooks/useFileUpload";
+import React from 'react'
+import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
 
 export default function SupportedFormatsList() {
-  const { formats, loading, error } = useSupportedFormats();
-  if (loading) return <div>Loading formats...</div>;
-  if (error) return <div>{error}</div>;
-  const safeFormats = Array.isArray(formats) ? formats : [];
-  return (
-    <ul style={{ padding: 0, listStyle: "none" }}>
-      {safeFormats.map((f) => (
-        <li key={f.id} style={{ marginBottom: 12 }}>
-          <b>{f.name}</b> (<code>{f.inputFormats.join(", ")}</code>) →
-          <span style={{ marginLeft: 4 }}>{f.outputFormats.join(", ")}</span>
-        </li>
-      ))}
-    </ul>
-  );
-} 
+	const { formats, isLoading, error } = useSupportedFormats()
+
+	if (isLoading) return <div>Loading formats...</div>
+	if (error) return <div>{error.message}</div>
+	if (!formats.length) return <div>No supported formats found</div>
+
+	return (
+		<ul className="space-y-4">
+			{formats.map((format) => (
+				<li key={format.id} className="flex items-center space-x-2">
+					<span className="font-medium">{format.name}</span>
+					<span className="text-muted-foreground">({format.inputFormats.join(', ')})</span>
+					<span className="text-muted-foreground">→</span>
+					<span className="text-muted-foreground">{format.outputFormats.join(', ')}</span>
+				</li>
+			))}
+		</ul>
+	)
+}

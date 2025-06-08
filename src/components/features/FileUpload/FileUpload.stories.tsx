@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { FileUpload } from "./FileUpload";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { rest } from "msw";
+
+import { FileUpload } from "./FileUpload";
 
 const queryClient = new QueryClient({
   defaultOptions: {

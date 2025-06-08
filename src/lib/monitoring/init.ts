@@ -1,5 +1,6 @@
-import { measurePerformance } from "./performance";
 import * as Sentry from "@sentry/browser";
+
+import { measurePerformance } from "./performance";
 
 export function initializeMonitoring() {
   // Initialize Sentry in production
