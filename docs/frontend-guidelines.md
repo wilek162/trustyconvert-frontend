@@ -62,7 +62,6 @@
 - Use for static UI elements
 - Server-side rendered content
 - SEO-critical components
-- Layout components
 
 Examples:
 
@@ -92,7 +91,6 @@ src/
   components/
     common/          # Shared components
     features/        # Feature-specific components
-    layout/         # Layout components
     ui/             # UI components library
     providers/      # Context providers
     seo/            # SEO components
@@ -104,27 +102,27 @@ src/
 
 ```css
 :root {
-  /* Colors */
-  --color-primary: #0066cc;
-  --color-secondary: #4c566a;
-  --color-success: #4caf50;
-  --color-warning: #ff9800;
-  --color-error: #f44336;
+	/* Colors */
+	--color-primary: #0066cc;
+	--color-secondary: #4c566a;
+	--color-success: #4caf50;
+	--color-warning: #ff9800;
+	--color-error: #f44336;
 
-  /* Typography */
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+	/* Typography */
+	--font-sans: 'Inter', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', monospace;
 
-  /* Spacing */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 1rem;
-  --space-4: 1.5rem;
-  --space-5: 2rem;
+	/* Spacing */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 1rem;
+	--space-4: 1.5rem;
+	--space-5: 2rem;
 
-  /* Transitions */
-  --transition-default: 200ms ease-in-out;
-  --transition-slow: 300ms ease-in-out;
+	/* Transitions */
+	--transition-default: 200ms ease-in-out;
+	--transition-slow: 300ms ease-in-out;
 }
 ```
 

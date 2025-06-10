@@ -6,6 +6,8 @@ import type { TaskStatus } from '@/lib/api/types'
 import { withRetry } from '@/lib/retry'
 import { useToast } from '@/lib/hooks/useToast'
 import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
+import { useConversionStatus } from '@/lib/hooks/useConversionStatus'
+import { debugLog, debugError } from '@/lib/utils/debug'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
 const MAX_RETRIES = 3
@@ -35,110 +37,102 @@ export function useFileConversion() {
 	const [file, setFile] = useState<File | null>(null)
 	const [format, setFormat] = useState<string>('')
 	const [taskId, setTaskId] = useState<string | null>(null)
-	const [status, setStatus] = useState<TaskStatus['status']>('idle')
-	const [progress, setProgress] = useState(0)
-	const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
 	const [error, setError] = useState<Error | null>(null)
+	const [isPosting, setIsPosting] = useState(false)
 
 	// Get supported formats
 	const { formats, isLoading: isLoadingFormats, error: formatsError } = useSupportedFormats()
 
-	// Log hook initialization
-	useEffect(() => {
-		debug.log('Hook initialized')
-		return () => {
-			debug.log('Hook cleanup')
-			// Clear any pending timeouts
-			if (taskId) {
-				debug.log('Cleaning up task', { taskId })
-				setTaskId(null)
-				setStatus('idle')
-			}
-		}
-	}, [])
+	// Use status polling hook
+	const {
+		status,
+		progress,
+		downloadUrl,
+		fileName,
+		fileSize,
+		isLoading: isStatusLoading,
+		retryCount,
+		error: statusError,
+		cancel: cancelConversion
+	} = useConversionStatus({
+		taskId,
+		onError: (err) => setError(new Error(err))
+	})
 
-	/**
-	 * Mutation for starting a file conversion
-	 * Handles file upload and conversion initiation
-	 */
 	const conversion = useMutation({
 		mutationFn: async ({ file, targetFormat }: { file: File; targetFormat: string }) => {
-			debug.log('Starting conversion', { file: file.name, format: targetFormat })
-			const response = await apiClient.startConversion(file, targetFormat)
-			return response
+			debugLog('[conversion.mutationFn] called', {
+				file: file?.name,
+				targetFormat,
+				isPosting,
+				taskId,
+				status
+			})
+			if (isPosting || (taskId && status !== 'idle' && status !== 'failed')) {
+				debugLog('[conversion.mutationFn] Early exit: already posting or task in progress', {
+					isPosting,
+					taskId,
+					status
+				})
+				return
+			}
+			setIsPosting(true)
+			debugLog('[conversion.mutationFn] Starting conversion', {
+				file: file.name,
+				format: targetFormat
+			})
+			try {
+				const response = await apiClient.startConversion(file, targetFormat)
+				debugLog('[conversion.mutationFn] Conversion response', response)
+				if (!response?.task_id) {
+					throw new Error('No task ID returned from server')
+				}
+				return response
+			} catch (err) {
+				debugError('[conversion.mutationFn] Error during conversion', err)
+				setIsPosting(false)
+				throw err
+			}
 		},
 		onSuccess: (data) => {
-			debug.log('Conversion started successfully', { taskId: data.task_id })
+			debugLog('[conversion.onSuccess] called', data)
+			if (!data?.task_id) {
+				debugError('[conversion.onSuccess] No task ID returned from server', data)
+				setError(new Error('No task ID returned from server'))
+				setIsPosting(false)
+				return
+			}
+			debugLog('[conversion.onSuccess] Conversion started successfully', { taskId: data.task_id })
 			setTaskId(data.task_id)
-			setStatus('processing')
 			setError(null)
+			setIsPosting(false)
 		},
 		onError: (error: Error) => {
-			debug.error('Conversion start failed', error)
+			debugError('[conversion.onError] Conversion start failed', error)
 			setError(error)
-			setStatus('failed')
+			setIsPosting(false)
 			addToast({
 				title: 'Error',
 				description: error.message,
 				variant: 'destructive'
 			})
-		}
+		},
+		// Configure React Query's retry behavior
+		retry: 2, // Only retry twice
+		retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000) // Exponential backoff with max 30s
 	})
 
-	/**
-	 * Query for checking conversion status
-	 * Polls the API until conversion is complete or failed
-	 */
-	const useConversionStatus = (taskId: string | null) => {
-		return useQuery({
-			queryKey: ['conversionStatus', taskId],
-			queryFn: async () => {
-				if (!taskId) throw new Error('No task ID')
-				debug.log('Checking conversion status', { taskId })
-				const response = await apiClient.getTaskStatus(taskId)
-				return response
-			},
-			enabled: !!taskId && status === 'processing',
-			refetchInterval: POLLING_INTERVAL,
-			retry: (failureCount, error: any) => {
-				// Don't retry on client errors (4xx)
-				if (error?.status >= 400 && error?.status < 500) {
-					return false
-				}
-				// Retry up to MAX_RETRIES times with exponential backoff
-				return failureCount < MAX_RETRIES
-			}
-		})
-	}
-
-	// Update progress and status based on status query
-	useEffect(() => {
-		if (conversion.data) {
-			const { status: newStatus, progress: newProgress, download_url } = conversion.data
-			debug.log('Status updated', { status: newStatus, progress: newProgress })
-			setStatus(newStatus)
-			setProgress(newProgress)
-			if (download_url) {
-				setDownloadUrl(download_url)
-			}
-		}
-	}, [conversion.data])
-
-	// Handle status query errors
-	useEffect(() => {
-		if (conversion.error) {
-			debug.error('Status check failed', conversion.error)
-			setError(conversion.error as Error)
-			setStatus('failed')
-		}
-	}, [conversion.error])
-
-	/**
-	 * Start the conversion process
-	 */
 	const startConversion = useCallback(() => {
-		if (!file || !format) {
-			const error = new Error('File and format are required')
+		debugLog('[startConversion] called', { file, format, isPosting, taskId, status })
+		if (!file || !format || isPosting || (taskId && status !== 'idle' && status !== 'failed')) {
+			const error = new Error('File and format are required or conversion already in progress')
+			debugError('[startConversion] Invalid state for conversion', {
+				file,
+				format,
+				isPosting,
+				taskId,
+				status
+			})
 			setError(error)
 			addToast({
 				title: 'Error',
@@ -147,23 +141,19 @@ export function useFileConversion() {
 			})
 			return
 		}
-		setStatus('uploading')
+		debugLog('[startConversion] Triggering conversion.mutate', { file: file.name, format })
 		conversion.mutate({ file, targetFormat: format })
-	}, [file, format, conversion, addToast])
+	}, [file, format, conversion, addToast, isPosting, taskId, status])
 
-	/**
-	 * Reset the conversion state
-	 */
 	const reset = useCallback(() => {
 		debug.log('Resetting conversion state')
 		setFile(null)
 		setFormat('')
 		setTaskId(null)
-		setStatus('idle')
-		setProgress(0)
-		setDownloadUrl(null)
 		setError(null)
-	}, [])
+		setIsPosting(false)
+		queryClient.removeQueries({ queryKey: ['conversion-status'] })
+	}, [queryClient])
 
 	return {
 		file,
@@ -174,13 +164,18 @@ export function useFileConversion() {
 		status,
 		progress,
 		downloadUrl,
-		error,
+		fileName,
+		fileSize,
+		error: error || statusError,
+		isPosting,
+		isStatusLoading,
 		reset,
+		cancelConversion,
 		conversion,
-		useConversionStatus,
 		formats,
 		isLoadingFormats,
-		formatsError
+		formatsError,
+		retryCount
 	}
 }
 

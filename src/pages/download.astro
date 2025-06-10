@@ -1,189 +1,42 @@
 ---
-import {
-  Download as DownloadIcon,
-  RefreshCw,
-  AlertCircle,
-  CheckCircle,
-} from "lucide-react";
-
-import MainLayout from "@/layouts/mainLayout.astro";
-import { apiClient } from "@/lib/api/client";
-import type { TaskStatus } from "@/lib/api/types";
+import Layout from '@/layouts/Layout.astro'
+import { DownloadContent } from '@/components/features/Download/DownloadContent'
+import { ArrowLeft } from 'lucide-react'
 
 // Get task ID from URL
-const taskId = Astro.url.searchParams.get("id");
+const taskId = Astro.url.searchParams.get('taskId')
 
 // Redirect to home if no task ID
 if (!taskId) {
-  return Astro.redirect("/");
+  return Astro.redirect('/')
 }
-
-let status: TaskStatus | null = null;
-let error: string | null = null;
-
-try {
-  const response = await apiClient.getTaskStatus(taskId);
-  status = response;
-} catch (e) {
-  error = e instanceof Error ? e.message : "Failed to get conversion status";
-}
-
-// SEO
-const title =
-  status?.status === "completed"
-    ? `Download ${status.filename || "Converted File"} - TrustyConvert`
-    : "File Conversion Status - TrustyConvert";
-
-const description =
-  status?.status === "completed"
-    ? `Your file has been converted successfully. Download your converted file now.`
-    : "Check your file conversion status. Fast, secure, and privacy-focused file conversion.";
-
-const canonical = `https://trustyconvert.com/download?id=${taskId}`;
-
-// Prevent indexing of download pages
-const noindex = true;
 ---
 
-<MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  noindex={noindex}
->
-  <main class="container mx-auto px-4 py-12">
-    <div class="max-w-2xl mx-auto">
-      {
-        error ? (
-          <div class="bg-destructive/10 border border-destructive/30 rounded-lg p-8 text-center">
-            <div class="w-12 h-12 text-destructive mx-auto mb-4">
-              <AlertCircle />
-            </div>
-            <h1 class="text-2xl font-bold text-destructive mb-4">Error</h1>
-            <p class="text-destructive/90 mb-6">{error}</p>
-            <a
-              href="/"
-              class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
-            >
-              Try Again
-            </a>
-          </div>
-        ) : !status ? (
-          <div class="bg-muted border rounded-lg p-8 text-center">
-            <div class="w-12 h-12 text-muted-foreground mx-auto mb-4 animate-spin">
-              <RefreshCw />
-            </div>
-            <h1 class="text-2xl font-bold text-foreground mb-2">Loading...</h1>
-            <p class="text-muted-foreground">
-              Please wait while we check your conversion status.
-            </p>
-          </div>
-        ) : (
-          <div class="border rounded-lg overflow-hidden bg-card">
-            <div class="p-8">
-              {/* Status Header */}
-              <div class="text-center mb-8">
-                {status.status === "completed" && (
-                  <div class="w-12 h-12 text-green-500 mx-auto mb-4">
-                    <CheckCircle />
-                  </div>
-                )}
-                {status.status === "processing" && (
-                  <div class="w-12 h-12 text-primary mx-auto mb-4 animate-spin">
-                    <RefreshCw />
-                  </div>
-                )}
-                {status.status === "failed" && (
-                  <div class="w-12 h-12 text-destructive mx-auto mb-4">
-                    <AlertCircle />
-                  </div>
-                )}
+<Layout title="Download Converted File">
+  <main class="container mx-auto px-4 py-8">
+    <div class="max-w-2xl mx-auto space-y-8">
+      <div class="flex items-center gap-4">
+        <a href="/" class="text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft  className="h-5 w-5" />
+        </a>
+        <h1 class="text-3xl font-bold">Download Your File</h1>
+      </div>
+      
+      <div class="bg-card rounded-lg shadow-lg">
+        <DownloadContent client:load taskId={taskId} />
+      </div>
 
-                <h1 class="text-2xl font-bold text-foreground mb-2">
-                  {status.status === "completed" && "Conversion Complete!"}
-                  {status.status === "processing" && "Converting..."}
-                  {status.status === "failed" && "Conversion Failed"}
-                </h1>
-
-                {status.filename && (
-                  <p class="text-muted-foreground">{status.filename}</p>
-                )}
-              </div>
-
-              {/* Progress Bar */}
-              {status.status === "processing" && (
-                <div class="mb-8">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-foreground">
-                      Progress
-                    </span>
-                    <span class="text-sm text-muted-foreground">
-                      {Math.round(status.progress)}%
-                    </span>
-                  </div>
-                  <div class="w-full bg-muted rounded-full h-2">
-                    <div
-                      class="bg-primary h-2 rounded-full transition-all duration-300"
-                      style={`width: ${status.progress}%`}
-                      data-progress
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {status.status === "failed" && (
-                <div class="bg-destructive/10 border border-destructive/30 rounded-lg p-4 mb-8">
-                  <p class="text-destructive">
-                    {status.error ||
-                      "An error occurred during conversion. Please try again."}
-                  </p>
-                  {status.error_details && (
-                    <pre class="mt-2 text-sm text-destructive/90 overflow-auto p-2 bg-destructive/5 rounded">
-                      {JSON.stringify(status.error_details, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              )}
-
-              {/* Download Button */}
-              {status?.status === "completed" && status.download_url && (
-                <div class="space-y-4">
-                  <a
-                    href={status.download_url}
-                    class="flex items-center justify-center w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6 rounded-lg transition-colors"
-                    download={status.filename}
-                  >
-                    <div class="w-5 h-5 mr-2">
-                      <DownloadIcon />
-                    </div>
-                    Download File
-                  </a>
-                  <p class="text-sm text-center text-muted-foreground">
-                    Your file will be automatically deleted after 24 hours for
-                    privacy.
-                  </p>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div class="mt-8 text-center space-y-4">
-                <a
-                  href="/"
-                  class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
-                >
-                  Convert Another File
-                </a>
-              </div>
-            </div>
-          </div>
-        )
-      }
+      <div class="text-center text-sm text-muted-foreground">
+        <p>Need to convert another file?</p>
+        <a href="/" class="text-primary hover:underline">Start a new conversion</a>
+      </div>
     </div>
   </main>
-</MainLayout>
+</Layout>
 
-<script>
-  import { initializeDownloadPage } from "@/lib/client/downloadPage";
-  initializeDownloadPage();
-</script>
+<style>
+  :global(body) {
+    background: linear-gradient(to bottom right, hsl(var(--background)), hsl(var(--muted)));
+    min-height: 100vh;
+  }
+</style>

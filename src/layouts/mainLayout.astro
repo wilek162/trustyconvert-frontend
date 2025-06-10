@@ -1,27 +1,34 @@
 ---
-import "@styles/global.css";
-import { Toaster } from "sonner";
+import SEO from '@/components/seo/SEO.astro'
+import { QueryProvider } from '@/lib/providers/QueryProvider'
+import { Toaster } from '@/components/ui/toast'
+import { ModeToggle } from '@/components/common/ModeToggle'
+import '@/styles/global.css'
 
-import { ModeToggle } from "@/components/common/ModeToggle";
-import SEO from "@/components/seo/SEO.astro";
-import { QueryProvider } from "@/lib/providers/QueryProvider";
-/**
- * Props:
- * - title: string
- * - description: string
- * - canonical: string
- * - ogImage: string
- * - extraStructuredData?: object | object[] (optional, for per-page JSON-LD)
- */
-const { title, description, canonical, ogImage, extraStructuredData } =
-  Astro.props;
+interface Props {
+  title?: string
+  description?: string
+  image?: string
+  type?: 'website' | 'article'
+  structuredData?: Record<string, any>
+}
+
+const {
+  title,
+  description,
+  image,
+  type,
+  structuredData
+} = Astro.props
+
+// Get the canonical URL
+const canonical = new URL(Astro.url.pathname, Astro.site).toString()
 
 // Preload critical assets
 const preloadLinks = [
-  { rel: "preload", href: "/favicon.svg", as: "image", type: "image/svg+xml" },
-  { rel: "preconnect", href: "https://fonts.googleapis.com" },
-  { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" },
-];
+  { rel: 'preload', href: '/fonts/inter-var.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
+  { rel: 'preload', href: '/fonts/jetbrains-mono-var.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' }
+]
 
 // Always-included structured data
 const structuredDataWebSite = {
@@ -34,7 +41,8 @@ const structuredDataWebSite = {
     target: `${canonical}?search={search_term_string}`,
     "query-input": "required name=search_term_string",
   },
-};
+}
+
 const structuredDataOrg = {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -45,25 +53,30 @@ const structuredDataOrg = {
     "https://twitter.com/trustyconvert",
     "https://github.com/trustyconvert",
   ],
-};
+}
 ---
 
-<html lang="en" class="scroll-smooth">
+<!DOCTYPE html>
+<html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <meta name="theme-color" content="#6366f1" />
 
-    {preloadLinks.map((link) => <link {...link} />)}
+    <!-- Preload critical assets -->
+    {preloadLinks.map(link => (
+      <link {...link} />
+    ))}
 
     <SEO
       title={title}
       description={description}
-      canonical={canonical}
-      ogImage={ogImage}
+      image={image}
+      type={type}
+      structuredData={structuredData}
     />
 
     <script
@@ -78,19 +91,19 @@ const structuredDataOrg = {
     />
     {
       // Support array or single object for extraStructuredData
-      Array.isArray(extraStructuredData) ? (
-        extraStructuredData.map((data) => (
+      Array.isArray(structuredData) ? (
+        structuredData.map((data) => (
           <script
             is:inline
             type="application/ld+json"
             set:html={JSON.stringify(data)}
           />
         ))
-      ) : extraStructuredData ? (
+      ) : structuredData ? (
         <script
           is:inline
           type="application/ld+json"
-          set:html={JSON.stringify(extraStructuredData)}
+          set:html={JSON.stringify(structuredData)}
         />
       ) : null
     }
@@ -107,150 +120,62 @@ const structuredDataOrg = {
     <meta name="msapplication-TileColor" content="#6366f1" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
   </head>
-  <body class="min-h-screen bg-background text-foreground antialiased">
-    <a
-      href="#main-content"
-      class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-background focus:text-foreground"
-    >
-      Skip to main content
-    </a>
-
-    <header
-      class="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
-    >
-      <nav
-        class="container mx-auto flex h-16 items-center justify-between px-4"
-        aria-label="Main navigation"
-      >
-        <a
-          href="/"
-          class="flex items-center gap-2 font-bold text-xl text-primary hover:opacity-90 transition-opacity"
-        >
-          <img
-            src="/favicon.svg"
-            alt=""
-            class="w-6 h-6"
-            width="24"
-            height="24"
-            loading="eager"
-          />
-          TrustyConvert
-        </a>
-
-        <ul class="flex items-center gap-6 text-base">
-          <li>
-            <a href="/about" class="hover:text-primary transition-colors"
-              >About</a
-            >
-          </li>
-          <li>
-            <a href="/faq" class="hover:text-primary transition-colors">FAQ</a>
-          </li>
-          <li>
-            <a href="/privacy" class="hover:text-primary transition-colors"
-              >Privacy</a
-            >
-          </li>
-        </ul>
-
-        <div class="flex items-center gap-4">
-          <ModeToggle client:visible />
-        </div>
-      </nav>
-    </header>
-
-    <main id="main-content" class="flex-1">
-      <QueryProvider client:load>
-        <slot />
-        <Toaster client:load />
-      </QueryProvider>
-    </main>
-
-    <footer class="w-full border-t bg-muted/40">
-      <div class="container mx-auto py-8 px-4">
-        <div class="grid gap-8 md:grid-cols-3">
-          <div>
-            <h2 class="font-semibold mb-4">TrustyConvert</h2>
-            <p class="text-sm text-muted-foreground">
-              Fast, secure, and privacy-focused file conversion for everyone.
-            </p>
+  <body>
+    <QueryProvider>
+      <div class="min-h-screen bg-background">
+        <header class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div class="container flex h-14 items-center">
+            <div class="mr-4 flex">
+              <a class="mr-6 flex items-center space-x-2" href="/">
+                <span class="font-bold">TrustyConvert</span>
+              </a>
+              <nav class="flex items-center space-x-6 text-sm font-medium">
+                <a class="transition-colors hover:text-foreground/80" href="/">Home</a>
+                <a class="transition-colors hover:text-foreground/80" href="/about">About</a>
+                <a class="transition-colors hover:text-foreground/80" href="/faq">FAQ</a>
+              </nav>
+            </div>
+            <div class="flex flex-1 items-center justify-end space-x-2">
+              <ModeToggle client:load />
+            </div>
           </div>
-          <div>
-            <h2 class="font-semibold mb-4">Quick Links</h2>
-            <ul class="space-y-2 text-sm">
-              <li>
-                <a href="/about" class="hover:text-primary transition-colors"
-                  >About</a
-                >
-              </li>
-              <li>
-                <a href="/faq" class="hover:text-primary transition-colors"
-                  >FAQ</a
-                >
-              </li>
-              <li>
-                <a href="/privacy" class="hover:text-primary transition-colors"
-                  >Privacy</a
-                >
-              </li>
-            </ul>
+        </header>
+        <main class="flex-1">
+          <slot />
+        </main>
+        <footer class="border-t py-6 md:py-0">
+          <div class="container flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row">
+            <div class="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
+              <p class="text-center text-sm leading-loose text-muted-foreground md:text-left">
+                Built with ❤️ by TrustyConvert Team
+              </p>
+            </div>
+            <div class="flex items-center gap-4">
+              <a
+                href="/privacy"
+                class="text-sm text-muted-foreground underline-offset-4 hover:underline"
+              >
+                Privacy Policy
+              </a>
+            </div>
           </div>
-          <div>
-            <h2 class="font-semibold mb-4">Legal</h2>
-            <ul class="space-y-2 text-sm">
-              <li>
-                <a href="/privacy" class="hover:text-primary transition-colors"
-                  >Privacy Policy</a
-                >
-              </li>
-              <li>
-                <a href="/terms" class="hover:text-primary transition-colors"
-                  >Terms of Service</a
-                >
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div
-          class="mt-8 pt-8 border-t text-center text-sm text-muted-foreground"
-        >
-          &copy; {new Date().getFullYear()} TrustyConvert. All rights reserved.
-        </div>
+        </footer>
       </div>
-    </footer>
-    <style>
-      /* Add smooth scrolling and better text rendering */
-      html {
-        scroll-behavior: smooth;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-
-      /* Improve focus styles for accessibility */
-      :focus-visible {
-        outline: 2px solid hsl(var(--primary));
-        outline-offset: 2px;
-      }
-
-      /* Add loading state styles */
-      .file-upload-loading {
-        opacity: 0;
-        animation: fadeIn 0.3s ease-in forwards;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-        }
-        to {
-          opacity: 1;
-        }
-      }
-
-      /* Performance optimizations */
-      img {
-        content-visibility: auto;
-      }
-    </style>
+      <Toaster client:load />
+    </QueryProvider>
   </body>
 </html>
+
+<script>
+  // Initialize performance monitoring
+  if (typeof window !== 'undefined') {
+    import('@/lib/monitoring/performance').then(({ performanceMonitor }) => {
+      performanceMonitor.measurePageLoad()
+
+      // Track navigation performance
+      document.addEventListener('astro:page-load', () => {
+        performanceMonitor.measurePageLoad()
+      })
+    })
+  }
+</script>

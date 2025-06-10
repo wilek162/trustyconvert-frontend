@@ -1,71 +1,64 @@
 ---
 interface Props {
-  title: string;
-  description: string;
-  canonical: string;
-  ogImage?: string;
-  noindex?: boolean;
-  alternateUrls?: { lang: string; url: string }[];
+  title?: string
+  description?: string
+  image?: string
+  type?: 'website' | 'article'
+  structuredData?: Record<string, any>
 }
 
 const {
-  title,
-  description,
-  canonical,
-  ogImage = "https://trustyconvert.com/og-image.png",
-  noindex = false,
-  alternateUrls = [],
-} = Astro.props;
+  title = 'TrustyConvert - Fast and Secure File Conversion',
+  description = 'Convert your files quickly and securely with TrustyConvert. Support for multiple formats including PDF, DOCX, and images.',
+  image = '/images/og-image.jpg',
+  type = 'website',
+  structuredData
+} = Astro.props
 
-// Ensure title is not too long for SEO
-const seoTitle = title.length > 60 ? title.substring(0, 57) + "..." : title;
-
-// Ensure description is not too long for SEO
-const seoDescription =
-  description.length > 160
-    ? description.substring(0, 157) + "..."
-    : description;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site)
 ---
 
 <!-- Primary Meta Tags -->
-<title>{seoTitle}</title>
-<meta name="title" content={seoTitle} />
-<meta name="description" content={seoDescription} />
-{noindex && <meta name="robots" content="noindex,nofollow" />}
-<link rel="canonical" href={canonical} />
+<title>{title}</title>
+<meta name="title" content={title} />
+<meta name="description" content={description} />
 
 <!-- Open Graph / Facebook -->
-<meta property="og:type" content="website" />
-<meta property="og:url" content={canonical} />
-<meta property="og:title" content={seoTitle} />
-<meta property="og:description" content={seoDescription} />
-<meta property="og:image" content={ogImage} />
+<meta property="og:type" content={type} />
+<meta property="og:url" content={canonicalURL} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={new URL(image, Astro.site)} />
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:url" content={canonical} />
-<meta property="twitter:title" content={seoTitle} />
-<meta property="twitter:description" content={seoDescription} />
-<meta property="twitter:image" content={ogImage} />
+<meta property="twitter:url" content={canonicalURL} />
+<meta property="twitter:title" content={title} />
+<meta property="twitter:description" content={description} />
+<meta property="twitter:image" content={new URL(image, Astro.site)} />
 
-<!-- Alternate Language URLs -->
-{
-  alternateUrls.map(({ lang, url }) => (
-    <link rel="alternate" hreflang={lang} href={url} />
-  ))
-}
+<!-- Canonical URL -->
+<link rel="canonical" href={canonicalURL} />
 
-<!-- Additional Meta Tags -->
-<meta name="format-detection" content="telephone=no" />
-<meta name="theme-color" content="#6366f1" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<!-- Structured Data -->
+{structuredData && (
+  <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+)}
 
-<!-- Preconnect to API -->
-<link rel="preconnect" href={import.meta.env.PUBLIC_API_URL || "/api"} />
-
-<!-- PWA Tags -->
-<link rel="manifest" href="/manifest.webmanifest" />
-<meta name="application-name" content="TrustyConvert" />
-<meta name="apple-mobile-web-app-title" content="TrustyConvert" />
+<!-- Default Structured Data -->
+{!structuredData && (
+  <script type="application/ld+json" set:html={JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'TrustyConvert',
+    description: description,
+    url: Astro.site,
+    applicationCategory: 'UtilityApplication',
+    operatingSystem: 'Any',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD'
+    }
+  })} />
+)}

@@ -83,9 +83,22 @@ const UPLOAD_CONFIG = {
  * Handles file upload, format selection, and conversion process
  */
 export function FileUploadContent({ onError }: FileUploadContentProps) {
-	const { formats, isLoading: isLoadingFormats, error: formatsError } = useSupportedFormats()
-	const { conversion, useConversionStatus } = useFileConversion()
-	const [file, setFile] = useState<File | null>(null)
+	const {
+		file,
+		setFile,
+		format,
+		setFormat,
+		startConversion,
+		status,
+		progress,
+		downloadUrl,
+		error,
+		isPosting,
+		isStatusLoading,
+		reset,
+		formats,
+		isLoadingFormats
+	} = useFileConversion()
 	const [formatError, setFormatError] = useState<string | null>(null)
 	const [selectedFormat, setSelectedFormat] = useState<string | null>(null)
 
@@ -174,23 +187,26 @@ export function FileUploadContent({ onError }: FileUploadContentProps) {
 	 * Handle file drop event
 	 * @param acceptedFiles Array of accepted files
 	 */
-	const onDrop = useCallback((acceptedFiles: File[]) => {
-		const droppedFile = acceptedFiles[0]
-		if (!droppedFile) return
+	const onDrop = useCallback(
+		(acceptedFiles: File[]) => {
+			const droppedFile = acceptedFiles[0]
+			if (!droppedFile) return
 
-		// Validate file size
-		if (droppedFile.size > UPLOAD_CONFIG.maxFileSize) {
-			debug.error('File too large', {
-				size: droppedFile.size,
-				maxSize: UPLOAD_CONFIG.maxFileSize
-			})
-			return
-		}
+			// Validate file size
+			if (droppedFile.size > UPLOAD_CONFIG.maxFileSize) {
+				debug.error('File too large', {
+					size: droppedFile.size,
+					maxSize: UPLOAD_CONFIG.maxFileSize
+				})
+				return
+			}
 
-		setFile(droppedFile)
-		setFormatError(null)
-		setSelectedFormat(null)
-	}, [])
+			setFile(droppedFile)
+			setFormatError(null)
+			setSelectedFormat(null)
+		},
+		[setFile]
+	)
 
 	// Configure dropzone
 	const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -200,43 +216,34 @@ export function FileUploadContent({ onError }: FileUploadContentProps) {
 		multiple: false
 	})
 
-	// Get conversion status
-	const { data: status, isLoading: isLoadingStatus } = useConversionStatus(
-		conversion.data?.task_id || null
-	)
-
 	/**
 	 * Handle format selection
 	 * @param format Selected output format
 	 */
-	const handleFormatSelect = useCallback((format: string) => {
-		setSelectedFormat(format)
-		setFormatError(null)
-	}, [])
+	const handleFormatSelect = useCallback(
+		(format: string) => {
+			setSelectedFormat(format)
+			setFormat(format)
+			setFormatError(null)
+		},
+		[setSelectedFormat, setFormat]
+	)
 
 	/**
 	 * Handle conversion start
 	 */
 	const handleConvert = useCallback(async () => {
 		if (!file || !selectedFormat) return
-
-		try {
-			await conversion.mutateAsync({
-				file,
-				targetFormat: selectedFormat
-			})
-		} catch (error) {
-			debug.error('Conversion failed', error)
-		}
-	}, [file, selectedFormat, conversion])
+		startConversion()
+	}, [file, selectedFormat, startConversion])
 
 	// Render different states based on conversion status
-	if (status?.status === 'completed') {
+	if (status === 'completed') {
 		return (
 			<div className="text-center">
 				<h3 className="mb-4 text-lg font-semibold">Conversion Complete!</h3>
 				<a
-					href={status.download_url}
+					href={downloadUrl}
 					download
 					className="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700"
 				>
@@ -247,17 +254,13 @@ export function FileUploadContent({ onError }: FileUploadContentProps) {
 		)
 	}
 
-	if (status?.status === 'failed') {
+	if (status === 'failed') {
 		return (
 			<div className="text-center">
 				<h3 className="mb-4 text-lg font-semibold text-red-600">Conversion Failed</h3>
-				<p className="mb-4 text-gray-600">{status.error}</p>
+				<p className="mb-4 text-gray-600">{error?.message}</p>
 				<button
-					onClick={() => {
-						setFile(null)
-						setSelectedFormat(null)
-						setFormatError(null)
-					}}
+					onClick={reset}
 					className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
 				>
 					<RefreshCw className="mr-2 h-4 w-4" />
@@ -267,11 +270,11 @@ export function FileUploadContent({ onError }: FileUploadContentProps) {
 		)
 	}
 
-	if (status?.status === 'processing' || conversion.isPending) {
+	if (status === 'processing' || isPosting || isStatusLoading) {
 		return (
 			<div className="text-center">
 				<h3 className="mb-4 text-lg font-semibold">Converting...</h3>
-				<Progress value={status?.progress || 0} className="w-full" />
+				<Progress value={progress || 0} className="w-full" />
 			</div>
 		)
 	}
@@ -342,10 +345,16 @@ export function FileUploadContent({ onError }: FileUploadContentProps) {
 
 					<Button
 						onClick={handleConvert}
-						disabled={!selectedFormat || conversion.isPending}
+						disabled={
+							!selectedFormat ||
+							isPosting ||
+							status === 'processing' ||
+							status === 'completed' ||
+							isStatusLoading
+						}
 						className="w-full"
 					>
-						{conversion.isPending ? (
+						{isPosting || isStatusLoading ? (
 							<>
 								<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
 								Converting...
