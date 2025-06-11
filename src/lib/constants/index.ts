@@ -4,7 +4,7 @@
 
 // API Configuration
 export const API_CONFIG = {
-	BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api',
+	BASE_URL: process.env.PUBLIC_API_URL || 'http://localhost:3000/api',
 	TIMEOUT: 30000, // 30 seconds
 	MAX_RETRIES: 3,
 	RETRY_DELAY: 1000, // 1 second
@@ -139,6 +139,6 @@ export const SEO_CONFIG = {
 	DEFAULT_DESCRIPTION:
 		'Convert your files quickly and securely with TrustyConvert. Support for various file formats including images, documents, spreadsheets, and presentations.',
 	DEFAULT_IMAGE: '/images/og-image.jpg',
-	SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+	SITE_URL: process.env.PUBLIC_SITE_URL || 'http://localhost:3000',
 	TWITTER_HANDLE: '@trustyconvert'
 } as const

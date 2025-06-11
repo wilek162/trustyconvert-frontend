@@ -1,181 +1,170 @@
 ---
-import SEO from '@/components/seo/SEO.astro'
-import { QueryProvider } from '@/lib/providers/QueryProvider'
-import { Toaster } from '@/components/ui/toast'
-import { ModeToggle } from '@/components/common/ModeToggle'
 import '@/styles/global.css'
+// Import the app initialization
+import '@/lib/app'
+
+// Define a type for structured data to avoid using 'any'
+type StructuredData = {
+	'@context': string
+	'@type': string
+	[key: string]:
+		| string
+		| number
+		| boolean
+		| null
+		| undefined
+		| StructuredData
+		| Array<string | number | StructuredData>
+}
 
 interface Props {
-  title?: string
-  description?: string
-  image?: string
-  type?: 'website' | 'article'
-  structuredData?: Record<string, any>
+	title: string
+	description: string
+	image?: string
+	canonical?: string
+	extraStructuredData?: StructuredData
+	alternateLanguages?: { code: string; name: string }[]
 }
 
 const {
-  title,
-  description,
-  image,
-  type,
-  structuredData
+	title,
+	description,
+	image = '/images/trustyconvert-og.jpg',
+	canonical,
+	extraStructuredData,
+	alternateLanguages = []
 } = Astro.props
 
-// Get the canonical URL
-const canonical = new URL(Astro.url.pathname, Astro.site).toString()
-
-// Preload critical assets
-const preloadLinks = [
-  { rel: 'preload', href: '/fonts/inter-var.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
-  { rel: 'preload', href: '/fonts/jetbrains-mono-var.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' }
-]
-
-// Always-included structured data
-const structuredDataWebSite = {
-  "@context": "https://schema.org",
-  "@type": "WebSite",
-  name: "TrustyConvert",
-  url: canonical,
-  potentialAction: {
-    "@type": "SearchAction",
-    target: `${canonical}?search={search_term_string}`,
-    "query-input": "required name=search_term_string",
-  },
-}
-
-const structuredDataOrg = {
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  name: "TrustyConvert",
-  url: canonical,
-  logo: "https://trustyconvert.com/favicon.svg",
-  sameAs: [
-    "https://twitter.com/trustyconvert",
-    "https://github.com/trustyconvert",
-  ],
-}
+// Compute the app version for cache busting
+const appVersion = import.meta.env.PUBLIC_APP_VERSION || '0.0.1';
 ---
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
-    <meta name="theme-color" content="#6366f1" />
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="generator" content={Astro.generator} />
 
-    <!-- Preload critical assets -->
-    {preloadLinks.map(link => (
-      <link {...link} />
-    ))}
+		<!-- Primary Meta Tags -->
+		<title>{title}</title>
+		<meta name="title" content={title} />
+		<meta name="description" content={description} />
+		<meta name="application-version" content={appVersion} />
 
-    <SEO
-      title={title}
-      description={description}
-      image={image}
-      type={type}
-      structuredData={structuredData}
-    />
+		<!-- Canonical URL -->
+		{canonical && <link rel="canonical" href={canonical} />}
 
-    <script
-      is:inline
-      type="application/ld+json"
-      set:html={JSON.stringify(structuredDataWebSite)}
-    />
-    <script
-      is:inline
-      type="application/ld+json"
-      set:html={JSON.stringify(structuredDataOrg)}
-    />
-    {
-      // Support array or single object for extraStructuredData
-      Array.isArray(structuredData) ? (
-        structuredData.map((data) => (
-          <script
-            is:inline
-            type="application/ld+json"
-            set:html={JSON.stringify(data)}
-          />
-        ))
-      ) : structuredData ? (
-        <script
-          is:inline
-          type="application/ld+json"
-          set:html={JSON.stringify(structuredData)}
-        />
-      ) : null
-    }
+		<!-- Alternate language links -->
+		{
+			alternateLanguages.map((lang) => (
+				<link
+					rel="alternate"
+					hreflang={lang.code}
+					href={`${Astro.url.origin}/${lang.code !== 'en' ? lang.code : ''}`}
+				/>
+			))
+		}
 
-    <!-- Performance optimizations -->
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-    <meta name="format-detection" content="telephone=no" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="TrustyConvert" />
-    <meta name="application-name" content="TrustyConvert" />
-    <meta name="msapplication-TileColor" content="#6366f1" />
-    <meta name="msapplication-config" content="/browserconfig.xml" />
-  </head>
-  <body>
-    <QueryProvider>
-      <div class="min-h-screen bg-background">
-        <header class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div class="container flex h-14 items-center">
-            <div class="mr-4 flex">
-              <a class="mr-6 flex items-center space-x-2" href="/">
-                <span class="font-bold">TrustyConvert</span>
-              </a>
-              <nav class="flex items-center space-x-6 text-sm font-medium">
-                <a class="transition-colors hover:text-foreground/80" href="/">Home</a>
-                <a class="transition-colors hover:text-foreground/80" href="/about">About</a>
-                <a class="transition-colors hover:text-foreground/80" href="/faq">FAQ</a>
-              </nav>
-            </div>
-            <div class="flex flex-1 items-center justify-end space-x-2">
-              <ModeToggle client:load />
-            </div>
-          </div>
-        </header>
-        <main class="flex-1">
-          <slot />
-        </main>
-        <footer class="border-t py-6 md:py-0">
-          <div class="container flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row">
-            <div class="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
-              <p class="text-center text-sm leading-loose text-muted-foreground md:text-left">
-                Built with ❤️ by TrustyConvert Team
-              </p>
-            </div>
-            <div class="flex items-center gap-4">
-              <a
-                href="/privacy"
-                class="text-sm text-muted-foreground underline-offset-4 hover:underline"
-              >
-                Privacy Policy
-              </a>
-            </div>
-          </div>
-        </footer>
-      </div>
-      <Toaster client:load />
-    </QueryProvider>
-  </body>
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonical || Astro.url} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={new URL(image, Astro.url)} />
+
+		<!-- Twitter -->
+		<meta property="twitter:card" content="summary_large_image" />
+		<meta property="twitter:url" content={canonical || Astro.url} />
+		<meta property="twitter:title" content={title} />
+		<meta property="twitter:description" content={description} />
+		<meta property="twitter:image" content={new URL(image, Astro.url)} />
+
+		<!-- Structured Data -->
+		{
+			extraStructuredData && (
+				<script type="application/ld+json" set:html={JSON.stringify(extraStructuredData)} />
+			)
+		}
+
+		<!-- Preconnect to API -->
+		<link rel="preconnect" href="/api" />
+		
+		<!-- Preload critical assets -->
+		<link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+	</head>
+	<body class="min-h-screen bg-gray-50">
+		<header class="bg-white shadow-sm">
+			<div class="container mx-auto flex items-center justify-between px-4 py-4">
+				<a href="/" class="text-2xl font-bold text-blue-600">TrustyConvert</a>
+				<nav>
+					<ul class="flex space-x-6">
+						<li><a href="/" class="text-gray-600 hover:text-blue-600">Home</a></li>
+						<li><a href="/about" class="text-gray-600 hover:text-blue-600">About</a></li>
+						<li><a href="/privacy" class="text-gray-600 hover:text-blue-600">Privacy</a></li>
+					</ul>
+				</nav>
+			</div>
+		</header>
+
+		<main class="container mx-auto px-4 py-8">
+			<slot />
+		</main>
+
+		<footer class="bg-gray-800 py-8 text-white">
+			<div class="container mx-auto px-4">
+				<div class="grid grid-cols-1 gap-8 md:grid-cols-3">
+					<div>
+						<h3 class="mb-4 text-lg font-semibold">TrustyConvert</h3>
+						<p class="text-gray-300">Fast, secure file conversion for all your document needs.</p>
+					</div>
+					<div>
+						<h3 class="mb-4 text-lg font-semibold">Links</h3>
+						<ul class="space-y-2">
+							<li><a href="/" class="text-gray-300 hover:text-white">Home</a></li>
+							<li><a href="/about" class="text-gray-300 hover:text-white">About</a></li>
+							<li><a href="/privacy" class="text-gray-300 hover:text-white">Privacy Policy</a></li>
+						</ul>
+					</div>
+					<div>
+						<h3 class="mb-4 text-lg font-semibold">Security</h3>
+						<p class="text-gray-300">
+							Your files are automatically deleted after conversion. We never store your personal
+							data.
+						</p>
+					</div>
+				</div>
+				<div class="mt-8 border-t border-gray-700 pt-6 text-center text-gray-400">
+					&copy; {new Date().getFullYear()} TrustyConvert. All rights reserved. | Version {appVersion}
+				</div>
+			</div>
+		</footer>
+
+		{import.meta.env.DEV && (
+			<script>
+				// Import the test utility in development mode
+				import('/src/lib/api/test.ts').then(module => {
+					// Make test function available in the console
+					window.testTrustyConvertAPI = module.testMockAPI;
+					console.info('🧪 TrustyConvert API test utility loaded. Run window.testTrustyConvertAPI() in the console to test API mocks.');
+				}).catch(err => {
+					console.error('Failed to load test utility:', err);
+				});
+			</script>
+		)}
+		
+		<!-- Initialize app -->
+		<script>
+			// This ensures the app is initialized as early as possible
+			import { initializeApp, initializeBrowser } from '../lib/app';
+			
+			// Use requestIdleCallback when available, otherwise use setTimeout
+			const scheduleInit = window.requestIdleCallback || setTimeout;
+			
+			scheduleInit(() => {
+				initializeApp().then(initializeBrowser);
+			}, { timeout: 1000 });
+		</script>
+	</body>
 </html>
-
-<script>
-  // Initialize performance monitoring
-  if (typeof window !== 'undefined') {
-    import('@/lib/monitoring/performance').then(({ performanceMonitor }) => {
-      performanceMonitor.measurePageLoad()
-
-      // Track navigation performance
-      document.addEventListener('astro:page-load', () => {
-        performanceMonitor.measurePageLoad()
-      })
-    })
-  }
-</script>

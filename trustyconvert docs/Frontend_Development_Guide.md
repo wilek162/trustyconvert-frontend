@@ -4,21 +4,21 @@ This guide outlines how to develop the frontend using **Astro v5.9.1** (static o
 
 ## 🧱 Architecture Overview
 
-- **Framework:** Astro (static output mode)  
-- **Interactive Components:** React (minimized use)  
-- **Data Flow:** REST API with `fetch` + `@tanstack/react-query`  
-- **State Management:** nanostores  
-- **Styling:** Tailwind CSS + shadcn/ui  
-- **Testing:** Vitest + Testing Library  
+- **Framework:** Astro (static output mode)
+- **Interactive Components:** React (minimized use)
+- **Data Flow:** REST API with `fetch` + `@tanstack/react-query`
+- **State Management:** nanostores
+- **Styling:** Tailwind CSS + radix-ui
+- **Testing:** Vitest + Testing Library
 
 ## 🌐 Pages Structure (Astro Static Routes)
 
-| Route         | Description                         | React Used? |
-|---------------|-------------------------------------|-------------|
-| `/`           | Home page (upload, start conversion)| Minimal     |
-| `/download/[id]` | Download result page            | No          |
-| `/privacy`    | Static policy page                  | No          |
-| `/about`      | Info about TrustyConvert            | No          |
+| Route            | Description                          | React Used? |
+| ---------------- | ------------------------------------ | ----------- |
+| `/`              | Home page (upload, start conversion) | Minimal     |
+| `/download/[id]` | Download result page                 | No          |
+| `/privacy`       | Static policy page                   | No          |
+| `/about`         | Info about TrustyConvert             | No          |
 
 > Keep all SEO content in `.astro` files. Use React only for isolated interactive parts.
 
@@ -46,8 +46,8 @@ This guide outlines how to develop the frontend using **Astro v5.9.1** (static o
 
 ```ts
 interface ApiResponse<T> {
-  success: boolean;
-  data: T;
+	success: boolean
+	data: T
 }
 ```
 

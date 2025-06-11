@@ -1,24 +1,97 @@
 ---
-import MainLayout from "@/layouts/mainLayout.astro";
-const title = "About TrustyConvert";
-const description =
-  "Learn more about TrustyConvert, our mission, and our team.";
-const canonical = "https://trustyconvert.com/about";
-const ogImage = "https://trustyconvert.com/og-image.png";
+import MainLayout from '../layouts/MainLayout.astro';
 ---
 
-<MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  ogImage={ogImage}
+<MainLayout 
+  title="About TrustyConvert - Fast & Secure File Conversion" 
+  description="Learn about TrustyConvert, our mission, and how we provide fast and secure file conversion services."
 >
-  <section class="max-w-xl mx-auto py-12 px-4">
-    <h1 class="text-3xl font-bold mb-4">About TrustyConvert</h1>
-    <p>
-      TrustyConvert is dedicated to providing fast, secure, and privacy-focused
-      file conversion for everyone. Our mission is to make file conversion
-      simple, accessible, and safe for all users.
-    </p>
-  </section>
+  <div class="container mx-auto py-12 px-4">
+    <div class="max-w-4xl mx-auto">
+      <h1 class="text-4xl font-bold mb-8">About TrustyConvert</h1>
+      
+      <div class="prose prose-lg">
+        <p class="lead">
+          TrustyConvert is a modern file conversion platform designed with speed, security, and simplicity in mind.
+        </p>
+        
+        <h2>Our Mission</h2>
+        <p>
+          We believe file conversion should be fast, secure, and straightforward. Our mission is to provide a reliable conversion service that respects your privacy and delivers high-quality results.
+        </p>
+        
+        <h2>What Makes Us Different</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
+          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h3 class="text-xl font-semibold mb-2">Security First</h3>
+            <p>
+              We implement enterprise-grade security measures to protect your files. All uploads are processed in isolated containers and automatically deleted after conversion.
+            </p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h3 class="text-xl font-semibold mb-2">Lightning Fast</h3>
+            <p>
+              Our optimized conversion engine processes your files in seconds, not minutes. We use the latest technologies to ensure rapid conversions without sacrificing quality.
+            </p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h3 class="text-xl font-semibold mb-2">Privacy Respecting</h3>
+            <p>
+              No registration or personal information required. We don't track you or sell your data. Your privacy matters to us.
+            </p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h3 class="text-xl font-semibold mb-2">High Quality</h3>
+            <p>
+              We use industry-leading conversion tools to ensure the highest quality output for all file formats.
+            </p>
+          </div>
+        </div>
+        
+        <h2>Supported Formats</h2>
+        <p>
+          TrustyConvert supports a wide range of file formats, including:
+        </p>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 my-6">
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">PDF</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">DOCX</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">JPG</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">PNG</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">XLSX</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">PPTX</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">GIF</span>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-md text-center">
+            <span class="font-semibold">SVG</span>
+          </div>
+        </div>
+        
+        <p>
+          And many more! If you need a specific format that isn't listed, please contact us.
+        </p>
+        
+        <h2>Contact Us</h2>
+        <p>
+          Have questions or suggestions? We'd love to hear from you. Reach out to us at <a href="mailto:support@trustyconvert.com" class="text-blue-600 hover:underline">support@trustyconvert.com</a>.
+        </p>
+      </div>
+    </div>
+  </div>
 </MainLayout>

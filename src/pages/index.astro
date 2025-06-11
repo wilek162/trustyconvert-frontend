@@ -1,206 +1,212 @@
 ---
 // src/pages/index.astro
-import { Check, Lock, Zap } from "@lucide/astro";
+import { Check, Lock, Zap } from '@lucide/astro'
 
-import MainLayout from "@/layouts/mainLayout.astro";
-import { FileUpload } from "@/components/features/FileUpload/FileUpload";
-import type { ConversionFormat } from "@/lib/api/types";
-import { mockFormats } from "@/mocks/data";
+import FileConverter from '@/components/features/FileConverter'
+import type { ConversionFormat } from '@/lib/api/types'
+import { mockFormats } from '@/mocks/data'
 
-const title = "TrustyConvert - Fast, Modern File Converter";
+import QueryProvider from '@/components/providers/QueryProvider'
+import MainLayout from '@/layouts/MainLayout.astro'
+
+const title = 'TrustyConvert - Fast, Modern File Converter'
 const description =
-  "Convert your files quickly and securely with TrustyConvert. Free, fast, and privacy-focused file conversion supporting multiple formats including PDF, DOCX, XLSX, and more.";
-const canonical = new URL("/", Astro.site).toString();
+	'Convert your files quickly and securely with TrustyConvert. Free, fast, and privacy-focused file conversion supporting multiple formats including PDF, DOCX, XLSX, and more.'
+const canonical = new URL('/', Astro.site).toString()
 // Enhanced structured data for better SEO
 const structuredData = {
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  name: "TrustyConvert",
-  url: canonical,
-  description: description,
-  applicationCategory: "UtilityApplication",
-  operatingSystem: "Any",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-    availability: "https://schema.org/InStock",
-  },
-  featureList: [
-    "Fast file conversion",
-    "Secure processing",
-    "Privacy focused",
-    "Multiple file formats",
-  ],
-  aggregateRating: {
-    "@type": "AggregateRating",
-    ratingValue: "4.8",
-    ratingCount: "1250",
-    bestRating: "5",
-    worstRating: "1",
-  },
-  provider: {
-    "@type": "Organization",
-    name: "TrustyConvert",
-    url: canonical,
-  },
-  browserRequirements: "Requires JavaScript. Requires HTML5.",
-  permissions: "File upload required",
-  softwareVersion: "1.0.0",
-};
+	'@context': 'https://schema.org',
+	'@type': 'WebApplication',
+	name: 'TrustyConvert',
+	url: canonical,
+	description: description,
+	applicationCategory: 'UtilityApplication',
+	operatingSystem: 'Any',
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD',
+		availability: 'https://schema.org/InStock'
+	},
+	featureList: [
+		'Fast file conversion',
+		'Secure processing',
+		'Privacy focused',
+		'Multiple file formats'
+	],
+	aggregateRating: {
+		'@type': 'AggregateRating',
+		ratingValue: '4.8',
+		ratingCount: '1250',
+		bestRating: '5',
+		worstRating: '1'
+	},
+	provider: {
+		'@type': 'Organization',
+		name: 'TrustyConvert',
+		url: canonical
+	},
+	browserRequirements: 'Requires JavaScript. Requires HTML5.',
+	permissions: 'File upload required',
+	softwareVersion: '1.0.0'
+}
 
 // Fetch supported formats for the dropdown
-let formats: ConversionFormat[] = [];
+let formats: ConversionFormat[] = []
 
 if (import.meta.env.DEV) {
-  // Use mock data in development
-  formats = mockFormats;
+	// Use mock data in development
+	formats = mockFormats
 } else {
-  try {
-    const response = await fetch(
-      `${import.meta.env.PUBLIC_API_URL || "/api"}/supported-conversions`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-      }
-    );
-    const data = await response.json();
-    formats = data.data;
-  } catch (error) {
-    console.error("Failed to fetch formats:", error);
-    // Fallback to mock data if fetch fails
-    formats = mockFormats;
-  }
+	try {
+		const response = await fetch(
+			`${import.meta.env.PUBLIC_API_URL || '/api'}/supported-conversions`,
+			{
+				headers: {
+					Accept: 'application/json'
+				}
+			}
+		)
+		const data = await response.json()
+		formats = data.data
+	} catch (error) {
+		console.error('Failed to fetch formats:', error)
+		// Fallback to mock data if fetch fails
+		formats = mockFormats
+	}
 }
 
 // Generate alternate language links
 const alternateLanguages = [
-  { code: "en", name: "English" },
-  { code: "es", name: "Español" },
-  { code: "fr", name: "Français" },
-  { code: "de", name: "Deutsch" },
-];
+	{ code: 'en', name: 'English' },
+	{ code: 'es', name: 'Español' },
+	{ code: 'fr', name: 'Français' },
+	{ code: 'de', name: 'Deutsch' }
+]
 ---
 
 <MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  extraStructuredData={structuredData}
-  alternateLanguages={alternateLanguages}
+	title={title}
+	description={description}
+	canonical={canonical}
+	extraStructuredData={structuredData}
+	alternateLanguages={alternateLanguages}
 >
-  <section class="container mx-auto px-4 py-12 md:py-24">
-    <div class="max-w-3xl mx-auto text-center mb-12">
-      <h1
-        class="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent"
-      >
-        Convert Files Fast & Secure
-      </h1>
-      <p class="text-xl text-muted-foreground mb-8">
-        Transform your files instantly with our free, privacy-focused converter.
-        No registration required.
-      </p>
-      <div class="flex flex-wrap justify-center gap-4 mb-12">
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Check class="w-5 h-5 text-green-500" aria-hidden="true" />
-          <span>Free & Secure</span>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Lock class="w-5 h-5 text-green-500" aria-hidden="true" />
-          <span>No Registration</span>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Zap class="w-5 h-5 text-green-500" aria-hidden="true" />
-          <span>Instant Conversion</span>
-        </div>
-      </div>
-    </div>
+	<section class="container mx-auto px-4 py-12 md:py-24">
+		<div class="mx-auto mb-12 max-w-3xl text-center">
+			<h1
+				class="mb-6 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-4xl font-bold text-transparent md:text-5xl"
+			>
+				Convert Files Fast & Secure
+			</h1>
+			<p class="mb-8 text-xl text-muted-foreground">
+				Transform your files instantly with our free, privacy-focused converter. No registration
+				required.
+			</p>
+			<div class="mb-12 flex flex-wrap justify-center gap-4">
+				<div class="flex items-center gap-2 text-sm text-muted-foreground">
+					<Check class="h-5 w-5 text-green-500" aria-hidden="true" />
+					<span>Free & Secure</span>
+				</div>
+				<div class="flex items-center gap-2 text-sm text-muted-foreground">
+					<Lock class="h-5 w-5 text-green-500" aria-hidden="true" />
+					<span>No Registration</span>
+				</div>
+				<div class="flex items-center gap-2 text-sm text-muted-foreground">
+					<Zap class="h-5 w-5 text-green-500" aria-hidden="true" />
+					<span>Instant Conversion</span>
+				</div>
+			</div>
+		</div>
 
-    <div class="max-w-xl mx-auto">
-      <FileUpload client:load />
-    </div>
+		<div class="mx-auto max-w-xl">
+			<QueryProvider client:only="react">
+				<FileConverter client:only="react" />
+			</QueryProvider>
+		</div>
 
-    <div class="max-w-3xl mx-auto mt-24 grid gap-8 md:grid-cols-3">
-      <div class="text-center">
-        <div
-          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <Lock class="w-6 h-6 text-primary" />
-        </div>
-        <h2 class="text-lg font-semibold mb-2">Secure Processing</h2>
-        <p class="text-sm text-muted-foreground">
-          Your files are processed securely and deleted immediately after
-          conversion.
-        </p>
-      </div>
-      <div class="text-center">
-        <div
-          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <Zap class="w-6 h-6 text-primary" />
-        </div>
-        <h2 class="text-lg font-semibold mb-2">Fast Conversion</h2>
-        <p class="text-sm text-muted-foreground">
-          Convert your files in seconds with our optimized processing system.
-        </p>
-      </div>
-      <div class="text-center">
-        <div
-          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <Check class="w-6 h-6 text-primary" />
-        </div>
-        <h2 class="text-lg font-semibold mb-2">Privacy First</h2>
-        <p class="text-sm text-muted-foreground">
-          We never store your files. Your privacy is our top priority.
-        </p>
-      </div>
-    </div>
+		<div class="mx-auto mt-24 grid max-w-3xl gap-8 md:grid-cols-3">
+			<div class="text-center">
+				<div
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
+					aria-hidden="true"
+				>
+					<Lock class="h-6 w-6 text-primary" />
+				</div>
+				<h2 class="mb-2 text-lg font-semibold">Secure Processing</h2>
+				<p class="text-sm text-muted-foreground">
+					Your files are processed securely and deleted immediately after conversion.
+				</p>
+			</div>
+			<div class="text-center">
+				<div
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
+					aria-hidden="true"
+				>
+					<Zap class="h-6 w-6 text-primary" />
+				</div>
+				<h2 class="mb-2 text-lg font-semibold">Fast Conversion</h2>
+				<p class="text-sm text-muted-foreground">
+					Convert your files in seconds with our optimized processing system.
+				</p>
+			</div>
+			<div class="text-center">
+				<div
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
+					aria-hidden="true"
+				>
+					<Check class="h-6 w-6 text-primary" />
+				</div>
+				<h2 class="mb-2 text-lg font-semibold">Privacy First</h2>
+				<p class="text-sm text-muted-foreground">
+					We never store your files. Your privacy is our top priority.
+				</p>
+			</div>
+		</div>
 
-    <div class="max-w-3xl mx-auto mt-24">
-      <h2 class="text-2xl font-bold text-center mb-8">Popular Conversions</h2>
-      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {
-          formats.map((format) =>
-            format.outputFormats.slice(0, 3).map((targetFormat) => (
-              <a
-                href={`/convert/${format.id}-to-${targetFormat}`}
-                class="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
-                title={`Convert ${format.id.toUpperCase()} to ${targetFormat.toUpperCase()}`}
-              >
-                <h3 class="font-medium">
-                  {format.id.toUpperCase()} to {targetFormat.toUpperCase()}
-                </h3>
-                <p class="text-sm text-muted-foreground mt-1">
-                  Convert {format.id.toUpperCase()} files to{" "}
-                  {targetFormat.toUpperCase()} format
-                </p>
-              </a>
-            ))
-          )
-        }
-      </div>
-    </div>
-  </section>
+		<div class="mx-auto mt-24 max-w-3xl">
+			<h2 class="mb-8 text-center text-2xl font-bold">Popular Conversions</h2>
+			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+				{
+					formats &&
+						formats.length > 0 &&
+						formats.map((format) => {
+							// Ensure outputFormats exists before trying to use slice
+							const outputFormatsToShow = format.outputFormats?.slice(0, 3) || []
+							return outputFormatsToShow.map((targetFormat) => (
+								<a
+									href={`/convert/${format.id}-to-${targetFormat}`}
+									class="rounded-lg border border-border p-4 transition-colors hover:border-primary/50"
+									title={`Convert ${format.id.toUpperCase()} to ${targetFormat.toUpperCase()}`}
+								>
+									<h3 class="font-medium">
+										{format.id.toUpperCase()} to {targetFormat.toUpperCase()}
+									</h3>
+									<p class="mt-1 text-sm text-muted-foreground">
+										Convert {format.id.toUpperCase()} files to {targetFormat.toUpperCase()} format
+									</p>
+								</a>
+							))
+						})
+				}
+			</div>
+		</div>
+	</section>
 </MainLayout>
 
 <style is:global>
-  /* Add loading state styles */
-  .file-upload-loading {
-    opacity: 0;
-    animation: fadeIn 0.3s ease-in forwards;
-  }
+	/* Add loading state styles */
+	.file-upload-loading {
+		opacity: 0;
+		animation: fadeIn 0.3s ease-in forwards;
+	}
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 </style>
