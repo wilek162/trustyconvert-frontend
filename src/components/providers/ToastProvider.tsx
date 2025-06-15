@@ -1,12 +1,11 @@
-import * as React from "react";
+import * as React from 'react'
 
-import { Toaster } from "@/components/ui/toast";
+import { ToastProvider as ToastProviderUI } from '@/components/ui/Toast'
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <Toaster />
-      {children}
-    </>
-  );
+	return (
+		<>
+			<ToastProviderUI>{children}</ToastProviderUI>
+		</>
+	)
 }

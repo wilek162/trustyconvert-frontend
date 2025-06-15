@@ -1,19 +1,22 @@
 /**
- * Application Initialization
+ * Application Initialization Module
  *
- * This module serves as the central initialization point for the application.
- * It initializes monitoring, mocks, and any other services needed at startup.
+ * Centralizes application initialization logic for consistent startup
+ * across different entry points (SSR, browser, etc.)
  */
 
-import { initializeMonitoring, initializeMocks, reportError } from './monitoring'
+import { initializeMonitoring, initializeMocks } from '@/lib/monitoring/init'
+import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
+// Offline detection is temporarily disabled
+// import { initOfflineDetection } from '@/lib/utils/offlineDetection'
 
 /**
  * Initialize the application
- * This function should be called as early as possible in the application lifecycle
+ * Common initialization code for both server and client
  */
-export async function initializeApp() {
+export async function initializeApp(): Promise<void> {
 	try {
-		// Initialize monitoring first to catch any errors
+		// Initialize monitoring first for error tracking
 		await initializeMonitoring()
 
 		// Initialize API mocks in development
@@ -21,51 +24,67 @@ export async function initializeApp() {
 			await initializeMocks()
 		}
 
-		// Log initialization success
-		console.log('Application initialized successfully')
+		// Log initialization in development
+		if (import.meta.env.DEV) {
+			console.log('Application initialized')
+		}
 	} catch (error) {
 		console.error('Failed to initialize application:', error)
-		// Use a simple console log since monitoring might not be initialized
-		console.error(error instanceof Error ? error : String(error), {
-			context: 'app-init'
-		})
 	}
 }
 
 /**
  * Initialize browser-specific features
- * This function should only run in the browser environment
+ * Only called in the browser environment
  */
-export function initializeBrowser() {
-	if (typeof window === 'undefined') {
-		return
-	}
+export async function initializeBrowser(): Promise<void> {
+	if (typeof window === 'undefined') return
 
 	try {
-		// Set up global error handler
-		window.addEventListener('error', (event) => {
-			reportError(event.error || new Error(event.message), {
-				context: 'window.onerror',
-				url: event.filename,
-				line: event.lineno,
-				column: event.colno
-			})
-		})
+		// Initialize global error handlers
+		initGlobalErrorHandlers()
 
-		// Set up unhandled promise rejection handler
-		window.addEventListener('unhandledrejection', (event) => {
-			reportError(event.reason instanceof Error ? event.reason : new Error(String(event.reason)), {
-				context: 'unhandledrejection'
-			})
-		})
+		// Initialize offline detection
+		// Offline detection is temporarily disabled
+		// initOfflineDetection()
 
-		// Log browser initialization success
-		console.log('Browser features initialized')
+		// Initialize IndexedDB for job persistence
+		const { initIndexedDB } = await import('@/lib/stores/upload')
+		await initIndexedDB()
+
+		// Initialize session
+		const { initSession } = await import('@/lib/api/apiClient')
+
+		// Only initialize session if not already initializing
+		const { getInitializing } = await import('@/lib/stores/session')
+		if (!getInitializing()) {
+			try {
+				await initSession()
+			} catch (error) {
+				console.error('Failed to initialize session:', error)
+			}
+		}
+
+		// Register service worker if available
+		if ('serviceWorker' in navigator && import.meta.env.PROD) {
+			window.addEventListener('load', () => {
+				navigator.serviceWorker
+					.register('/service-worker.js')
+					.then((registration) => {
+						console.log('ServiceWorker registered with scope:', registration.scope)
+					})
+					.catch((error) => {
+						console.error('ServiceWorker registration failed:', error)
+					})
+			})
+		}
+
+		// Log initialization in development
+		if (import.meta.env.DEV) {
+			console.log('Browser features initialized')
+		}
 	} catch (error) {
 		console.error('Failed to initialize browser features:', error)
-		reportError(error instanceof Error ? error : String(error), {
-			context: 'browser-init'
-		})
 	}
 }
 

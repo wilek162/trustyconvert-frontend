@@ -1,97 +1,77 @@
 ---
-import MainLayout from '../layouts/MainLayout.astro';
+import MainLayout from '@/layouts/MainLayout.astro'
+
+const title = 'About TrustyConvert - Fast & Secure File Conversion'
+const description =
+	'Learn about TrustyConvert, our mission, and how we provide fast, secure file conversion while prioritizing your privacy.'
+const alternateLanguages = [{ code: 'en', name: 'English' }]
 ---
 
-<MainLayout 
-  title="About TrustyConvert - Fast & Secure File Conversion" 
-  description="Learn about TrustyConvert, our mission, and how we provide fast and secure file conversion services."
->
-  <div class="container mx-auto py-12 px-4">
-    <div class="max-w-4xl mx-auto">
-      <h1 class="text-4xl font-bold mb-8">About TrustyConvert</h1>
-      
-      <div class="prose prose-lg">
-        <p class="lead">
-          TrustyConvert is a modern file conversion platform designed with speed, security, and simplicity in mind.
-        </p>
-        
-        <h2>Our Mission</h2>
-        <p>
-          We believe file conversion should be fast, secure, and straightforward. Our mission is to provide a reliable conversion service that respects your privacy and delivers high-quality results.
-        </p>
-        
-        <h2>What Makes Us Different</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
-          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-            <h3 class="text-xl font-semibold mb-2">Security First</h3>
-            <p>
-              We implement enterprise-grade security measures to protect your files. All uploads are processed in isolated containers and automatically deleted after conversion.
-            </p>
-          </div>
-          
-          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-            <h3 class="text-xl font-semibold mb-2">Lightning Fast</h3>
-            <p>
-              Our optimized conversion engine processes your files in seconds, not minutes. We use the latest technologies to ensure rapid conversions without sacrificing quality.
-            </p>
-          </div>
-          
-          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-            <h3 class="text-xl font-semibold mb-2">Privacy Respecting</h3>
-            <p>
-              No registration or personal information required. We don't track you or sell your data. Your privacy matters to us.
-            </p>
-          </div>
-          
-          <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-            <h3 class="text-xl font-semibold mb-2">High Quality</h3>
-            <p>
-              We use industry-leading conversion tools to ensure the highest quality output for all file formats.
-            </p>
-          </div>
-        </div>
-        
-        <h2>Supported Formats</h2>
-        <p>
-          TrustyConvert supports a wide range of file formats, including:
-        </p>
-        
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 my-6">
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">PDF</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">DOCX</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">JPG</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">PNG</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">XLSX</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">PPTX</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">GIF</span>
-          </div>
-          <div class="bg-gray-50 p-4 rounded-md text-center">
-            <span class="font-semibold">SVG</span>
-          </div>
-        </div>
-        
-        <p>
-          And many more! If you need a specific format that isn't listed, please contact us.
-        </p>
-        
-        <h2>Contact Us</h2>
-        <p>
-          Have questions or suggestions? We'd love to hear from you. Reach out to us at <a href="mailto:support@trustyconvert.com" class="text-blue-600 hover:underline">support@trustyconvert.com</a>.
-        </p>
-      </div>
-    </div>
-  </div>
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+	<div class="trusty-container py-12">
+		<div class="mx-auto max-w-3xl">
+			<h1 class="mb-8">About TrustyConvert</h1>
+
+			<div class="prose max-w-none">
+				<p class="lead">
+					TrustyConvert is a secure, privacy-focused file conversion service designed to make
+					converting files between formats fast, easy, and worry-free.
+				</p>
+
+				<h2>Our Mission</h2>
+				<p>
+					We believe that file conversion should be simple, secure, and respectful of your privacy.
+					Our mission is to provide a reliable conversion service that prioritizes security and
+					transparency.
+				</p>
+
+				<h2>What Makes Us Different</h2>
+
+				<h3>Privacy First</h3>
+				<p>
+					Unlike many other conversion services, we never store your files permanently. All files
+					are automatically deleted after conversion is complete or after 24 hours, whichever comes
+					first.
+				</p>
+
+				<h3>Lightning Fast</h3>
+				<p>
+					Our optimized conversion engine processes your files in seconds, not minutes. We've built
+					our infrastructure to handle conversions quickly and efficiently.
+				</p>
+
+				<h3>Professional-Grade Security</h3>
+				<p>
+					We use bank-level encryption for all file transfers and process your files in secure,
+					isolated environments. Your data never leaves our secure processing pipeline.
+				</p>
+
+				<h3>No Registration Required</h3>
+				<p>
+					We don't require you to create an account or provide personal information. Just upload
+					your file, convert it, and download the result.
+				</p>
+
+				<h2>Our Technology</h2>
+				<p>TrustyConvert is built on modern, reliable technology:</p>
+				<ul>
+					<li>Secure file processing with industry-standard encryption</li>
+					<li>High-performance conversion engines for all supported formats</li>
+					<li>Scalable infrastructure that grows with demand</li>
+					<li>Regular security audits and updates</li>
+				</ul>
+
+				<h2>Supported Formats</h2>
+				<p>We support a wide range of file formats, including:</p>
+				<ul>
+					<li><strong>Documents:</strong> PDF, DOCX, DOC, TXT, RTF, ODT</li>
+					<li><strong>Images:</strong> JPG, PNG, WEBP, GIF, SVG, TIFF</li>
+					<li><strong>Spreadsheets:</strong> XLSX, XLS, CSV, ODS</li>
+					<li><strong>Presentations:</strong> PPTX, PPT, ODP</li>
+				</ul>
+
+				<p>We're constantly adding support for new formats based on user feedback.</p>
+			</div>
+		</div>
+	</div>
 </MainLayout>

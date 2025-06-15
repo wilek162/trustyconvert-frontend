@@ -1,141 +1,80 @@
 ---
-import MainLayout from '../layouts/MainLayout.astro'
+import MainLayout from '@/layouts/MainLayout.astro'
+
 const title = 'Privacy Policy - TrustyConvert'
 const description =
-	"TrustyConvert's privacy policy explains how we handle your data and protect your privacy."
+	'Our privacy policy explains how TrustyConvert handles your data and protects your privacy during file conversion.'
 const canonical = 'https://trustyconvert.com/privacy'
 const ogImage = 'https://trustyconvert.com/og-image.png'
+const alternateLanguages = [{ code: 'en', name: 'English' }]
 ---
 
-<MainLayout
-	title="Privacy Policy | TrustyConvert"
-	description="TrustyConvert's commitment to your privacy and data security."
->
-	<div class="container mx-auto max-w-3xl px-4 py-12">
-		<div class="mb-8">
-			<h1 class="text-3xl font-bold text-gray-900">Privacy Policy</h1>
-			<p class="mt-2 text-gray-600">Last updated: {new Date().toLocaleDateString()}</p>
-		</div>
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+	<div class="trusty-container py-12">
+		<div class="mx-auto max-w-3xl">
+			<h1 class="mb-8">Privacy Policy</h1>
 
-		<div class="prose prose-blue max-w-none">
-			<h2>Our Commitment to Your Privacy</h2>
-			<p>
-				At TrustyConvert, we're committed to protecting your privacy and ensuring the security of
-				your data. This privacy policy explains how we collect, use, and safeguard your information
-				when you use our file conversion service.
-			</p>
+			<div class="prose max-w-none">
+				<p class="lead">
+					At TrustyConvert, we prioritize your privacy and data security. This policy explains how
+					we handle your files during the conversion process.
+				</p>
 
-			<h2>Information We Collect</h2>
-			<p>When you use TrustyConvert, we collect the following information:</p>
-			<ul>
-				<li>
-					<strong>File Data:</strong> We temporarily store the files you upload for conversion and the
-					converted results.
-				</li>
-				<li>
-					<strong>Conversion History:</strong> We store basic information about your conversion tasks,
-					including file names, formats, and timestamps.
-				</li>
-				<li>
-					<strong>Session Information:</strong> We use secure, encrypted session cookies to maintain
-					your session state while you use our service.
-				</li>
-				<li>
-					<strong>Usage Data:</strong> We collect anonymous usage statistics to help us improve our service,
-					such as popular conversion types and performance metrics.
-				</li>
-			</ul>
+				<h2>No File Storage Policy</h2>
+				<p>
+					<strong>Your files are never permanently stored.</strong> All uploaded files are automatically
+					deleted from our servers immediately after conversion is complete or after 24 hours, whichever
+					comes first.
+				</p>
 
-			<h2>How We Use Your Information</h2>
-			<p>We use the information we collect for the following purposes:</p>
-			<ul>
-				<li>To provide our file conversion service</li>
-				<li>To maintain and improve the performance and security of our platform</li>
-				<li>To analyze usage patterns and optimize user experience</li>
-				<li>To communicate with you about your conversions and account</li>
-			</ul>
+				<h2>Data Processing</h2>
+				<p>
+					When you use our service, we temporarily process your files solely for the purpose of
+					conversion. This processing happens in a secure, isolated environment.
+				</p>
 
-			<h2>Data Storage and Retention</h2>
-			<p>TrustyConvert follows strict data retention practices to protect your privacy:</p>
-			<ul>
-				<li>
-					<strong>Uploaded Files:</strong> Original files are permanently deleted immediately after conversion
-					is completed.
-				</li>
-				<li>
-					<strong>Converted Files:</strong> Converted files are automatically deleted after 24 hours.
-				</li>
-				<li>
-					<strong>Conversion History:</strong> Basic conversion records are stored in your browser using
-					IndexedDB, which you can clear at any time.
-				</li>
-				<li>
-					<strong>Session Data:</strong> Your session data is automatically cleared after 24 hours of
-					inactivity.
-				</li>
-			</ul>
+				<h3>What we collect:</h3>
+				<ul>
+					<li>Temporary file data (deleted after conversion)</li>
+					<li>Basic conversion metrics (file types, sizes)</li>
+					<li>Anonymous usage statistics</li>
+				</ul>
 
-			<h2>Cookies and Local Storage</h2>
-			<p>TrustyConvert uses cookies and browser storage technologies to provide our service:</p>
-			<ul>
-				<li>
-					<strong>Session Cookies:</strong> We use HttpOnly, Secure cookies to maintain your session
-					state. These cookies do not contain sensitive information and cannot be accessed by JavaScript.
-				</li>
-				<li>
-					<strong>IndexedDB:</strong> We use browser IndexedDB to store your conversion history locally
-					on your device, allowing you to see your past conversions.
-				</li>
-				<li>
-					<strong>CSRF Protection:</strong> We use in-memory tokens (not stored in cookies or localStorage)
-					to protect against cross-site request forgery attacks.
-				</li>
-			</ul>
-			<p>You can clear cookies and IndexedDB storage at any time through your browser settings.</p>
+				<h3>What we don't collect:</h3>
+				<ul>
+					<li>Personal information</li>
+					<li>File contents or metadata</li>
+					<li>User accounts or credentials</li>
+				</ul>
 
-			<h2>Conversion Tracking</h2>
-			<p>
-				TrustyConvert tracks basic information about your conversions to provide service continuity
-				and improve user experience:
-			</p>
-			<ul>
-				<li>We track file names, formats, sizes, and conversion timestamps</li>
-				<li>
-					Conversion history is stored locally in your browser and is never sent to third parties
-				</li>
-				<li>You can view your conversion history in the application and clear it at any time</li>
-				<li>Anonymized conversion metrics (without personal data) help us improve our service</li>
-			</ul>
+				<h2>Cookies and Local Storage</h2>
+				<p>
+					We use a single session cookie for security purposes and local browser storage to remember
+					your recent conversions. No tracking cookies are used.
+				</p>
 
-			<h2>Security Measures</h2>
-			<p>TrustyConvert employs industry-standard security measures to protect your data:</p>
-			<ul>
-				<li>All data transfers are encrypted using HTTPS/TLS</li>
-				<li>We use secure, HttpOnly, and SameSite cookies</li>
-				<li>CSRF protection is implemented for all API endpoints</li>
-				<li>One-time download tokens with limited validity</li>
-				<li>Regular security audits and updates</li>
-			</ul>
+				<h2>Security Measures</h2>
+				<p>
+					All file transfers use TLS encryption. Our conversion process runs in isolated containers
+					with strict security controls.
+				</p>
 
-			<h2>Your Rights</h2>
-			<p>You have the following rights regarding your data:</p>
-			<ul>
-				<li>Right to clear your conversion history from your browser at any time</li>
-				<li>Right to end your session, which removes all temporary data</li>
-				<li>Right to export your conversion history data</li>
-			</ul>
+				<h2>Third-Party Services</h2>
+				<p>
+					We use minimal third-party services for infrastructure and monitoring. None of these
+					services have access to your file contents.
+				</p>
 
-			<h2>Contact Information</h2>
-			<p>
-				If you have any questions about our privacy practices or this policy, please contact us at:
-			</p>
-			<p class="font-medium">privacy@trustyconvert.example.com</p>
+				<h2>Changes to This Policy</h2>
+				<p>
+					We may update this privacy policy from time to time. Any changes will be posted on this
+					page.
+				</p>
 
-			<div class="mt-12 rounded-lg border border-blue-100 bg-blue-50 p-4 text-blue-800">
-				<h3 class="font-medium">Your Privacy Matters</h3>
-				<p class="mt-2 text-sm">
-					TrustyConvert is designed with privacy as a core principle. We only collect what's
-					necessary to provide our service, and we never sell your data to third parties.
+				<h2>Contact Us</h2>
+				<p>
+					If you have any questions about our privacy practices, please contact us at
+					<a href="mailto:privacy@trustyconvert.com">privacy@trustyconvert.com</a>.
 				</p>
 			</div>
 		</div>

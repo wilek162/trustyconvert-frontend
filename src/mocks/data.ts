@@ -1,4 +1,16 @@
-import { ConversionFormat } from '@/lib/api/types'
+// Define a local ConversionFormat type for mocks
+type MockConversionFormat = {
+	id: string
+	name: string
+	inputFormats: string[]
+	outputFormats: string[]
+	maxSize: number
+	features?: string[]
+	extensions?: string[]
+	mimeTypes?: string[]
+	canConvertTo?: string[]
+	icon?: string
+}
 
 // Mock file objects for testing
 export const mockFiles = {
@@ -48,7 +60,7 @@ export const mockResponses = {
 // Mock data for TrustyConvert
 
 // Mock file formats and their conversions
-export const mockFormats: ConversionFormat[] = [
+export const mockFormats: MockConversionFormat[] = [
 	{
 		id: 'pdf',
 		name: 'PDF Document',
@@ -162,7 +174,7 @@ export const mockFormats: ConversionFormat[] = [
 		canConvertTo: ['pdf', 'html', 'md'],
 		icon: '📝'
 	}
-] as ConversionFormat[]
+] as MockConversionFormat[]
 
 // Mock error templates
 export const mockErrors = {

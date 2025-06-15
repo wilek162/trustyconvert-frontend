@@ -1,160 +1,61 @@
 ---
-import MainLayout from "@/layouts/mainLayout.astro";
-import { FileUpload } from "@/components/features/FileUpload/FileUpload";
-import type { ConversionFormat } from "@/lib/api/types";
-import { formatFileSize } from "@/lib/utils/format";
+import MainLayout from '@/layouts/MainLayout.astro'
+import { mockFormats } from '@/mocks/data'
 
-interface Props {
-  title: string;
-  description: string;
-  sourceFormat: string;
-  targetFormat: string;
-  formatInfo: ConversionFormat;
-}
-
-
-interface Params {
-  source: string;
-  target: string;
+// Define types for the mock data
+type MockFormat = {
+	id: string
+	name: string
+	inputFormats: string[]
+	outputFormats: string[]
+	maxSize: number
+	features?: string[]
+	extensions?: string[]
+	mimeTypes?: string[]
+	canConvertTo?: string[]
+	icon?: string
 }
 
 export async function getStaticPaths() {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  const response = await fetch(
-    `${import.meta.env.PUBLIC_API_URL || "/api"}/supported-conversions`
-  );
-  const { data: formats } = await response.json();
+	// Use mock data instead of fetching from API
+	const formats = mockFormats as MockFormat[]
 
-  return formats.flatMap((format: ConversionFormat) =>
-    format.outputFormats.map((targetFormat) => ({
-      params: {
-        source: format.id,
-        target: targetFormat,
-      },
-      props: {
-        title: `Convert ${format.id.toUpperCase()} to ${targetFormat.toUpperCase()} - Free Online Converter`,
-        description: `Convert your ${format.id.toUpperCase()} files to ${targetFormat.toUpperCase()} format online. Fast, secure, and free file conversion with TrustyConvert. Support for multiple file formats and instant conversion.`,
-        sourceFormat: format.id,
-        targetFormat,
-        formatInfo: format,
-      },
-    }))
-  );
+	// Create paths for each source-target format combination
+	return formats.flatMap((format) =>
+		format.outputFormats.map((targetFormat) => ({
+			params: {
+				source: format.id,
+				target: targetFormat
+			},
+			props: {
+				title: `Convert ${format.id.toUpperCase()} to ${targetFormat.toUpperCase()} - Free Online Converter`,
+				description: `Convert your ${format.id.toUpperCase()} files to ${targetFormat.toUpperCase()} format online. Fast, secure, and free file conversion with TrustyConvert.`,
+				sourceFormat: format.id,
+				targetFormat,
+				formatInfo: format
+			}
+		}))
+	)
 }
 
-const { source, target } = Astro.params as Params;
-const { title, description, sourceFormat, targetFormat, formatInfo } =
-  Astro.props as Props;
+const { source, target } = Astro.params
+const { title, description, sourceFormat, targetFormat, formatInfo } = Astro.props
 
-const canonical = new URL(
-  `/convert/${source}-to-${target}`,
-  Astro.site
-).toString();
-
-// Enhanced structured data for better SEO
-const structuredData = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "TrustyConvert",
-  applicationCategory: "FileConverter",
-  operatingSystem: "Any",
-  url: canonical,
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-    availability: "https://schema.org/InStock",
-  },
-  description: description,
-  featureList: [
-    `Convert ${sourceFormat.toUpperCase()} to ${targetFormat.toUpperCase()}`,
-    "Free online conversion",
-    "Fast processing",
-    "Secure file handling",
-    ...(formatInfo.features || []),
-  ],
-  provider: {
-    "@type": "Organization",
-    name: "TrustyConvert",
-    url: new URL("/", Astro.site).toString(),
-  },
-  browserRequirements: "Requires JavaScript. Requires HTML5.",
-  permissions: "File upload required",
-  softwareVersion: "1.0.0",
-  fileSize: formatFileSize(formatInfo.maxSize),
-  fileFormat: [sourceFormat.toUpperCase(), targetFormat.toUpperCase()],
-};
-
-// Generate alternate language links
-const alternateLanguages = [
-  { code: "en", name: "English" },
-  { code: "es", name: "Español" },
-  { code: "fr", name: "Français" },
-  { code: "de", name: "Deutsch" },
-];
+const alternateLanguages = [{ code: 'en', name: 'English' }]
 ---
 
-<MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  extraStructuredData={structuredData}
-  alternateLanguages={alternateLanguages}
->
-  <div class="container mx-auto px-4 py-12">
-    <h1 class="text-4xl font-bold text-center mb-8">
-      Convert {source.toUpperCase()} to {target.toUpperCase()}
-    </h1>
-
-    <div class="max-w-xl mx-auto">
-      <FileUpload
-        client:load
-        defaultSourceFormat={sourceFormat}
-        defaultTargetFormat={targetFormat}
-      />
-    </div>
-
-    <div class="mt-12 prose prose-blue mx-auto">
-      <h2>How to Convert {source.toUpperCase()} to {target.toUpperCase()}</h2>
-      <ol>
-        <li>
-          Upload your {source.toUpperCase()} file using the upload button above
-        </li>
-        <li>Wait for the conversion process to complete</li>
-        <li>Download your converted {target.toUpperCase()} file</li>
-      </ol>
-
-      <h2>About {source.toUpperCase()} to {target.toUpperCase()} Conversion</h2>
-      <p>
-        Convert your {source.toUpperCase()} files to {target.toUpperCase()} format
-        quickly and easily. Our online converter ensures your files are processed
-        securely and efficiently. Maximum file size: {
-          formatFileSize(formatInfo.maxSize)
-        }.
-      </p>
-
-      {
-        formatInfo.features && formatInfo.features.length > 0 && (
-          <>
-            <h2>Features</h2>
-            <ul>
-              {formatInfo.features.map((feature) => (
-                <li>{feature}</li>
-              ))}
-            </ul>
-          </>
-        )
-      }
-    </div>
-  </div>
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+	<div class="container mx-auto px-4 py-12">
+		<h1 class="mb-8 text-center text-4xl font-bold">
+			Convert {source?.toUpperCase()} to {target?.toUpperCase()}
+		</h1>
+		<div class="mx-auto max-w-xl">
+			<div class="rounded-lg border border-border bg-card p-6 text-center">
+				<p class="mb-4">This is a demo page for the conversion route.</p>
+				<p class="mb-4">Source format: {sourceFormat}</p>
+				<p class="mb-4">Target format: {targetFormat}</p>
+				<a href="/" class="btn btn-primary">Go to Home</a>
+			</div>
+		</div>
+	</div>
 </MainLayout>
-
-<script>
-  // Client-side redirection for the download page
-  document.addEventListener("conversionComplete", (e: any) => {
-    const taskId = e.detail?.taskId;
-    if (taskId) {
-      window.location.href = `/download?id=${taskId}`;
-    }
-  });
-</script>

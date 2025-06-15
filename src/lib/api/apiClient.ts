@@ -5,7 +5,7 @@
  * session management, and consistent request/response patterns.
  */
 
-import { getCSRFToken, setCSRFToken, setInitializing } from '../stores/session'
+import { getCSRFToken, setCSRFToken, setInitializing } from '@/lib/stores/session'
 import type {
 	ApiResponse,
 	SessionInitResponse,
@@ -14,8 +14,8 @@ import type {
 	DownloadTokenResponse,
 	ConvertResponse,
 	SessionCloseResponse
-} from '../types/api'
-import { NetworkError, SessionError, ValidationError, handleError } from '../utils/errorHandling'
+} from '@/lib/types/api'
+import { NetworkError, SessionError, ValidationError, handleError } from '@/lib/utils/errorHandling'
 
 // Configuration
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL || '/api'

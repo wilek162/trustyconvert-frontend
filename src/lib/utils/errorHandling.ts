@@ -5,7 +5,7 @@
  * with support for user-friendly messages and error reporting.
  */
 
-import { getErrorTracker, reportError } from '../monitoring/init'
+import { getErrorTracker, reportError } from '@/lib/monitoring/init'
 
 /**
  * Application error types for consistent categorization

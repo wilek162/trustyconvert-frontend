@@ -1,42 +1,40 @@
 ---
-import Layout from '@/layouts/Layout.astro'
-import { DownloadContent } from '@/components/features/Download/DownloadContent'
-import { ArrowLeft } from 'lucide-react'
+import MainLayout from '@/layouts/MainLayout.astro'
+import { DownloadManager } from '@/components/features/DownloadManager'
+import { UploadIcon } from 'lucide-react'
 
-// Get task ID from URL
-const taskId = Astro.url.searchParams.get('taskId')
+// Get job ID from URL
+const jobId = Astro.url.searchParams.get('jobId') || ''
 
-// Redirect to home if no task ID
-if (!taskId) {
-  return Astro.redirect('/')
+// Redirect to home if no job ID
+if (!jobId) {
+	return Astro.redirect('/')
 }
+
+const title = 'Download Your Converted File - TrustyConvert'
+const description = 'Download your securely converted file from TrustyConvert.'
+const alternateLanguages = [{ code: 'en', name: 'English' }]
 ---
 
-<Layout title="Download Converted File">
-  <main class="container mx-auto px-4 py-8">
-    <div class="max-w-2xl mx-auto space-y-8">
-      <div class="flex items-center gap-4">
-        <a href="/" class="text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft  className="h-5 w-5" />
-        </a>
-        <h1 class="text-3xl font-bold">Download Your File</h1>
-      </div>
-      
-      <div class="bg-card rounded-lg shadow-lg">
-        <DownloadContent client:load taskId={taskId} />
-      </div>
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+	<div class="trusty-container py-12">
+		<div class="mx-auto max-w-xl">
+			<DownloadManager client:load jobId={jobId} />
 
-      <div class="text-center text-sm text-muted-foreground">
-        <p>Need to convert another file?</p>
-        <a href="/" class="text-primary hover:underline">Start a new conversion</a>
-      </div>
-    </div>
-  </main>
-</Layout>
+			<div class="mt-12 text-center">
+				<h2 class="mb-4 text-xl font-medium">Need to convert another file?</h2>
+				<a href="/" class="btn btn-primary inline-flex items-center gap-2">
+					<UploadIcon size={16} />
+					Convert Another File
+				</a>
+			</div>
+		</div>
+	</div>
+</MainLayout>
 
 <style>
-  :global(body) {
-    background: linear-gradient(to bottom right, hsl(var(--background)), hsl(var(--muted)));
-    min-height: 100vh;
-  }
+	:global(body) {
+		background: linear-gradient(to bottom right, hsl(var(--background)), hsl(var(--muted)));
+		min-height: 100vh;
+	}
 </style>

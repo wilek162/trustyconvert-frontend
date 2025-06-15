@@ -14,18 +14,17 @@ export function cn(...inputs: ClassValue[]) {
  * Format file size to human readable string
  */
 export function formatFileSize(bytes: number): string {
-	if (bytes === 0) return '0 B'
-	const k = 1024
-	const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-	const i = Math.floor(Math.log(bytes) / Math.log(k))
-	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+	if (bytes === 0) return '0 Bytes'
+	const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+	const i = Math.floor(Math.log(bytes) / Math.log(1024))
+	return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`
 }
 
 /**
  * Get file extension from file name
  */
-export function getFileExtension(filename: string): string {
-	return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2)
+export function getFileExtension(fileName: string): string {
+	return fileName.slice(((fileName.lastIndexOf('.') - 1) >>> 0) + 2)
 }
 
 /**
@@ -112,4 +111,52 @@ export async function retry<T>(
 	}
 
 	throw lastError
+}
+
+/**
+ * Truncates a string if it exceeds the maximum length
+ */
+export function truncateString(str: string, maxLength: number): string {
+	if (str.length <= maxLength) return str
+	return str.slice(0, maxLength) + '...'
+}
+
+/**
+ * Generates a random string of specified length
+ */
+export function generateRandomString(length: number): string {
+	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+	let result = ''
+	for (let i = 0; i < length; i++) {
+		result += chars.charAt(Math.floor(Math.random() * chars.length))
+	}
+	return result
+}
+
+/**
+ * Debounces a function
+ */
+export function debounce<T extends (...args: any[]) => any>(
+	fn: T,
+	delay: number
+): (...args: Parameters<T>) => void {
+	let timeoutId: ReturnType<typeof setTimeout>
+	return function (...args: Parameters<T>) {
+		clearTimeout(timeoutId)
+		timeoutId = setTimeout(() => fn(...args), delay)
+	}
+}
+
+/**
+ * Checks if a file type is supported
+ */
+export function isSupportedFileType(fileType: string, supportedTypes: string[]): boolean {
+	return supportedTypes.includes(fileType)
+}
+
+/**
+ * Checks if the device is mobile
+ */
+export function isMobileDevice(): boolean {
+	return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 }

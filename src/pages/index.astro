@@ -8,10 +8,12 @@ import { mockFormats } from '@/mocks/data'
 
 import QueryProvider from '@/components/providers/QueryProvider'
 import MainLayout from '@/layouts/MainLayout.astro'
+import { Hero } from '@/components/Hero'
+import { Features } from '@/components/Features'
 
-const title = 'TrustyConvert - Fast, Modern File Converter'
+const title = 'TrustyConvert - Fast & Secure File Conversion'
 const description =
-	'Convert your files quickly and securely with TrustyConvert. Free, fast, and privacy-focused file conversion supporting multiple formats including PDF, DOCX, XLSX, and more.'
+	'Convert your files with lightning speed and professional-grade security. No tracking, no storage - your privacy comes first.'
 const canonical = new URL('/', Astro.site).toString()
 // Enhanced structured data for better SEO
 const structuredData = {
@@ -92,103 +94,152 @@ const alternateLanguages = [
 	extraStructuredData={structuredData}
 	alternateLanguages={alternateLanguages}
 >
-	<section class="container mx-auto px-4 py-12 md:py-24">
-		<div class="mx-auto mb-12 max-w-3xl text-center">
-			<h1
-				class="mb-6 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-4xl font-bold text-transparent md:text-5xl"
-			>
-				Convert Files Fast & Secure
-			</h1>
-			<p class="mb-8 text-xl text-muted-foreground">
-				Transform your files instantly with our free, privacy-focused converter. No registration
-				required.
-			</p>
-			<div class="mb-12 flex flex-wrap justify-center gap-4">
-				<div class="flex items-center gap-2 text-sm text-muted-foreground">
-					<Check class="h-5 w-5 text-green-500" aria-hidden="true" />
-					<span>Free & Secure</span>
+	<Hero client:load onFileConvert={(file, format) => console.log(file, format)} />
+
+	<Features />
+
+	<section class="trusty-section bg-lightGray">
+		<div class="trusty-container">
+			<div class="mb-12 text-center">
+				<h2 class="mb-4">How It Works</h2>
+				<p class="mx-auto max-w-2xl text-lg text-muted-foreground">
+					TrustyConvert makes file conversion simple, secure, and lightning-fast in just three easy
+					steps.
+				</p>
+			</div>
+
+			<div class="grid grid-cols-1 gap-8 md:grid-cols-3">
+				<div class="trusty-card text-center">
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/10"
+					>
+						<span class="text-2xl font-semibold text-trustTeal">1</span>
+					</div>
+					<h3 class="mb-2 text-xl font-medium">Upload Your File</h3>
+					<p class="text-muted-foreground">
+						Drag and drop or browse to select the file you want to convert.
+					</p>
 				</div>
-				<div class="flex items-center gap-2 text-sm text-muted-foreground">
-					<Lock class="h-5 w-5 text-green-500" aria-hidden="true" />
-					<span>No Registration</span>
+
+				<div class="trusty-card text-center">
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/10"
+					>
+						<span class="text-2xl font-semibold text-trustTeal">2</span>
+					</div>
+					<h3 class="mb-2 text-xl font-medium">Choose Target Format</h3>
+					<p class="text-muted-foreground">
+						Select the format you want to convert your file to from our wide range of options.
+					</p>
 				</div>
-				<div class="flex items-center gap-2 text-sm text-muted-foreground">
-					<Zap class="h-5 w-5 text-green-500" aria-hidden="true" />
-					<span>Instant Conversion</span>
+
+				<div class="trusty-card text-center">
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/10"
+					>
+						<span class="text-2xl font-semibold text-trustTeal">3</span>
+					</div>
+					<h3 class="mb-2 text-xl font-medium">Download Converted File</h3>
+					<p class="text-muted-foreground">
+						Your file is converted instantly and ready for download. No registration required.
+					</p>
 				</div>
 			</div>
 		</div>
+	</section>
 
-		<div class="mx-auto max-w-xl">
-			<QueryProvider client:only="react">
-				<FileConverter client:only="react" />
-			</QueryProvider>
-		</div>
+	<section class="trusty-section bg-deepNavy text-white">
+		<div class="trusty-container">
+			<div class="flex flex-col items-center justify-between gap-8 md:flex-row">
+				<div class="max-w-xl">
+					<h2 class="mb-4">Ready to Convert Your Files?</h2>
+					<p class="mb-6 text-gray-300">
+						Experience lightning-fast file conversion with professional-grade security. No
+						registration required.
+					</p>
+					<a href="/" class="btn btn-primary">Convert Now</a>
+				</div>
 
-		<div class="mx-auto mt-24 grid max-w-3xl gap-8 md:grid-cols-3">
-			<div class="text-center">
-				<div
-					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
-					aria-hidden="true"
-				>
-					<Lock class="h-6 w-6 text-primary" />
+				<div class="rounded-card border border-trustTeal/20 bg-deepNavy/50 p-6">
+					<div class="flex flex-col gap-4">
+						<div class="flex items-center gap-3">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="text-trustTeal"
+							>
+								<path d="m9 12 2 2 4-4"></path>
+								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
+								></path>
+							</svg>
+							<span>No registration required</span>
+						</div>
+						<div class="flex items-center gap-3">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="text-trustTeal"
+							>
+								<path d="m9 12 2 2 4-4"></path>
+								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
+								></path>
+							</svg>
+							<span>Files deleted after conversion</span>
+						</div>
+						<div class="flex items-center gap-3">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="text-trustTeal"
+							>
+								<path d="m9 12 2 2 4-4"></path>
+								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
+								></path>
+							</svg>
+							<span>Bank-level encryption</span>
+						</div>
+						<div class="flex items-center gap-3">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="text-trustTeal"
+							>
+								<path d="m9 12 2 2 4-4"></path>
+								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
+								></path>
+							</svg>
+							<span>Unlimited conversions</span>
+						</div>
+					</div>
 				</div>
-				<h2 class="mb-2 text-lg font-semibold">Secure Processing</h2>
-				<p class="text-sm text-muted-foreground">
-					Your files are processed securely and deleted immediately after conversion.
-				</p>
-			</div>
-			<div class="text-center">
-				<div
-					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
-					aria-hidden="true"
-				>
-					<Zap class="h-6 w-6 text-primary" />
-				</div>
-				<h2 class="mb-2 text-lg font-semibold">Fast Conversion</h2>
-				<p class="text-sm text-muted-foreground">
-					Convert your files in seconds with our optimized processing system.
-				</p>
-			</div>
-			<div class="text-center">
-				<div
-					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
-					aria-hidden="true"
-				>
-					<Check class="h-6 w-6 text-primary" />
-				</div>
-				<h2 class="mb-2 text-lg font-semibold">Privacy First</h2>
-				<p class="text-sm text-muted-foreground">
-					We never store your files. Your privacy is our top priority.
-				</p>
-			</div>
-		</div>
-
-		<div class="mx-auto mt-24 max-w-3xl">
-			<h2 class="mb-8 text-center text-2xl font-bold">Popular Conversions</h2>
-			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-				{
-					formats &&
-						formats.length > 0 &&
-						formats.map((format) => {
-							// Ensure outputFormats exists before trying to use slice
-							const outputFormatsToShow = format.outputFormats?.slice(0, 3) || []
-							return outputFormatsToShow.map((targetFormat) => (
-								<a
-									href={`/convert/${format.id}-to-${targetFormat}`}
-									class="rounded-lg border border-border p-4 transition-colors hover:border-primary/50"
-									title={`Convert ${format.id.toUpperCase()} to ${targetFormat.toUpperCase()}`}
-								>
-									<h3 class="font-medium">
-										{format.id.toUpperCase()} to {targetFormat.toUpperCase()}
-									</h3>
-									<p class="mt-1 text-sm text-muted-foreground">
-										Convert {format.id.toUpperCase()} files to {targetFormat.toUpperCase()} format
-									</p>
-								</a>
-							))
-						})
-				}
 			</div>
 		</div>
 	</section>

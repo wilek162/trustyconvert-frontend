@@ -18,6 +18,16 @@ export default {
               extend: {
                      colors: {
                             ...tokens.colors,
+                            // TrustyConvert Brand Colors
+                            trustTeal: '#4ECDC4',
+                            deepNavy: '#2C3E50',
+                            pureWhite: '#FFFFFF',
+                            accentOrange: '#FF8C42',
+                            lightGray: '#F8F9FA',
+                            mediumGray: '#6C757D',
+                            successGreen: '#28A745',
+                            warningRed: '#DC3545',
+
                             border: 'hsl(var(--border))',
                             input: 'hsl(var(--input))',
                             ring: 'hsl(var(--ring))',
@@ -53,7 +63,10 @@ export default {
                             },
                      },
                      spacing: tokens.spacing,
-                     fontFamily: tokens.typography.fonts,
+                     fontFamily: {
+                            ...tokens.typography.fonts,
+                            heading: tokens.typography.fonts.heading,
+                     },
                      fontSize: tokens.typography.sizes,
                      fontWeight: tokens.typography.weights,
                      lineHeight: tokens.typography.lineHeights,
@@ -126,15 +139,19 @@ export default {
                                           },
                                           h1: {
                                                  color: 'hsl(var(--foreground))',
+                                                 fontFamily: tokens.typography.fonts.heading,
                                           },
                                           h2: {
                                                  color: 'hsl(var(--foreground))',
+                                                 fontFamily: tokens.typography.fonts.heading,
                                           },
                                           h3: {
                                                  color: 'hsl(var(--foreground))',
+                                                 fontFamily: tokens.typography.fonts.heading,
                                           },
                                           h4: {
                                                  color: 'hsl(var(--foreground))',
+                                                 fontFamily: tokens.typography.fonts.heading,
                                           },
                                           'figure figcaption': {
                                                  color: 'hsl(var(--muted-foreground))',
@@ -156,6 +173,10 @@ export default {
                                    },
                             },
                      },
+                     backgroundImage: {
+                            'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+                            'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+                     },
               },
        },
        plugins: [
@@ -163,6 +184,7 @@ export default {
               require('@tailwindcss/forms'),
               require('@tailwindcss/aspect-ratio'),
               require('tailwindcss-animate'),
+              require('@tailwindcss/container-queries'),
        ],
        // Performance optimizations
        future: {
