@@ -9,52 +9,26 @@ import { mockFormats } from '@/mocks/data'
 import { AppProviders } from '@/components/providers/AppProviders'
 import MainLayout from '@/layouts/MainLayout.astro'
 import { Hero } from '@/components/Hero'
+import { HowItWorks } from '@/components/HowItWorks'
 import { Features } from '@/components/Features'
-import { CallToAction } from '@/components/CallToAction'
+import { FAQ } from '@/components/FAQ'
+import { SupportedFormats } from '@/components/SupportedFormats'
 import { Testimonials } from '@/components/Testimonials'
 
+// SEO and structured data
 const title = 'TrustyConvert - Fast & Secure File Conversion'
 const description =
-	'Convert your files with lightning speed and professional-grade security. No tracking, no storage - your privacy comes first.'
-const canonical = new URL('/', Astro.site).toString()
-// Enhanced structured data for better SEO
+	'Convert your files quickly with our secure, private file conversion tool. No registration required.'
+
+// Structured data for better SEO
 const structuredData = {
 	'@context': 'https://schema.org',
 	'@type': 'WebApplication',
 	name: 'TrustyConvert',
-	url: canonical,
+	url: Astro.url.href,
 	description: description,
 	applicationCategory: 'UtilityApplication',
-	operatingSystem: 'Any',
-	offers: [
-		{
-			'@type': 'Offer',
-			price: '0',
-			priceCurrency: 'USD',
-			availability: 'https://schema.org/InStock'
-		}
-	],
-	featureList: [
-		'Fast file conversion',
-		'Secure processing',
-		'Privacy focused',
-		'Multiple file formats'
-	],
-	aggregateRating: {
-		'@type': 'AggregateRating',
-		ratingValue: '4.8',
-		ratingCount: '1250',
-		bestRating: '5',
-		worstRating: '1'
-	},
-	provider: {
-		'@type': 'Organization',
-		name: 'TrustyConvert',
-		url: canonical
-	},
-	browserRequirements: 'Requires JavaScript. Requires HTML5.',
-	permissions: 'File upload required',
-	softwareVersion: '1.0.0'
+	operatingSystem: 'All'
 }
 
 // Fetch supported formats for the dropdown
@@ -105,86 +79,22 @@ const alternateLanguages = [
 ]
 ---
 
-<MainLayout
-	title={title}
-	description={description}
-	canonical={canonical}
-	extraStructuredData={structuredData}
-	alternateLanguages={alternateLanguages}
->
-	<Hero client:load />
-
-	<section class="trusty-section bg-white">
-		<div class="trusty-container">
-			<div class="mb-12 text-center">
-				<h2 class="mb-4">Convert Your Files Now</h2>
-				<p class="mx-auto max-w-2xl text-lg text-muted-foreground">
-					Fast, secure file conversion with no registration required. Your files are processed
-					locally and never stored.
-				</p>
-			</div>
-
-			<AppProviders enableDevtools={import.meta.env.DEV}>
-				<ConversionFlow client:load />
-			</AppProviders>
+<MainLayout title={title} description={description} extraStructuredData={structuredData}>
+	<div class="bg-gradient-to-b from-white to-lightGray/20">
+		<div id="convert" class="scroll-mt-24">
+			<Hero client:load />
 		</div>
-	</section>
+
+		<HowItWorks />
+	</div>
 
 	<Features />
 
-	<section class="trusty-section bg-lightGray">
-		<div class="trusty-container">
-			<div class="mb-12 text-center">
-				<h2 class="mb-4">How It Works</h2>
-				<p class="mx-auto max-w-2xl text-lg text-muted-foreground">
-					TrustyConvert makes file conversion simple, secure, and lightning-fast in just three easy
-					steps.
-				</p>
-			</div>
+	<SupportedFormats />
 
-			<div class="grid grid-cols-1 gap-8 md:grid-cols-3">
-				<div class="trusty-card text-center">
-					<div
-						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/10"
-					>
-						<span class="text-2xl font-semibold text-trustTeal">1</span>
-					</div>
-					<h3 class="mb-2 text-xl font-medium">Upload Your File</h3>
-					<p class="text-muted-foreground">
-						Drag and drop or browse to select the file you want to convert.
-					</p>
-				</div>
+	<Testimonials />
 
-				<div class="trusty-card text-center">
-					<div
-						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/10"
-					>
-						<span class="text-2xl font-semibold text-trustTeal">2</span>
-					</div>
-					<h3 class="mb-2 text-xl font-medium">Choose Target Format</h3>
-					<p class="text-muted-foreground">
-						Select the format you want to convert your file to from our wide range of options.
-					</p>
-				</div>
-
-				<div class="trusty-card text-center">
-					<div
-						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/10"
-					>
-						<span class="text-2xl font-semibold text-trustTeal">3</span>
-					</div>
-					<h3 class="mb-2 text-xl font-medium">Download Converted File</h3>
-					<p class="text-muted-foreground">
-						Your file is converted instantly and ready for download. No registration required.
-					</p>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<Testimonials client:visible />
-
-	<CallToAction client:visible />
+	<FAQ />
 </MainLayout>
 
 <style is:global>
@@ -196,12 +106,12 @@ const alternateLanguages = [
 
 	/* Custom card styling */
 	.trusty-card {
-		@apply rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md;
+		@apply rounded-xl border border-trustTeal/20 bg-white p-8 shadow-md transition-all duration-300;
 	}
 
 	/* Section styling */
 	.trusty-section {
-		@apply py-16 md:py-24;
+		@apply py-20 md:py-28;
 	}
 
 	.trusty-container {
@@ -215,11 +125,11 @@ const alternateLanguages = [
 
 	/* Button styling */
 	.btn {
-		@apply inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-medium transition-all duration-200;
+		@apply inline-flex items-center justify-center rounded-button px-6 py-3 text-base font-medium transition-all duration-200;
 	}
 
 	.btn-primary {
-		@apply bg-trustTeal text-white hover:bg-trustTeal/90;
+		@apply bg-trustTeal text-white hover:bg-trustTeal/90 hover:shadow-md;
 	}
 
 	.btn-outline {
@@ -228,6 +138,6 @@ const alternateLanguages = [
 
 	/* Testimonial styling */
 	.testimonial-card {
-		@apply rounded-xl bg-white p-6 shadow-sm;
+		@apply rounded-xl bg-white p-6 shadow-md;
 	}
 </style>

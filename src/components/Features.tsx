@@ -13,9 +13,9 @@ export function Features() {
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
 					className="text-trustTeal"
 				>
 					<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
@@ -34,9 +34,9 @@ export function Features() {
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
 					className="text-trustTeal"
 				>
 					<rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
@@ -55,9 +55,9 @@ export function Features() {
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
 					className="text-trustTeal"
 				>
 					<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
@@ -77,9 +77,9 @@ export function Features() {
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
 					className="text-trustTeal"
 				>
 					<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
@@ -99,9 +99,9 @@ export function Features() {
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
 					className="text-trustTeal"
 				>
 					<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -123,9 +123,9 @@ export function Features() {
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
 					className="text-trustTeal"
 				>
 					<rect width="16" height="16" x="4" y="4" rx="2" />
@@ -140,11 +140,14 @@ export function Features() {
 	]
 
 	return (
-		<section className="trusty-section bg-white">
+		<section className="bg-gradient-to-b from-white to-lightGray/30 py-20">
 			<div className="trusty-container">
-				<div className="mb-12 text-center">
-					<h2 className="mb-4">Why Choose TrustyConvert</h2>
-					<p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+				<div className="mb-14 text-center">
+					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold text-deepNavy md:text-4xl">
+						Why Choose TrustyConvert
+						<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
+					</h2>
+					<p className="mx-auto max-w-2xl text-lg text-deepNavy/80">
 						Our platform combines speed, security, and simplicity to provide the best file
 						conversion experience.
 					</p>
@@ -152,12 +155,19 @@ export function Features() {
 
 				<div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
 					{features.map((feature, index) => (
-						<div key={index} className="trusty-card">
-							<div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-trustTeal/10">
-								{feature.icon}
+						<div
+							key={index}
+							className="group relative overflow-hidden rounded-xl border border-trustTeal/20 bg-white p-8 shadow-lg transition-all hover:shadow-xl"
+						>
+							<div className="absolute -right-16 -top-16 h-32 w-32 rounded-full bg-trustTeal/5 transition-transform duration-500 group-hover:scale-150"></div>
+
+							<div className="relative z-10">
+								<div className="mb-6 flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-trustTeal/20 to-trustTeal/30 shadow-inner">
+									{feature.icon}
+								</div>
+								<h3 className="mb-4 text-xl font-semibold text-deepNavy">{feature.title}</h3>
+								<p className="text-base text-deepNavy/80">{feature.description}</p>
 							</div>
-							<h3 className="mb-2 text-xl font-medium">{feature.title}</h3>
-							<p className="text-muted-foreground">{feature.description}</p>
 						</div>
 					))}
 				</div>

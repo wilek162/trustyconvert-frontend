@@ -90,27 +90,27 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 	}
 
 	return (
-		<Card className="mx-auto w-full max-w-3xl overflow-hidden border-trustTeal/10 bg-white shadow-lg shadow-trustTeal/5">
+		<Card className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border-0 bg-white shadow-lg">
 			<form onSubmit={handleSubmit}>
-				<CardHeader className="border-b border-border/50 pb-4">
+				<CardHeader className="border-b border-border/50 bg-gradient-to-r from-trustTeal/20 to-transparent pb-4 pt-5">
 					<CardTitle className="text-center text-xl font-semibold text-deepNavy">
 						Convert Your File
 					</CardTitle>
 				</CardHeader>
 
-				<CardContent className="px-6 pt-6">
+				<CardContent className="bg-gradient-to-b from-white to-lightGray/10 p-6">
 					{!selectedFile ? (
 						<FileDropzone onFileAccepted={handleFileAccepted} onFileRejected={handleFileRejected} />
 					) : (
-						<div className="space-y-6">
-							<div className="rounded-xl border border-trustTeal/20 bg-white p-4 shadow-sm">
+						<div className="space-y-8">
+							<div className="rounded-xl border border-trustTeal/30 bg-gradient-to-r from-trustTeal/5 to-white p-6 shadow-md">
 								<div className="flex items-center justify-between">
-									<div className="flex items-center space-x-3">
-										<div className="flex h-12 w-12 items-center justify-center rounded-full bg-trustTeal/10">
+									<div className="flex items-center space-x-4">
+										<div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-trustTeal/20 to-trustTeal/30 shadow-inner">
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
-												width="22"
-												height="22"
+												width="28"
+												height="28"
 												viewBox="0 0 24 24"
 												fill="none"
 												stroke="currentColor"
@@ -124,15 +124,15 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 											</svg>
 										</div>
 										<div>
-											<p className="max-w-[180px] truncate font-medium md:max-w-[300px]">
+											<p className="max-w-[180px] truncate text-lg font-medium text-deepNavy md:max-w-[300px]">
 												{selectedFile.name}
 											</p>
 											<div className="mt-1 flex items-center space-x-2">
-												<span className="text-xs text-muted-foreground">
+												<span className="text-sm text-deepNavy/70">
 													{formatFileSize(selectedFile.size)}
 												</span>
-												<span className="inline-block h-1 w-1 rounded-full bg-muted-foreground"></span>
-												<span className="text-xs capitalize text-muted-foreground">
+												<span className="inline-block h-1 w-1 rounded-full bg-deepNavy/30"></span>
+												<span className="text-sm capitalize text-deepNavy/70">
 													{getFileExtension(selectedFile.name)} file
 												</span>
 											</div>
@@ -143,12 +143,12 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 										variant="ghost"
 										size="sm"
 										onClick={() => setSelectedFile(null)}
-										className="flex h-8 w-8 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+										className="flex h-10 w-10 items-center justify-center rounded-full bg-warningRed/10 p-0 text-warningRed hover:bg-warningRed/20 hover:text-warningRed"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
+											width="18"
+											height="18"
 											viewBox="0 0 24 24"
 											fill="none"
 											stroke="currentColor"
@@ -164,15 +164,15 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 								</div>
 							</div>
 
-							<div className="space-y-4">
-								<label className="text-sm font-medium">Convert to:</label>
-								<div className="flex flex-wrap gap-2">
+							<div className="space-y-5">
+								<label className="text-lg font-medium text-deepNavy">Convert to:</label>
+								<div className="flex flex-wrap gap-3">
 									{getAvailableFormats().map((format) => (
 										<button
 											key={format}
 											type="button"
 											onClick={() => setTargetFormat(format)}
-											className={`group relative rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+											className={`group relative rounded-lg px-5 py-3 text-base font-medium transition-all duration-200 ${
 												targetFormat === format
 													? 'bg-trustTeal text-white shadow-md'
 													: 'bg-lightGray text-deepNavy hover:bg-trustTeal/10 hover:shadow-sm'
@@ -181,7 +181,7 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 											<span className="flex items-center">
 												{targetFormat === format && (
 													<svg
-														className="mr-1 h-3 w-3"
+														className="mr-1.5 h-4 w-4"
 														xmlns="http://www.w3.org/2000/svg"
 														viewBox="0 0 20 20"
 														fill="currentColor"
@@ -196,7 +196,7 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 												.{format}
 											</span>
 											{targetFormat === format && (
-												<span className="absolute inset-0 z-0 rounded-full bg-trustTeal/10 blur-sm"></span>
+												<span className="absolute inset-0 -z-10 rounded-lg bg-trustTeal/10 blur-sm"></span>
 											)}
 										</button>
 									))}
@@ -206,37 +206,35 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 					)}
 
 					{error && (
-						<div className="mt-4 rounded-md border border-warningRed/20 bg-warningRed/10 p-3 text-sm text-warningRed">
-							<div className="flex items-center">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									className="mr-2 h-4 w-4"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-								>
-									<path
-										fillRule="evenodd"
-										d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-										clipRule="evenodd"
-									/>
-								</svg>
-								{error}
-							</div>
+						<div className="mt-6 flex items-center rounded-lg border border-warningRed/20 bg-warningRed/10 p-4 text-sm text-warningRed">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								className="mr-2 h-5 w-5"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+							>
+								<path
+									fillRule="evenodd"
+									d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+									clipRule="evenodd"
+								/>
+							</svg>
+							{error}
 						</div>
 					)}
 				</CardContent>
 
-				<CardFooter className="flex justify-center border-t border-border/50 bg-gradient-to-b from-white to-lightGray/30 py-6">
+				<CardFooter className="flex justify-center border-t border-border/50 bg-gradient-to-b from-lightGray/10 to-lightGray/20 px-8 py-7">
 					<Button
 						type="submit"
 						disabled={!selectedFile || !targetFormat || isLoading}
-						className="group relative w-full max-w-xs overflow-hidden rounded-full bg-trustTeal px-6 py-3 font-medium text-white hover:bg-trustTeal/90"
+						className="group relative w-full max-w-xs overflow-hidden rounded-lg bg-trustTeal px-8 py-4 text-base font-medium text-white shadow-md transition-all hover:bg-trustTeal/90 hover:shadow-lg focus:ring-2 focus:ring-trustTeal/50 focus:ring-offset-2 disabled:bg-trustTeal/50"
 					>
 						<span className="relative z-10 flex items-center justify-center">
 							{isLoading ? (
 								<>
 									<svg
-										className="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+										className="mr-2 h-5 w-5 animate-spin text-white"
 										xmlns="http://www.w3.org/2000/svg"
 										fill="none"
 										viewBox="0 0 24 24"
@@ -259,25 +257,23 @@ export function ConversionForm({ onSubmit, isLoading = false }: ConversionFormPr
 								</>
 							) : (
 								<>
-									Convert Now
 									<svg
-										className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1"
 										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
+										className="mr-2 h-5 w-5"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
 									>
-										<path
-											fillRule="evenodd"
-											d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z"
-											clipRule="evenodd"
-										/>
+										<path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" />
 									</svg>
+									Convert Now
 								</>
 							)}
 						</span>
-
-						{/* Background animation */}
-						<span className="absolute bottom-0 left-1/2 h-full w-0 -translate-x-1/2 rounded-full bg-white/10 transition-all duration-300 group-hover:w-[105%]"></span>
+						<span className="absolute inset-0 -z-10 bg-gradient-to-r from-trustTeal to-accentOrange/50 opacity-0 blur-xl transition-opacity group-hover:opacity-30"></span>
 					</Button>
 				</CardFooter>
 			</form>
