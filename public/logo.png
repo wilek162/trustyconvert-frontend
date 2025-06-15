@@ -1,0 +1,16 @@
+/* 
+This is a placeholder file. You need to manually create a logo.png file in the public directory.
+
+You can convert the logo.svg to PNG using tools like:
+1. Inkscape (open source)
+2. GIMP (open source)
+3. Adobe Illustrator
+4. Online converters like https://svgtopng.com/
+
+Recommended specifications:
+- Size: 32x32 pixels (minimum)
+- Format: PNG with transparency
+- Colors: Use the TrustyConvert brand colors (#4ECDC4 teal and #2C3E50 navy)
+
+Once created, place the file at: /public/logo.png
+*/ 

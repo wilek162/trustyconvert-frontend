@@ -2,14 +2,16 @@
 // src/pages/index.astro
 import { Check, Lock, Zap } from '@lucide/astro'
 
-import FileConverter from '@/components/features/FileConverter'
-import type { ConversionFormat } from '@/lib/api/types'
+import { ConversionFlow } from '@/components/features/conversion'
+import type { ConversionFormat } from '@/lib/types/api'
 import { mockFormats } from '@/mocks/data'
 
-import QueryProvider from '@/components/providers/QueryProvider'
+import { AppProviders } from '@/components/providers/AppProviders'
 import MainLayout from '@/layouts/MainLayout.astro'
 import { Hero } from '@/components/Hero'
 import { Features } from '@/components/Features'
+import { CallToAction } from '@/components/CallToAction'
+import { Testimonials } from '@/components/Testimonials'
 
 const title = 'TrustyConvert - Fast & Secure File Conversion'
 const description =
@@ -24,12 +26,14 @@ const structuredData = {
 	description: description,
 	applicationCategory: 'UtilityApplication',
 	operatingSystem: 'Any',
-	offers: {
-		'@type': 'Offer',
-		price: '0',
-		priceCurrency: 'USD',
-		availability: 'https://schema.org/InStock'
-	},
+	offers: [
+		{
+			'@type': 'Offer',
+			price: '0',
+			priceCurrency: 'USD',
+			availability: 'https://schema.org/InStock'
+		}
+	],
 	featureList: [
 		'Fast file conversion',
 		'Secure processing',
@@ -57,8 +61,15 @@ const structuredData = {
 let formats: ConversionFormat[] = []
 
 if (import.meta.env.DEV) {
-	// Use mock data in development
-	formats = mockFormats
+	// Use mock data in development with appropriate type conversion
+	formats = mockFormats.map((mock) => ({
+		id: mock.id,
+		name: mock.name,
+		description: mock.name, // Use name as description
+		input_formats: mock.inputFormats,
+		output_formats: mock.outputFormats,
+		icon: mock.icon
+	}))
 } else {
 	try {
 		const response = await fetch(
@@ -73,8 +84,15 @@ if (import.meta.env.DEV) {
 		formats = data.data
 	} catch (error) {
 		console.error('Failed to fetch formats:', error)
-		// Fallback to mock data if fetch fails
-		formats = mockFormats
+		// Fallback to mock data if fetch fails with appropriate type conversion
+		formats = mockFormats.map((mock) => ({
+			id: mock.id,
+			name: mock.name,
+			description: mock.name, // Use name as description
+			input_formats: mock.inputFormats,
+			output_formats: mock.outputFormats,
+			icon: mock.icon
+		}))
 	}
 }
 
@@ -94,7 +112,23 @@ const alternateLanguages = [
 	extraStructuredData={structuredData}
 	alternateLanguages={alternateLanguages}
 >
-	<Hero client:load onFileConvert={(file, format) => console.log(file, format)} />
+	<Hero client:load />
+
+	<section class="trusty-section bg-white">
+		<div class="trusty-container">
+			<div class="mb-12 text-center">
+				<h2 class="mb-4">Convert Your Files Now</h2>
+				<p class="mx-auto max-w-2xl text-lg text-muted-foreground">
+					Fast, secure file conversion with no registration required. Your files are processed
+					locally and never stored.
+				</p>
+			</div>
+
+			<AppProviders enableDevtools={import.meta.env.DEV}>
+				<ConversionFlow client:load />
+			</AppProviders>
+		</div>
+	</section>
 
 	<Features />
 
@@ -148,116 +182,52 @@ const alternateLanguages = [
 		</div>
 	</section>
 
-	<section class="trusty-section bg-deepNavy text-white">
-		<div class="trusty-container">
-			<div class="flex flex-col items-center justify-between gap-8 md:flex-row">
-				<div class="max-w-xl">
-					<h2 class="mb-4">Ready to Convert Your Files?</h2>
-					<p class="mb-6 text-gray-300">
-						Experience lightning-fast file conversion with professional-grade security. No
-						registration required.
-					</p>
-					<a href="/" class="btn btn-primary">Convert Now</a>
-				</div>
+	<Testimonials client:visible />
 
-				<div class="rounded-card border border-trustTeal/20 bg-deepNavy/50 p-6">
-					<div class="flex flex-col gap-4">
-						<div class="flex items-center gap-3">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="text-trustTeal"
-							>
-								<path d="m9 12 2 2 4-4"></path>
-								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
-								></path>
-							</svg>
-							<span>No registration required</span>
-						</div>
-						<div class="flex items-center gap-3">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="text-trustTeal"
-							>
-								<path d="m9 12 2 2 4-4"></path>
-								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
-								></path>
-							</svg>
-							<span>Files deleted after conversion</span>
-						</div>
-						<div class="flex items-center gap-3">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="text-trustTeal"
-							>
-								<path d="m9 12 2 2 4-4"></path>
-								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
-								></path>
-							</svg>
-							<span>Bank-level encryption</span>
-						</div>
-						<div class="flex items-center gap-3">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="text-trustTeal"
-							>
-								<path d="m9 12 2 2 4-4"></path>
-								<path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"
-								></path>
-							</svg>
-							<span>Unlimited conversions</span>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
+	<CallToAction client:visible />
 </MainLayout>
 
 <style is:global>
 	/* Add loading state styles */
 	.file-upload-loading {
-		opacity: 0;
-		animation: fadeIn 0.3s ease-in forwards;
+		opacity: 0.7;
+		pointer-events: none;
 	}
 
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
+	/* Custom card styling */
+	.trusty-card {
+		@apply rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md;
+	}
+
+	/* Section styling */
+	.trusty-section {
+		@apply py-16 md:py-24;
+	}
+
+	.trusty-container {
+		@apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+	}
+
+	/* Feature grid styling */
+	.features-grid {
+		@apply grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3;
+	}
+
+	/* Button styling */
+	.btn {
+		@apply inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-medium transition-all duration-200;
+	}
+
+	.btn-primary {
+		@apply bg-trustTeal text-white hover:bg-trustTeal/90;
+	}
+
+	.btn-outline {
+		@apply border border-white text-white hover:bg-white/10;
+	}
+
+	/* Testimonial styling */
+	.testimonial-card {
+		@apply rounded-xl bg-white p-6 shadow-sm;
 	}
 </style>

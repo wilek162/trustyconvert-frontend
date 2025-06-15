@@ -52,6 +52,26 @@ export async function initializeBrowser(): Promise<void> {
 		const { initIndexedDB } = await import('@/lib/stores/upload')
 		await initIndexedDB()
 
+		// Configure fetch defaults for CORS
+		const originalFetch = window.fetch
+		window.fetch = async (resource, options = {}) => {
+			const defaultOptions = {
+				...options,
+				credentials: options.credentials || 'include',
+				headers: {
+					...options.headers,
+					Accept: 'application/json'
+				}
+			}
+
+			// For API requests, ensure we're using proper CORS settings
+			if (resource && typeof resource === 'string' && resource.includes('/api')) {
+				defaultOptions.mode = 'cors'
+			}
+
+			return originalFetch(resource, defaultOptions)
+		}
+
 		// Initialize session
 		const { initSession } = await import('@/lib/api/apiClient')
 

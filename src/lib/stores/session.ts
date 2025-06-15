@@ -4,6 +4,8 @@ interface SessionState {
 	csrfToken: string | null
 	isInitialized: boolean
 	isInitializing: boolean
+	sessionId?: string
+	expiresAt?: string
 }
 
 // Create the session store with initial state
@@ -16,11 +18,15 @@ export const sessionStore = atom<SessionState>({
 /**
  * Set the CSRF token in the session store
  * @param token The CSRF token from the API
+ * @param sessionId The session ID (optional)
+ * @param expiresAt When the session expires (optional)
  */
-export function setCSRFToken(token: string): void {
+export function setCSRFToken(token: string, sessionId?: string, expiresAt?: string): void {
 	sessionStore.set({
 		...sessionStore.get(),
 		csrfToken: token,
+		sessionId,
+		expiresAt,
 		isInitialized: true,
 		isInitializing: false
 	})
@@ -32,6 +38,22 @@ export function setCSRFToken(token: string): void {
  */
 export function getCSRFToken(): string | null {
 	return sessionStore.get().csrfToken
+}
+
+/**
+ * Get session ID
+ * @returns The current session ID or undefined
+ */
+export function getSessionId(): string | undefined {
+	return sessionStore.get().sessionId
+}
+
+/**
+ * Get session expiration date
+ * @returns Session expiration timestamp or undefined
+ */
+export function getSessionExpiry(): string | undefined {
+	return sessionStore.get().expiresAt
 }
 
 /**
@@ -68,52 +90,8 @@ export function clearSession(): void {
 	sessionStore.set({
 		csrfToken: null,
 		isInitialized: false,
-		isInitializing: false
+		isInitializing: false,
+		sessionId: undefined,
+		expiresAt: undefined
 	})
-}
-
-// Task status type
-export type TaskStatus = 'idle' | 'uploading' | 'converting' | 'completed' | 'failed'
-
-// Conversion state store
-export interface ConversionState {
-	taskId: string | null
-	status: TaskStatus
-	progress: number
-	error?: string
-	filename?: string
-	targetFormat?: string
-	resultUrl?: string
-}
-
-// Initial conversion state
-const initialConversionState: ConversionState = {
-	taskId: null,
-	status: 'idle',
-	progress: 0
-}
-
-// Conversion state store
-export const conversionState = atom<ConversionState>(initialConversionState)
-
-// Action to update conversion status
-export function updateConversionStatus(status: TaskStatus, data: Partial<ConversionState>) {
-	conversionState.set({
-		...conversionState.get(),
-		status,
-		...data
-	})
-}
-
-// Action to update conversion progress
-export function updateConversionProgress(progress: number) {
-	conversionState.set({
-		...conversionState.get(),
-		progress
-	})
-}
-
-// Action to reset conversion state
-export function resetConversion() {
-	conversionState.set(initialConversionState)
 }

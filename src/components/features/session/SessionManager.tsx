@@ -3,6 +3,7 @@ import { closeSession } from '@/lib/api/apiClient'
 import { getInitializing, getCSRFToken, clearSession } from '@/lib/stores/session'
 import { getAllJobs } from '@/lib/stores/upload'
 import type { FileUploadData } from '@/lib/stores/upload'
+import { CloseSession } from '@/components/features/session'
 
 interface SessionManagerProps {
 	onSessionClosed?: () => void
@@ -10,7 +11,7 @@ interface SessionManagerProps {
 	showExportOption?: boolean
 }
 
-export function SessionManager({
+function SessionManager({
 	onSessionClosed,
 	onSessionError,
 	showExportOption = true
@@ -157,8 +158,8 @@ export function SessionManager({
 	// If initializing, show loading
 	if (getInitializing()) {
 		return (
-			<div className="flex items-center rounded-lg bg-blue-50 p-3 text-blue-800">
-				<div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+			<div className="flex items-center rounded-lg bg-trustTeal/10 p-3 text-deepNavy">
+				<div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-trustTeal border-t-transparent"></div>
 				<span className="text-sm">Initializing session...</span>
 			</div>
 		)
@@ -167,73 +168,46 @@ export function SessionManager({
 	// If no session token, show warning
 	if (!getCSRFToken()) {
 		return (
-			<div className="rounded-lg bg-yellow-50 p-3 text-yellow-800">
+			<div className="rounded-lg bg-yellow-50 p-3 text-deepNavy">
 				<span className="text-sm">No active session. Please refresh the page.</span>
 			</div>
 		)
 	}
 
 	return (
-		<div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+		<div className="rounded-xl border border-trustTeal/20 bg-white p-4 shadow-sm">
 			<div className="mb-3 flex items-center justify-between">
-				<h3 className="font-medium text-gray-900">Session Status</h3>
+				<h3 className="font-medium text-deepNavy">Session Security</h3>
 				<div className="flex items-center">
-					<span className="mr-2 inline-block h-2 w-2 rounded-full bg-green-500"></span>
-					<span className="text-sm text-gray-600">Active</span>
+					<span className="mr-2 inline-block h-2 w-2 rounded-full bg-trustTeal"></span>
+					<span className="text-sm text-deepNavy/70">Session Active</span>
 				</div>
 			</div>
 
 			<div className="mb-4 grid grid-cols-2 gap-4 text-sm">
 				<div>
-					<p className="text-gray-500">Time Remaining</p>
-					<p className="font-medium">
+					<p className="text-muted-foreground">Time Remaining</p>
+					<p className="font-medium text-deepNavy">
 						{timeRemaining !== null ? formatTimeRemaining(timeRemaining) : 'Unknown'}
 					</p>
 				</div>
 				<div>
-					<p className="text-gray-500">Conversions</p>
-					<p className="font-medium">{jobCount}</p>
+					<p className="text-muted-foreground">Conversions</p>
+					<p className="font-medium text-deepNavy">{jobCount}</p>
 				</div>
 			</div>
 
-			{error && <div className="mb-3 rounded-md bg-red-50 p-2 text-xs text-red-700">{error}</div>}
+			{error && (
+				<div className="mb-3 rounded-md bg-warningRed/10 p-2 text-xs text-warningRed">{error}</div>
+			)}
 
 			<div className="flex flex-wrap gap-2">
-				<button
-					onClick={handleCloseSession}
-					disabled={isClosing}
-					className="flex items-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-				>
-					{isClosing ? (
-						<>
-							<div className="mr-1.5 h-3 w-3 animate-spin rounded-full border border-red-600 border-t-transparent"></div>
-							Closing...
-						</>
-					) : (
-						<>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								className="mr-1.5 h-3.5 w-3.5"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-								/>
-							</svg>
-							Close Session
-						</>
-					)}
-				</button>
+				<CloseSession variant="default" />
 
 				{showExportOption && jobCount > 0 && (
 					<button
 						onClick={handleExportHistory}
-						className="flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+						className="flex items-center rounded-full border border-deepNavy/30 bg-white px-3 py-1.5 text-xs font-medium text-deepNavy transition-colors hover:bg-deepNavy/10"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -246,7 +220,7 @@ export function SessionManager({
 								strokeLinecap="round"
 								strokeLinejoin="round"
 								strokeWidth={2}
-								d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+								d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
 							/>
 						</svg>
 						Export History
@@ -254,11 +228,15 @@ export function SessionManager({
 				)}
 			</div>
 
-			<div className="mt-3 text-xs text-gray-400">
-				Sessions automatically expire after 24 hours of inactivity.
+			<div className="mt-4 text-xs text-muted-foreground">
+				<p>
+					Your session will automatically end after 24 hours. All uploaded files are processed
+					securely and will be deleted when your session ends.
+				</p>
 			</div>
 		</div>
 	)
 }
 
 export default SessionManager
+export { SessionManager }

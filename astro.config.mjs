@@ -21,7 +21,7 @@ export default defineConfig({
   integrations: [
     react({
       // Only hydrate components that need interactivity
-      include: ['**/features/**/*', '**/ui/**/*'],
+      include: ['**/features/**/*', '**/ui/**/*', '**/providers/**/*'],
       // Exclude static components
       exclude: ['**/common/**/*', '**/seo/**/*', '**/*.stories.*'],
     }),
@@ -44,7 +44,12 @@ export default defineConfig({
   ],
   // Configure Vite
   vite: {
-    plugins: [mkcert()],
+    plugins: [mkcert({
+      hosts: ['localhost', '127.0.0.1'],
+      mkcertPath: undefined, // Let it auto-detect
+      autoUpgrade: true,
+      force: true,
+    })],
     // Enable CSS modules for all .module.css files
     css: {
       modules: {
@@ -82,11 +87,20 @@ export default defineConfig({
         '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
       },
     },
-    // Add dev server proxy for API
+    // Server configuration 
     server: {
       proxy: {
-        '/api': 'https://127.0.0.1',
-      },
+        '/api': {
+          target: 'https://127.0.0.1:9443',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/api/, '')
+        }
+      }
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', '@tanstack/react-query'],
+      exclude: [],
     },
   },
   // Astro v5 image config (optional, remove if not using @astrojs/image)

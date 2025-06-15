@@ -1,93 +1,120 @@
 # TrustyConvert Frontend
 
-A fast, secure file conversion platform built with Astro, React, and TypeScript.
+A modern, secure, and fast file conversion web application built with Astro, React, and TailwindCSS.
 
-## 🚀 Features
+## Features
 
-- **Fast & Secure**: Lightning-fast file conversions with enterprise-grade security
-- **Modern Tech Stack**: Astro v5.9.1, React, TypeScript, and Tailwind CSS
-- **Minimal Client JS**: Static output mode with React islands only where needed
-- **Type-Safe API Integration**: Fully typed API client with CSRF protection
-- **Mobile-First Design**: Responsive UI that works on all devices
+- 🔒 Secure file conversions with client-side encryption and zero storage
+- ⚡ Ultra-fast conversions with efficient processing
+- 🎨 Clean, responsive UI following TrustyConvert brand guidelines
+- 📱 Mobile-first design that works across all devices
+- 🔄 Support for multiple file formats
+- 🛡️ Comprehensive security measures including CSRF protection and secure sessions
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Framework**: [Astro](https://astro.build/) v5.9.1 (static output mode)
-- **UI Components**: [React](https://reactjs.org/) (minimal islands)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [Radix UI](https://www.radix-ui.com/)
-- **State Management**: [nanostores](https://github.com/nanostores/nanostores)
-- **API Integration**: [@tanstack/react-query](https://tanstack.com/query)
-- **Type Safety**: [TypeScript](https://www.typescriptlang.org/)
+- **Framework**: [Astro](https://astro.build/) with [React](https://reactjs.org/) islands
+- **UI**: [TailwindCSS](https://tailwindcss.com/) with [shadcn/ui](https://ui.shadcn.com/)
+- **State Management**: [Nanostores](https://github.com/nanostores/nanostores) for lightweight global state
+- **Data Fetching**: [TanStack Query](https://tanstack.com/query) (React Query v5)
+- **File Handling**: [react-dropzone](https://react-dropzone.js.org/) for file uploads
+- **Persistence**: [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) (via idb) for local storage
+- **Testing**: [Vitest](https://vitest.dev/) and [Testing Library](https://testing-library.com/)
 
-## 📁 Project Structure
+## Project Structure
+
+The codebase follows a feature-based organization pattern:
 
 ```
-/
-├── public/           # Static assets
-├── src/
-│   ├── components/   # UI components
-│   │   ├── features/ # Feature-specific components
-│   │   ├── ui/       # Reusable UI components
-│   │   ├── layout/   # Layout components
-│   │   ├── common/   # Common components
-│   │   ├── providers/ # Context providers
-│   │   └── seo/      # SEO components
-│   ├── layouts/      # Page layouts
-│   ├── lib/          # Utility functions
-│   │   ├── api/      # API client
-│   │   ├── stores/   # Nanostores
-│   │   ├── types/    # TypeScript types
-│   │   └── utils/    # Utility functions
-│   ├── pages/        # Astro pages
-│   └── styles/       # Global styles
-└── astro.config.mjs  # Astro configuration
+src/
+├── components/     # UI components
+│   ├── common/     # Common UI components
+│   ├── features/   # Feature-specific components
+│   │   ├── conversion/   # Conversion-related components
+│   │   ├── session/      # Session management components
+│   │   ├── upload/       # File upload components
+│   │   └── history/      # Job history components
+│   ├── layout/     # Layout components
+│   ├── providers/  # Context providers
+│   └── ui/         # shadcn/ui components
+├── layouts/        # Astro layout templates
+├── lib/           # Core utilities and functionality
+│   ├── api/       # API client
+│   ├── config/    # Configuration and constants
+│   ├── hooks/     # React hooks
+│   ├── stores/    # State management stores
+│   ├── types/     # TypeScript type definitions
+│   └── utils/     # Utility functions
+├── pages/         # Astro page routes
+├── styles/        # Global styles
+└── test/          # Test utilities and setup
 ```
 
-## 🧞 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [pnpm](https://pnpm.io/) (v8 or higher)
+- Node.js (v18+)
+- pnpm (v8+)
 
 ### Installation
 
+1. Clone the repository
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/trustyconvert-frontend.git
+git clone https://github.com/your-org/trustyconvert-frontend.git
 cd trustyconvert-frontend
+```
 
-# Install dependencies
+2. Install dependencies
+```bash
 pnpm install
 ```
 
-### Development
-
+3. Start the development server
 ```bash
-# Start the development server
 pnpm dev
 ```
 
-This will start the development server at `http://localhost:4322`.
+4. Open [http://localhost:4322](http://localhost:4322) to view the app
 
-### Building for Production
+## Build
 
 ```bash
-# Build the project
 pnpm build
-
-# Preview the production build
-pnpm preview
 ```
 
-## 🔒 Security Features
+## Testing
 
-- CSRF protection on all forms
-- In-memory only storage of tokens (no localStorage)
-- Secure, HttpOnly session cookies
-- Automatic session cleanup
+```bash
+# Run all tests
+pnpm test
 
-## 📝 License
+# Watch mode
+pnpm test:watch
+
+# UI mode
+pnpm test:ui
+
+# Coverage
+pnpm test:coverage
+```
+
+## Security Measures
+
+- Client-side encryption of sensitive data
+- Secure CSRF token validation for all API requests
+- Session-based authentication with secure cookies
+- File validation to prevent malicious uploads
+- XSS protection with proper output encoding
+
+## Code Quality
+
+- ESLint and Prettier for code formatting
+- TypeScript for type safety
+- Husky for pre-commit hooks
+- Comprehensive unit and integration tests
+
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 

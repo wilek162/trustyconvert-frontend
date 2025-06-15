@@ -9,6 +9,7 @@ import '@fontsource/poppins/500.css'
 import '@fontsource/poppins/600.css'
 import '@fontsource/poppins/700.css'
 import { AppProviders } from '@/components/providers/AppProviders'
+import { CloseSession } from '@/components/features/session'
 // import { OfflineBanner } from '@/components/ui/offlineBanner'
 
 // Define a type for structured data to avoid using 'any'
@@ -30,6 +31,8 @@ interface Props {
 	description: string
 	image?: string
 	canonical?: string
+	ogImage?: string
+	noindex?: boolean
 	extraStructuredData?: StructuredData
 	alternateLanguages?: { code: string; name: string }[]
 }
@@ -40,14 +43,7 @@ const appVersion = import.meta.env.PUBLIC_APP_VERSION || '0.0.1'
 // Initialize the application
 initializeApp()
 
-// SEO props
-interface SEOProps {
-	title?: string
-	description?: string
-	canonical?: string
-	ogImage?: string
-	noindex?: boolean
-}
+// No longer needed - using Props interface instead
 
 // Default SEO values
 const {
@@ -308,8 +304,8 @@ initializeBrowser()
 											fill="none"
 											stroke="currentColor"
 											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
+											strokeLinecap="round"
+											strokeLinejoin="round"
 											class="mr-2"
 										>
 											<path
@@ -335,6 +331,9 @@ initializeBrowser()
 				<div class="mt-4 text-center">
 					<p class="text-xs text-white/50">
 						&copy; {new Date().getFullYear()} TrustyConvert. All rights reserved.
+						<span class="ml-4 inline-block">
+							<CloseSession variant="minimal" client:load />
+						</span>
 					</p>
 				</div>
 			</div>

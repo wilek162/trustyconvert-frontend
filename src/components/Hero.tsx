@@ -2,11 +2,21 @@ import React from 'react'
 import { ConversionForm } from './ConversionForm'
 
 interface HeroProps {
-	onFileConvert: (file: File, targetFormat: string) => void
+	onFileConvert?: (file: File, targetFormat: string) => void
 	isLoading?: boolean
 }
 
 export function Hero({ onFileConvert, isLoading = false }: HeroProps) {
+	// Default handler if none provided
+	const handleFileConvert = (file: File, targetFormat: string) => {
+		if (onFileConvert) {
+			onFileConvert(file, targetFormat)
+		} else {
+			console.log('File conversion requested but no handler provided')
+			// Could use toast notification here
+		}
+	}
+
 	return (
 		<section className="relative overflow-hidden bg-gradient-to-b from-white to-lightGray py-16 md:py-24">
 			{/* Background pattern with reduced opacity */}
@@ -35,8 +45,8 @@ export function Hero({ onFileConvert, isLoading = false }: HeroProps) {
 									viewBox="0 0 24 24"
 									fill="none"
 									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
+									strokeWidth="2"
+									strokeLinecap="round"
 									strokeLinejoin="round"
 									className="text-trustTeal"
 								>
@@ -54,9 +64,9 @@ export function Hero({ onFileConvert, isLoading = false }: HeroProps) {
 									viewBox="0 0 24 24"
 									fill="none"
 									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
 									className="text-trustTeal"
 								>
 									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
@@ -73,9 +83,9 @@ export function Hero({ onFileConvert, isLoading = false }: HeroProps) {
 									viewBox="0 0 24 24"
 									fill="none"
 									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
 									className="text-trustTeal"
 								>
 									<path d="M18 8h1a4 4 0 0 1 0 8h-1" />
@@ -91,7 +101,7 @@ export function Hero({ onFileConvert, isLoading = false }: HeroProps) {
 				</div>
 
 				<div className="relative">
-					<ConversionForm onSubmit={onFileConvert} isLoading={isLoading} />
+					<ConversionForm onSubmit={handleFileConvert} isLoading={isLoading} />
 
 					{/* Decorative elements */}
 					<div className="absolute -right-6 -top-6 -z-10 h-32 w-32 rounded-full bg-accentOrange/5 blur-2xl"></div>

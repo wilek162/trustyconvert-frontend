@@ -9,7 +9,7 @@ interface DownloadManagerProps {
 	onError?: (error: string) => void
 }
 
-export function DownloadManager({ jobId, onDownloadComplete, onError }: DownloadManagerProps) {
+function DownloadManager({ jobId, onDownloadComplete, onError }: DownloadManagerProps) {
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
@@ -247,3 +247,4 @@ export function DownloadManager({ jobId, onDownloadComplete, onError }: Download
 }
 
 export default DownloadManager
+export { DownloadManager }

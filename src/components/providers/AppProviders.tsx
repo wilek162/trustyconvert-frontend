@@ -5,28 +5,30 @@
  * toast notifications, and other global functionality.
  */
 
-import React from 'react'
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
-import { ToastProvider } from '@/components/ui/Toast'
-import { ToastListener } from '@/components/providers/ToastListener'
+import * as React from 'react'
+import { ErrorBoundary } from '@/components/common'
+import { ToastProvider, QueryProvider, ToastListener } from '@/components/providers'
 
-interface AppProvidersProps {
+export interface AppProvidersProps {
 	/**
 	 * Child components to be wrapped with providers
 	 */
 	children: React.ReactNode
+	enableDevtools?: boolean
 }
 
 /**
  * AppProviders component that wraps the application with all necessary providers
  */
-export function AppProviders({ children }: AppProvidersProps): JSX.Element {
+export function AppProviders({ children, enableDevtools = false }: AppProvidersProps): JSX.Element {
 	return (
 		<ErrorBoundary>
-			<ToastProvider position="bottom-right" maxToasts={5}>
-				<ToastListener />
-				{children}
-			</ToastProvider>
+			<QueryProvider enableDevtools={enableDevtools}>
+				<ToastProvider>
+					<ToastListener />
+					{children}
+				</ToastProvider>
+			</QueryProvider>
 		</ErrorBoundary>
 	)
 }
@@ -52,3 +54,5 @@ export function withAppProviders<P extends object>(Component: React.ComponentTyp
 
 	return ComponentWithProviders
 }
+
+export default AppProviders

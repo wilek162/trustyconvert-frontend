@@ -19,7 +19,7 @@ interface ConversionProgressProps {
 	pollInterval?: number
 }
 
-export function ConversionProgress({
+function ConversionProgress({
 	jobId,
 	onConversionComplete,
 	onConversionFailed,
@@ -423,3 +423,4 @@ export function ConversionProgress({
 }
 
 export default ConversionProgress
+export { ConversionProgress }
