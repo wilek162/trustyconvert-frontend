@@ -1,9 +1,12 @@
 import React from 'react'
+import { mockFormats } from '@/mocks/data'
 
+// Format categories with icons matching the original SupportedFormats component
 const formatCategories = [
 	{
+		id: 'document',
 		name: 'Documents',
-		formats: ['PDF', 'DOCX', 'DOC', 'TXT', 'RTF', 'ODT'],
+		formats: ['pdf', 'docx', 'doc', 'txt', 'rtf', 'odt'],
 		icon: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -23,8 +26,9 @@ const formatCategories = [
 		)
 	},
 	{
+		id: 'image',
 		name: 'Images',
-		formats: ['JPG', 'JPEG', 'PNG', 'WEBP', 'GIF', 'SVG'],
+		formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'],
 		icon: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -45,8 +49,9 @@ const formatCategories = [
 		)
 	},
 	{
+		id: 'spreadsheet',
 		name: 'Spreadsheets',
-		formats: ['XLSX', 'XLS', 'CSV', 'ODS'],
+		formats: ['xlsx', 'xls', 'csv', 'ods'],
 		icon: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -69,8 +74,9 @@ const formatCategories = [
 		)
 	},
 	{
+		id: 'presentation',
 		name: 'Presentations',
-		formats: ['PPTX', 'PPT', 'ODP'],
+		formats: ['pptx', 'ppt', 'odp'],
 		icon: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -91,7 +97,21 @@ const formatCategories = [
 	}
 ]
 
-export function SupportedFormats() {
+export function ConversionSitemap() {
+	// Get all available format conversions from mock data
+	const getConversionsForFormat = (formatId: string) => {
+		const format = mockFormats.find((f) => f.id === formatId)
+		if (!format) return []
+
+		return format.outputFormats.map((outputFormat) => {
+			const targetFormat = mockFormats.find((f) => f.id === outputFormat)
+			return {
+				source: format,
+				target: targetFormat || { id: outputFormat, name: outputFormat.toUpperCase() }
+			}
+		})
+	}
+
 	return (
 		<section className="bg-white py-20">
 			<div className="trusty-container">
@@ -106,9 +126,9 @@ export function SupportedFormats() {
 				</div>
 
 				<div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-					{formatCategories.map((category, index) => (
+					{formatCategories.map((category) => (
 						<div
-							key={index}
+							key={category.id}
 							className="group rounded-xl border border-trustTeal/20 bg-white p-6 shadow-md transition-all hover:shadow-lg"
 						>
 							<div className="mb-5 flex items-center">
@@ -119,54 +139,37 @@ export function SupportedFormats() {
 							</div>
 
 							<div className="flex flex-wrap gap-2">
-								{category.formats.map((format, idx) => (
-									<span
-										key={idx}
-										className="rounded-md bg-lightGray px-2.5 py-1 text-sm font-medium text-deepNavy/80"
-									>
-										.{format.toLowerCase()}
-									</span>
-								))}
+								{category.formats.map((formatId) => {
+									const format = mockFormats.find((f) => f.id === formatId)
+									const displayName = format ? format.name : formatId.toUpperCase()
+
+									return (
+										<a
+											key={formatId}
+											href={`/all-conversions#${formatId}`}
+											className="rounded-md bg-lightGray px-2.5 py-1 text-sm font-medium text-deepNavy/80 hover:bg-trustTeal/10 hover:text-deepNavy"
+										>
+											.{formatId}
+										</a>
+									)
+								})}
 							</div>
 						</div>
 					))}
 				</div>
 
 				<div className="mt-10 text-center">
-					<p className="mb-4 text-base text-deepNavy/70">
+					<p className="text-base text-deepNavy/70">
 						Don't see the format you need?{' '}
 						<a href="#" className="text-trustTeal hover:underline">
 							Contact us
 						</a>{' '}
 						to request additional formats.
 					</p>
-
-					<a
-						href="/all-conversions"
-						className="inline-flex items-center justify-center rounded-full bg-trustTeal px-6 py-3 text-sm font-medium text-white transition-all hover:bg-trustTeal/90 hover:shadow-md"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							className="mr-2"
-						>
-							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-							<polyline points="14 2 14 8 20 8" />
-							<line x1="16" y1="13" x2="8" y2="13" />
-							<line x1="16" y1="17" x2="8" y2="17" />
-							<line x1="10" y1="9" x2="8" y2="9" />
-						</svg>
-						View All Conversion Options
-					</a>
 				</div>
 			</div>
 		</section>
 	)
 }
+
+export default ConversionSitemap

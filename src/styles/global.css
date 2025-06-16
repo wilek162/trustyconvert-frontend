@@ -9,100 +9,78 @@
 @layer base {
   :root {
     /* TrustyConvert Brand Colors */
-    --trust-teal: 174 78% 55%;
-    /* #4ECDC4 in HSL */
-    --deep-navy: 210 40% 24%;
-    /* #2C3E50 in HSL */
-    --accent-orange: 25 100% 63%;
-    /* #FF8C42 in HSL */
-    --light-gray: 210 17% 98%;
-    /* #F8F9FA in HSL */
-    --medium-gray: 210 7% 46%;
-    /* #6C757D in HSL */
-    --success-green: 134 61% 41%;
-    /* #28A745 in HSL */
-    --warning-red: 354 70% 54%;
-    /* #DC3545 in HSL */
-
-    /* Theme colors mapped to TrustyConvert brand */
-    --background: 0 0% 100%;
-    /* Pure white */
-    --foreground: 210 40% 24%;
-    /* Deep Navy */
-
-    --primary: 174 78% 55%;
-    /* Trust Teal */
+    --primary: 191 50% 39%;
+    /* #329697 */
+    --primary-light: 186 38% 54%;
+    /* #5db3b3 */
+    --primary-dark: 186 51% 28%;
+    /* #236c6c */
+    --secondary: 200 28% 18%;
+    /* #22313a */
+    --accent: 35 100% 64%;
+    /* #ffb347 */
+    --success: 146 50% 47%;
+    /* #3bb273 */
+    --warning: 13 100% 64%;
+    /* #ff704d */
+    --error: 6 78% 58%;
+    /* #e74c3c */
+    --background: 200 33% 98%;
+    /* #f7fafb */
+    --surface: 0 0% 100%;
+    /* #ffffff */
+    --text-main: 200 28% 18%;
+    /* #22313a */
+    --text-muted: 205 22% 45%;
+    /* #5a7a8c */
+    --foreground: var(--text-main);
     --primary-foreground: 0 0% 100%;
     /* White */
-
-    --secondary: 210 40% 24%;
-    /* Deep Navy */
     --secondary-foreground: 0 0% 100%;
     /* White */
-
-    --accent: 25 100% 63%;
-    /* Accent Orange */
-    --accent-foreground: 210 40% 24%;
-    /* Deep Navy */
-
-    --destructive: 354 70% 54%;
-    /* Warning Red */
-    --destructive-foreground: 0 0% 100%;
-    /* White */
-
-    --muted: 210 17% 98%;
-    /* Light Gray */
-    --muted-foreground: 210 7% 46%;
-    /* Medium Gray */
-
-    --border: 210 17% 90%;
-    /* Lighter gray for borders */
-    --input: 210 17% 90%;
-    /* Same as border */
-    --ring: 174 78% 55%;
-    /* Trust Teal */
-
+    --accent-foreground: var(--text-main);
+    --success-foreground: 0 0% 100%;
+    --warning-foreground: 0 0% 100%;
+    --error-foreground: 0 0% 100%;
+    --muted: 205 22% 95%;
+    /* very light for muted backgrounds */
+    --muted-foreground: var(--text-muted);
+    --border: 200 33% 90%;
+    /* lighter background for borders */
+    --input: 200 33% 90%;
+    --ring: var(--primary);
     --radius: 0.5rem;
-    /* 8px border radius */
   }
 
   .dark {
-    --background: 210 40% 24%;
-    /* Deep Navy */
+    --background: 200 28% 18%;
+    /* #22313a */
+    --surface: 200 28% 24%;
+    /* slightly lighter for surfaces */
     --foreground: 0 0% 100%;
     /* White */
-
-    --primary: 174 78% 55%;
-    /* Trust Teal */
+    --primary: 191 50% 39%;
+    --primary-light: 186 38% 54%;
+    --primary-dark: 186 51% 28%;
+    --secondary: 200 28% 24%;
+    --accent: 35 100% 64%;
+    --success: 146 50% 47%;
+    --warning: 13 100% 64%;
+    --error: 6 78% 58%;
+    --text-main: 0 0% 100%;
+    --text-muted: 205 22% 70%;
     --primary-foreground: 0 0% 100%;
-    /* White */
-
-    --secondary: 210 40% 34%;
-    /* Lighter Deep Navy */
     --secondary-foreground: 0 0% 100%;
-    /* White */
-
-    --accent: 25 100% 63%;
-    /* Accent Orange */
     --accent-foreground: 0 0% 100%;
-    /* White */
-
-    --destructive: 354 70% 44%;
-    /* Darker Warning Red */
-    --destructive-foreground: 0 0% 100%;
-    /* White */
-
-    --muted: 210 40% 30%;
-    /* Slightly lighter than Deep Navy */
-    --muted-foreground: 210 17% 80%;
-    /* Light gray */
-
-    --border: 210 40% 30%;
-    /* Same as muted */
-    --input: 210 40% 30%;
-    /* Same as muted */
-    --ring: 174 78% 55%;
-    /* Trust Teal */
+    --success-foreground: 0 0% 100%;
+    --warning-foreground: 0 0% 100%;
+    --error-foreground: 0 0% 100%;
+    --muted: 200 28% 24%;
+    --muted-foreground: 205 22% 70%;
+    --border: 200 28% 24%;
+    --input: 200 28% 24%;
+    --ring: var(--primary);
+    --radius: 0.5rem;
   }
 }
 

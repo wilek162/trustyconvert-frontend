@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
@@ -13,14 +13,17 @@ import { useFileUpload } from '@/lib/hooks/useApi'
 import { addJob, updateJobStatus, updateJobProgress } from '@/lib/stores/upload'
 import { getCSRFToken } from '@/lib/stores/session'
 import { getFileInfo } from '@/lib/utils/files'
+import { mockFormats } from '@/mocks/data'
 
 interface UploadZoneProps {
 	onFileUploaded?: (jobId: string, file: File) => void
 	onError?: (error: string) => void
 	maxFileSize?: number
 	acceptedFormats?: Record<string, string[]>
+	initialSourceFormat?: string
 	className?: string
 	showProgress?: boolean
+	title?: string
 }
 
 // Define progress event type
@@ -33,14 +36,42 @@ export function UploadZone({
 	onFileUploaded,
 	onError,
 	maxFileSize = FILE_UPLOAD.MAX_SIZE,
-	acceptedFormats = FILE_UPLOAD.MIME_TYPES,
+	acceptedFormats: propAcceptedFormats,
+	initialSourceFormat,
 	className = '',
-	showProgress = true
+	showProgress = true,
+	title = 'Upload File'
 }: UploadZoneProps) {
 	const [file, setFile] = useState<File | null>(null)
 	const [validationResult, setValidationResult] = useState<FileValidationResult | null>(null)
 	const [uploadProgress, setUploadProgress] = useState(0)
 	const [isUploading, setIsUploading] = useState(false)
+	const [filteredFormats, setFilteredFormats] = useState<Record<string, string[]>>(
+		propAcceptedFormats || FILE_UPLOAD.MIME_TYPES
+	)
+
+	// Filter accepted formats based on initialSourceFormat
+	useEffect(() => {
+		if (initialSourceFormat) {
+			// Find the format info from mock data
+			const formatInfo = mockFormats.find((format) => format.id === initialSourceFormat)
+
+			if (formatInfo && formatInfo.mimeTypes && formatInfo.extensions) {
+				// Create a filtered format object that only includes the specified source format
+				const filtered: Record<string, string[]> = {}
+
+				// Add MIME types
+				formatInfo.mimeTypes.forEach((mimeType) => {
+					filtered[mimeType] = formatInfo.extensions || []
+				})
+
+				setFilteredFormats(filtered)
+			}
+		} else {
+			// Use the props or default if no initialSourceFormat is provided
+			setFilteredFormats(propAcceptedFormats || FILE_UPLOAD.MIME_TYPES)
+		}
+	}, [initialSourceFormat, propAcceptedFormats])
 
 	// Use the file upload mutation
 	const uploadMutation = useFileUpload({
@@ -93,7 +124,7 @@ export function UploadZone({
 			// Validate file
 			const result = validateFile(selectedFile, {
 				maxSize: maxFileSize,
-				allowedTypes: Object.values(acceptedFormats).flat()
+				allowedTypes: Object.values(filteredFormats).flat()
 			})
 
 			setValidationResult(result)
@@ -107,13 +138,13 @@ export function UploadZone({
 
 			setFile(selectedFile)
 		},
-		[maxFileSize, acceptedFormats, onError]
+		[maxFileSize, filteredFormats, onError]
 	)
 
 	// Configure dropzone
 	const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
 		onDrop,
-		accept: acceptedFormats,
+		accept: filteredFormats,
 		maxFiles: 1,
 		maxSize: maxFileSize,
 		multiple: false
@@ -184,10 +215,21 @@ export function UploadZone({
 		setIsUploading(false)
 	}
 
+	// Get format-specific message
+	const getFormatMessage = () => {
+		if (initialSourceFormat) {
+			const formatInfo = mockFormats.find((format) => format.id === initialSourceFormat)
+			if (formatInfo) {
+				return `Upload a ${formatInfo.name} file`
+			}
+		}
+		return 'Drag & drop a file here, or click to select'
+	}
+
 	return (
 		<Card className={`overflow-hidden ${className}`}>
 			<CardHeader className="bg-muted/50 pb-2">
-				<CardTitle className="text-lg font-medium">Upload File</CardTitle>
+				<CardTitle className="text-lg font-medium">{title}</CardTitle>
 			</CardHeader>
 
 			<CardContent className="pt-4">
@@ -243,12 +285,11 @@ export function UploadZone({
 								</svg>
 							</div>
 							<p className="font-medium">
-								{isDragActive
-									? 'Drop the file here'
-									: 'Drag & drop a file here, or click to select'}
+								{isDragActive ? 'Drop the file here' : getFormatMessage()}
 							</p>
 							<p className="text-sm text-muted-foreground">
 								Max file size: {Math.round(maxFileSize / (1024 * 1024))} MB
+								{initialSourceFormat && <span> | Format: {initialSourceFormat.toUpperCase()}</span>}
 							</p>
 						</div>
 					)}
@@ -273,7 +314,7 @@ export function UploadZone({
 				)}
 			</CardContent>
 
-			<CardFooter className={`flex gap-2 bg-muted/30 ${file ? 'justify-between' : 'justify-end'}`}>
+			<CardFooter className="flex justify-end space-x-2 bg-muted/30 px-6 py-4">
 				{file && (
 					<Button
 						variant="outline"

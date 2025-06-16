@@ -2,21 +2,25 @@ import React from 'react'
 import type { ConversionFormat } from '@/lib/api/types'
 
 interface FormatSelectorProps {
-	currentFormat: string
+	sourceFormat?: string
+	selectedFormat: string
 	availableFormats: string[]
 	onFormatChange: (format: string) => void
 	disabled?: boolean
 }
 
 function FormatSelector({
-	currentFormat,
+	sourceFormat,
+	selectedFormat,
 	availableFormats,
 	onFormatChange,
 	disabled = false
 }: FormatSelectorProps) {
 	return (
 		<div className="space-y-4">
-			<label className="text-sm font-medium text-deepNavy">Convert to:</label>
+			<label className="text-sm font-medium text-deepNavy">
+				{sourceFormat ? `Convert ${sourceFormat.toUpperCase()} to:` : 'Convert to:'}
+			</label>
 			<div className="flex flex-wrap gap-2">
 				{availableFormats.map((format) => (
 					<button
@@ -25,14 +29,14 @@ function FormatSelector({
 						onClick={() => onFormatChange(format)}
 						disabled={disabled}
 						className={`group relative rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-							currentFormat === format
+							selectedFormat === format
 								? 'bg-trustTeal text-white shadow-md'
 								: 'bg-lightGray text-deepNavy hover:bg-trustTeal/10 hover:shadow-sm'
 						} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-						aria-pressed={currentFormat === format}
+						aria-pressed={selectedFormat === format}
 					>
 						<span className="flex items-center">
-							{currentFormat === format && (
+							{selectedFormat === format && (
 								<svg
 									className="mr-1 h-3 w-3"
 									xmlns="http://www.w3.org/2000/svg"
@@ -48,7 +52,7 @@ function FormatSelector({
 							)}
 							.{format}
 						</span>
-						{currentFormat === format && (
+						{selectedFormat === format && (
 							<span className="absolute inset-0 z-0 rounded-full bg-trustTeal/10 blur-sm"></span>
 						)}
 					</button>

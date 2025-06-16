@@ -1,0 +1,161 @@
+---
+/**
+ * Blog post page for file-formats category posts
+ * This page handles URLs like /blog/file-formats/post-slug/
+ */
+import { getCollection, type CollectionEntry } from 'astro:content'
+import MainLayout from '@/layouts/MainLayout.astro'
+import SEOManager from '@/components/seo/SEOManager.astro'
+import BlogHero from '@/components/blog/BlogHero.astro'
+import TableOfContents from '@/components/blog/TableOfContents.astro'
+import BlogAuthor from '@/components/blog/BlogAuthor.astro'
+import RelatedPosts from '@/components/blog/RelatedPosts.astro'
+import { blogConfig } from '@/lib/seo/config'
+
+// Helper function to format dates
+function formatDate(date: Date): string {
+	return date.toLocaleDateString('en-US', {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric'
+	})
+}
+
+export async function getStaticPaths() {
+	const blogEntries = await getCollection(
+		'blog',
+		({ data }: CollectionEntry<'blog'>) => !data.draft
+	)
+
+	// Filter only posts in the "file-formats" category directory
+	return blogEntries
+		.filter(entry => entry.slug.startsWith('file-formats/'))
+		.map((entry: CollectionEntry<'blog'>) => {
+			// Get the slug part without the category prefix
+			const slugParts = entry.slug.split('/')
+			if (slugParts.length > 1) {
+				const postSlug = slugParts[1]
+				return {
+					params: { slug: postSlug },
+					props: { entry }
+				}
+			}
+			return null
+		})
+		.filter(Boolean)
+}
+
+interface Props {
+	entry: CollectionEntry<'blog'>
+}
+
+const { entry } = Astro.props
+const { Content } = await entry.render()
+
+// Get the proper category slug from the config
+const categorySlug =
+	blogConfig.categories.find((cat) => cat.name === entry.data.category)?.slug ||
+	entry.data.category.toLowerCase().replace(/\s+/g, '-')
+
+// Generate breadcrumbs for SEO
+const breadcrumbs = [
+	{ name: 'Home', url: '/' },
+	{ name: 'Blog', url: '/blog' },
+	{ name: entry.data.category, url: `/blog/category/${categorySlug}` },
+	{ name: entry.data.title, url: `/blog/file-formats/${entry.slug.split('/')[1]}` }
+]
+
+// Article structured data
+const articleStructuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'BlogPosting',
+	headline: entry.data.title,
+	description: entry.data.description,
+	image: new URL(entry.data.image, Astro.site).href,
+	datePublished: entry.data.publishDate.toISOString(),
+	dateModified: entry.data.updatedDate
+		? entry.data.updatedDate.toISOString()
+		: entry.data.publishDate.toISOString(),
+	author: {
+		'@type': 'Person',
+		name: entry.data.author
+	},
+	publisher: {
+		'@type': 'Organization',
+		name: 'TrustyConvert',
+		logo: {
+			'@type': 'ImageObject',
+			url: new URL('/logo.png', Astro.site).href
+		}
+	},
+	mainEntityOfPage: {
+		'@type': 'WebPage',
+		'@id': new URL(`/blog/file-formats/${entry.slug.split('/')[1]}`, Astro.site).href
+	}
+}
+
+// Format the date for display
+const formattedDate = formatDate(entry.data.publishDate)
+---
+
+<MainLayout
+	title={entry.data.seoTitle || entry.data.title}
+	description={entry.data.seoDescription || entry.data.description}
+>
+	<SEOManager
+		title={entry.data.seoTitle || entry.data.title}
+		description={entry.data.seoDescription || entry.data.description}
+		ogImage={entry.data.image}
+		pageType="article"
+		articleData={{
+			publishedTime: entry.data.publishDate.toISOString(),
+			modifiedTime: entry.data.updatedDate ? entry.data.updatedDate.toISOString() : undefined,
+			author: entry.data.author,
+			tags: entry.data.tags,
+			section: entry.data.category
+		}}
+		breadcrumbs={breadcrumbs}
+		structuredData={articleStructuredData}
+	/>
+
+	<BlogHero
+		title={entry.data.title}
+		image={entry.data.image}
+		publishDate={formattedDate}
+		category={entry.data.category}
+		tags={entry.data.tags}
+	/>
+
+	<div class="container mx-auto px-4 py-12">
+		<div class="grid grid-cols-1 gap-12 lg:grid-cols-4">
+			<div class="lg:col-span-3">
+				<article
+					class="prose prose-lg max-w-none prose-headings:font-heading prose-headings:font-semibold prose-headings:text-deepNavy prose-a:text-trustTeal prose-a:no-underline hover:prose-a:underline prose-img:rounded-lg"
+				>
+					<Content />
+				</article>
+
+				<BlogAuthor
+					name={entry.data.author}
+					image={entry.data.authorImage}
+					date={entry.data.publishDate}
+				/>
+			</div>
+
+			<aside class="space-y-8">
+				<div class="sticky top-24">
+					<TableOfContents />
+
+					<div class="mt-8 rounded-lg border border-border bg-card p-6">
+						<h3 class="mb-4 text-xl font-semibold text-deepNavy">Related Articles</h3>
+						<RelatedPosts
+							currentSlug={entry.slug}
+							tags={entry.data.tags}
+							category={entry.data.category}
+						/>
+					</div>
+				</div>
+			</aside>
+		</div>
+	</div>
+</MainLayout> 

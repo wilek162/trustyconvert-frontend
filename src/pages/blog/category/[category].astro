@@ -1,0 +1,131 @@
+---
+/**
+ * Blog category page
+ * This page displays all blog posts in a specific category
+ */
+import { getCollection, type CollectionEntry } from 'astro:content'
+import MainLayout from '@/layouts/MainLayout.astro'
+import SEOManager from '@/components/seo/SEOManager.astro'
+import BlogCard from '@/components/blog/BlogCard.astro'
+import { blogConfig } from '@/lib/seo/config'
+
+export async function getStaticPaths() {
+	const categories = blogConfig.categories
+
+	return categories.map((category) => {
+		return {
+			params: { category: category.slug },
+			props: { categoryInfo: category }
+		}
+	})
+}
+
+interface Props {
+	categoryInfo: {
+		name: string
+		slug: string
+		description: string
+	}
+}
+
+const { categoryInfo } = Astro.props
+const { category } = Astro.params
+
+// Get all blog posts in this category
+const allCategoryPosts = await getCollection('blog', ({ data }: CollectionEntry<'blog'>) => {
+	return !data.draft && data.category === categoryInfo.name
+})
+
+// Sort by publish date
+const sortedPosts = allCategoryPosts.sort(
+	(a, b) => new Date(b.data.publishDate).valueOf() - new Date(a.data.publishDate).valueOf()
+)
+
+// SEO
+const title = `${categoryInfo.name} - TrustyConvert Blog`
+const description = categoryInfo.description
+
+// Breadcrumbs for SEO
+const breadcrumbs = [
+	{ name: 'Home', url: '/' },
+	{ name: 'Blog', url: '/blog' },
+	{ name: categoryInfo.name, url: `/blog/category/${category}` }
+]
+
+// Structured data
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: title,
+	description: description,
+	url: new URL(`/blog/category/${category}`, Astro.site).href,
+	mainEntity: {
+		'@type': 'ItemList',
+		itemListElement: sortedPosts.map((post, index) => ({
+			'@type': 'ListItem',
+			position: index + 1,
+			url: new URL(`/blog/${post.slug}`, Astro.site).href
+		}))
+	}
+}
+---
+
+<MainLayout title={title} description={description}>
+	<SEOManager
+		title={title}
+		description={description}
+		pageType="website"
+		breadcrumbs={breadcrumbs}
+		structuredData={structuredData}
+	/>
+
+	<div class="bg-gradient-to-b from-white to-lightGray/20 py-12 md:py-16">
+		<div class="container mx-auto px-4">
+			<div class="mb-12 text-center">
+				<h1 class="font-heading text-4xl font-bold text-deepNavy md:text-5xl">
+					{categoryInfo.name}
+				</h1>
+				<p class="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+					{categoryInfo.description}
+				</p>
+			</div>
+		</div>
+	</div>
+
+	<div class="container mx-auto px-4 py-12">
+		{
+			sortedPosts.length > 0 ? (
+				<div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+					{sortedPosts.map((post) => (
+						<BlogCard post={post} />
+					))}
+				</div>
+			) : (
+				<div class="rounded-lg border border-border bg-card p-12 text-center">
+					<h2 class="mb-2 text-xl font-semibold text-deepNavy">No posts found</h2>
+					<p class="text-muted-foreground">
+						There are currently no posts in this category. Check back soon!
+					</p>
+					<a href="/blog" class="mt-6 inline-flex items-center text-trustTeal hover:underline">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							class="mr-2"
+						>
+							<path d="m12 19-7-7 7-7" />
+							<path d="M19 12H5" />
+						</svg>
+						Back to all posts
+					</a>
+				</div>
+			)
+		}
+	</div>
+</MainLayout>

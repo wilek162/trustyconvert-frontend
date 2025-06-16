@@ -1,0 +1,121 @@
+---
+/**
+ * Blog index page
+ * This page displays all blog posts with featured posts at the top
+ */
+import { getCollection } from 'astro:content'
+import MainLayout from '@/layouts/MainLayout.astro'
+import SEOManager from '@/components/seo/SEOManager.astro'
+import BlogCard from '@/components/blog/BlogCard.astro'
+import { blogConfig } from '@/lib/seo/config'
+
+// Get all blog posts
+const allPosts = await getCollection('blog', ({ data }) => !data.draft)
+
+// Sort by publish date
+const sortedPosts = allPosts.sort(
+	(a, b) => new Date(b.data.publishDate).valueOf() - new Date(a.data.publishDate).valueOf()
+)
+
+// Get featured posts
+const featuredPosts = sortedPosts.filter((post) => post.data.featured).slice(0, 3)
+
+// Get recent posts (excluding featured)
+const recentPosts = sortedPosts
+	.filter((post) => !featuredPosts.includes(post))
+	.slice(0, blogConfig.postsPerPage)
+
+// Get all categories
+const categories = blogConfig.categories
+
+// Breadcrumbs for SEO
+const breadcrumbs = [
+	{ name: 'Home', url: '/' },
+	{ name: 'Blog', url: '/blog' }
+]
+---
+
+<MainLayout title={blogConfig.title} description={blogConfig.description}>
+	<SEOManager
+		title={blogConfig.title}
+		description={blogConfig.description}
+		pageType="website"
+		structuredData={blogConfig.structuredData}
+		breadcrumbs={breadcrumbs}
+	/>
+
+	<div class="bg-gradient-to-b from-white to-lightGray/20 py-12 md:py-16">
+		<div class="container mx-auto px-4">
+			<div class="mb-12 text-center">
+				<h1 class="font-heading text-4xl font-bold text-deepNavy md:text-5xl">
+					TrustyConvert Blog
+				</h1>
+				<p class="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+					Learn about file formats, conversion techniques, and digital document management.
+				</p>
+			</div>
+		</div>
+	</div>
+
+	<div class="container mx-auto px-4 py-12">
+		<!-- Featured Posts -->
+		{
+			featuredPosts.length > 0 && (
+				<section class="mb-16">
+					<h2 class="mb-8 text-2xl font-semibold text-deepNavy">Featured Articles</h2>
+					<div class="grid grid-cols-1 gap-8 md:grid-cols-3">
+						{featuredPosts.map((post) => (
+							<BlogCard post={post} featured={true} />
+						))}
+					</div>
+				</section>
+			)
+		}
+
+		<!-- Recent Posts -->
+		<section class="mb-16">
+			<h2 class="mb-8 text-2xl font-semibold text-deepNavy">Recent Articles</h2>
+			<div class="grid grid-cols-1 gap-8 md:grid-cols-3">
+				{recentPosts.map((post) => <BlogCard post={post} />)}
+			</div>
+		</section>
+
+		<!-- Categories -->
+		<section>
+			<h2 class="mb-8 text-2xl font-semibold text-deepNavy">Browse by Category</h2>
+			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+				{
+					categories.map((category) => (
+						<a
+							href={`/blog/category/${category.slug}`}
+							class="group flex flex-col rounded-xl border border-border bg-card p-6 transition-all hover:border-trustTeal/30 hover:bg-trustTeal/5"
+						>
+							<h3 class="mb-2 text-xl font-semibold text-deepNavy group-hover:text-trustTeal">
+								{category.name}
+							</h3>
+							<p class="mb-4 flex-grow text-muted-foreground">{category.description}</p>
+							<span class="flex items-center text-sm font-medium text-trustTeal">
+								Browse articles
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									class="ml-1 transition-transform group-hover:translate-x-1"
+								>
+									<path d="M5 12h14" />
+									<path d="m12 5 7 7-7 7" />
+								</svg>
+							</span>
+						</a>
+					))
+				}
+			</div>
+		</section>
+	</div>
+</MainLayout>

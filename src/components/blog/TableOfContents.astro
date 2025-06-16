@@ -1,0 +1,86 @@
+---
+/**
+ * Table of contents component for blog posts
+ * This component automatically generates a table of contents from headings
+ */
+export interface Props {
+	// No props needed for this component
+}
+---
+
+<div class="mb-8 rounded-lg border border-border bg-card p-6">
+	<h3 class="mb-4 text-lg font-semibold">Table of Contents</h3>
+	<div class="toc-container">
+		<!-- Table of contents will be populated by JavaScript -->
+		<div id="toc-container" class="text-sm"></div>
+	</div>
+</div>
+
+<script>
+	// Function to generate table of contents
+	function generateTableOfContents() {
+		const article = document.querySelector('article')
+		const tocContainer = document.getElementById('toc-container')
+
+		if (!article || !tocContainer) return
+
+		// Get all headings
+		const headings = Array.from(article.querySelectorAll('h2, h3'))
+
+		if (headings.length === 0) {
+			tocContainer.parentElement?.parentElement?.classList.add('hidden')
+			return
+		}
+
+		// Create the list
+		const tocList = document.createElement('ul')
+		tocList.className = 'space-y-2'
+
+		// Add each heading to the list
+		headings.forEach((heading, index) => {
+			// Add ID to heading if it doesn't have one
+			if (!heading.id) {
+				heading.id = `heading-${index}`
+			}
+
+			const listItem = document.createElement('li')
+			const link = document.createElement('a')
+
+			link.href = `#${heading.id}`
+			link.textContent = heading.textContent
+			link.className =
+				heading.tagName === 'H2'
+					? 'block py-1 text-foreground hover:text-trustTeal'
+					: 'block py-1 pl-4 text-muted-foreground hover:text-trustTeal'
+
+			// Add click event to smooth scroll
+			link.addEventListener('click', (e) => {
+				e.preventDefault()
+				const targetId = link.getAttribute('href')?.substring(1)
+				if (targetId) {
+					const targetElement = document.getElementById(targetId)
+					if (targetElement) {
+						window.scrollTo({
+							top: targetElement.offsetTop - 100,
+							behavior: 'smooth'
+						})
+
+						// Update URL without scrolling
+						history.pushState(null, '', `#${targetId}`)
+					}
+				}
+			})
+
+			listItem.appendChild(link)
+			tocList.appendChild(listItem)
+		})
+
+		tocContainer.appendChild(tocList)
+	}
+
+	// Generate table of contents when the DOM is loaded
+	document.addEventListener('DOMContentLoaded', generateTableOfContents)
+
+	// Re-generate on client-side navigation (for SPAs)
+	document.addEventListener('astro:page-load', generateTableOfContents)
+</script>

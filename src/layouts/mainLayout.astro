@@ -152,6 +152,22 @@ initializeBrowser()
 							</li>
 							<li>
 								<a
+									href="/all-conversions"
+									class={`text-sm font-medium transition-colors hover:text-foreground ${Astro.url.pathname === '/all-conversions' ? 'text-foreground' : 'text-muted-foreground'}`}
+								>
+									All Conversions
+								</a>
+							</li>
+							<li>
+								<a
+									href="/blog"
+									class={`text-sm font-medium transition-colors hover:text-foreground ${Astro.url.pathname.startsWith('/blog') ? 'text-foreground' : 'text-muted-foreground'}`}
+								>
+									Blog
+								</a>
+							</li>
+							<li>
+								<a
 									href="/about"
 									class={`text-sm font-medium transition-colors hover:text-foreground ${Astro.url.pathname === '/about' ? 'text-foreground' : 'text-muted-foreground'}`}
 								>
@@ -298,6 +314,11 @@ initializeBrowser()
 							<h3 class="text-sm font-medium text-white">Resources</h3>
 							<ul class="mt-4 space-y-3 text-sm">
 								<li>
+									<a href="/blog" class="text-white/70 transition-colors hover:text-white">
+										Blog
+									</a>
+								</li>
+								<li>
 									<a href="/about" class="text-white/70 transition-colors hover:text-white">
 										About Us
 									</a>
@@ -309,6 +330,30 @@ initializeBrowser()
 								</li>
 								<li>
 									<a href="/faq" class="text-white/70 transition-colors hover:text-white"> FAQ </a>
+								</li>
+								<li>
+									<a
+										href="/rss.xml"
+										class="flex items-center text-white/70 transition-colors hover:text-white"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											class="mr-2"
+										>
+											<path d="M4 11a9 9 0 0 1 9 9"></path>
+											<path d="M4 4a16 16 0 0 1 16 16"></path>
+											<circle cx="5" cy="19" r="1"></circle>
+										</svg>
+										RSS Feed
+									</a>
 								</li>
 							</ul>
 						</div>

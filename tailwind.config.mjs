@@ -18,8 +18,20 @@ export default {
               extend: {
                      colors: {
                             ...tokens.colors,
+                            primary: '#329697',
+                            'primary-light': '#5db3b3',
+                            'primary-dark': '#236c6c',
+                            secondary: '#22313a',
+                            accent: '#ffb347',
+                            success: '#3bb273',
+                            warning: '#ff704d',
+                            error: '#e74c3c',
+                            background: '#f7fafb',
+                            surface: '#ffffff',
+                            'text-main': '#22313a',
+                            'text-muted': '#5a7a8c',
                             // TrustyConvert Brand Colors
-                            trustTeal: '#4ECDC4',
+                            trustTeal: '#329697',
                             deepNavy: '#2C3E50',
                             pureWhite: '#FFFFFF',
                             accentOrange: '#FF8C42',
@@ -31,7 +43,6 @@ export default {
                             border: 'hsl(var(--border))',
                             input: 'hsl(var(--input))',
                             ring: 'hsl(var(--ring))',
-                            background: 'hsl(var(--background))',
                             foreground: 'hsl(var(--foreground))',
                             primary: {
                                    DEFAULT: 'hsl(var(--primary))',

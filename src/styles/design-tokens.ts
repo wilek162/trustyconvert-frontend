@@ -1,7 +1,7 @@
 export const tokens = {
 	colors: {
 		// TrustyConvert Brand Colors
-		trustTeal: '#4ECDC4',
+		trustTeal: '#329697',
 		deepNavy: '#2C3E50',
 		pureWhite: '#FFFFFF',
 		accentOrange: '#FF8C42',
@@ -11,25 +11,21 @@ export const tokens = {
 		warningRed: '#DC3545',
 
 		// Theme colors (HSL format for Tailwind)
-		primary: {
-			DEFAULT: 'hsl(var(--primary))',
-			foreground: 'hsl(var(--primary-foreground))'
-		},
-		secondary: {
-			DEFAULT: 'hsl(var(--secondary))',
-			foreground: 'hsl(var(--secondary-foreground))'
-		},
-		destructive: {
-			DEFAULT: 'hsl(var(--destructive))',
-			foreground: 'hsl(var(--destructive-foreground))'
-		},
+		primary: '#329697',
+		primaryLight: '#5db3b3',
+		primaryDark: '#236c6c',
+		secondary: '#22313a',
+		accent: '#ffb347',
+		success: '#3bb273',
+		warning: '#ff704d',
+		error: '#e74c3c',
+		background: '#f7fafb',
+		surface: '#ffffff',
+		textMain: '#22313a',
+		textMuted: '#5a7a8c',
 		muted: {
 			DEFAULT: 'hsl(var(--muted))',
 			foreground: 'hsl(var(--muted-foreground))'
-		},
-		accent: {
-			DEFAULT: 'hsl(var(--accent))',
-			foreground: 'hsl(var(--accent-foreground))'
 		}
 	},
 	spacing: {

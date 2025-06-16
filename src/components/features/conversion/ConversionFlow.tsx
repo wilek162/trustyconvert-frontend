@@ -35,11 +35,21 @@ const SUPPORTED_FORMATS = {
 	presentation: ['pptx', 'ppt']
 }
 
+interface ConversionFlowProps {
+	initialSourceFormat?: string
+	initialTargetFormat?: string
+	title?: string
+}
+
 // Main conversion workflow component
-export function ConversionFlow() {
+export function ConversionFlow({
+	initialSourceFormat,
+	initialTargetFormat,
+	title = 'Convert Your File'
+}: ConversionFlowProps) {
 	// State for tracking the conversion flow
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
-	const [targetFormat, setTargetFormat] = useState<string>('')
+	const [targetFormat, setTargetFormat] = useState<string>(initialTargetFormat || '')
 	const [availableFormats, setAvailableFormats] = useState<string[]>([])
 	const [isUploading, setIsUploading] = useState(false)
 	const [isConverting, setIsConverting] = useState(false)
@@ -81,34 +91,44 @@ export function ConversionFlow() {
 	}, [])
 
 	// Handle file upload completion
-	const handleFileUploaded = useCallback((jobId: string, file: File) => {
-		setSelectedFile(file)
-		setJobId(jobId)
-		setError(null)
+	const handleFileUploaded = useCallback(
+		(jobId: string, file: File) => {
+			setSelectedFile(file)
+			setJobId(jobId)
+			setError(null)
 
-		// Determine available conversion formats based on file type
-		const extension = getFileExtension(file.name).toLowerCase()
-		let formats: string[] = []
+			// Determine available conversion formats based on file type
+			const extension = getFileExtension(file.name).toLowerCase()
+			let formats: string[] = []
 
-		if (SUPPORTED_FORMATS.document.includes(extension)) {
-			formats = SUPPORTED_FORMATS.document.filter((fmt) => fmt !== extension)
-		} else if (SUPPORTED_FORMATS.image.includes(extension)) {
-			formats = SUPPORTED_FORMATS.image.filter((fmt) => fmt !== extension)
-		} else if (SUPPORTED_FORMATS.spreadsheet.includes(extension)) {
-			formats = SUPPORTED_FORMATS.spreadsheet.filter((fmt) => fmt !== extension)
-		} else if (SUPPORTED_FORMATS.presentation.includes(extension)) {
-			formats = SUPPORTED_FORMATS.presentation.filter((fmt) => fmt !== extension)
-		}
+			// If we have an initialTargetFormat and it's valid for this file type, use it
+			if (initialSourceFormat && initialTargetFormat && extension === initialSourceFormat) {
+				formats = [initialTargetFormat]
+				setTargetFormat(initialTargetFormat)
+			} else {
+				// Otherwise use the standard format detection logic
+				if (SUPPORTED_FORMATS.document.includes(extension)) {
+					formats = SUPPORTED_FORMATS.document.filter((fmt) => fmt !== extension)
+				} else if (SUPPORTED_FORMATS.image.includes(extension)) {
+					formats = SUPPORTED_FORMATS.image.filter((fmt) => fmt !== extension)
+				} else if (SUPPORTED_FORMATS.spreadsheet.includes(extension)) {
+					formats = SUPPORTED_FORMATS.spreadsheet.filter((fmt) => fmt !== extension)
+				} else if (SUPPORTED_FORMATS.presentation.includes(extension)) {
+					formats = SUPPORTED_FORMATS.presentation.filter((fmt) => fmt !== extension)
+				}
 
-		setAvailableFormats(formats)
-		setTargetFormat(formats.length > 0 ? formats[0] : '')
-	}, [])
+				setAvailableFormats(formats)
+				setTargetFormat(formats.length > 0 ? formats[0] : '')
+			}
+		},
+		[initialSourceFormat, initialTargetFormat]
+	)
 
 	// Handle session closed event
 	const handleSessionClosed = useCallback(() => {
 		// Reset all state
 		setSelectedFile(null)
-		setTargetFormat('')
+		setTargetFormat(initialTargetFormat || '')
 		setAvailableFormats([])
 		setIsUploading(false)
 		setIsConverting(false)
@@ -118,7 +138,7 @@ export function ConversionFlow() {
 		setJobId('')
 		setDownloadUrl('')
 		setError(null)
-	}, [])
+	}, [initialTargetFormat])
 
 	// Handle format selection
 	const handleFormatChange = useCallback((format: string) => {
@@ -263,7 +283,7 @@ export function ConversionFlow() {
 	// Reset the conversion flow
 	const handleReset = useCallback(() => {
 		setSelectedFile(null)
-		setTargetFormat('')
+		setTargetFormat(initialTargetFormat || '')
 		setAvailableFormats([])
 		setIsUploading(false)
 		setIsConverting(false)
@@ -273,7 +293,7 @@ export function ConversionFlow() {
 		setJobId('')
 		setDownloadUrl('')
 		setError(null)
-	}, [])
+	}, [initialTargetFormat])
 
 	// Handle session error
 	const handleSessionError = useCallback((errorMessage: string) => {
@@ -352,7 +372,7 @@ export function ConversionFlow() {
 			<Card className="overflow-hidden border-trustTeal/10 bg-white shadow-lg shadow-trustTeal/5">
 				<CardHeader className="border-b border-border/50 pb-4">
 					<CardTitle className="text-center text-xl font-semibold text-deepNavy">
-						{currentStep === 'select' && 'Select File to Convert'}
+						{currentStep === 'select' && (title || 'Select File to Convert')}
 						{currentStep === 'upload' && 'Uploading File'}
 						{currentStep === 'convert' && 'Converting File'}
 						{currentStep === 'download' && 'Download Converted File'}
@@ -362,7 +382,16 @@ export function ConversionFlow() {
 				<CardContent className="p-6">
 					{currentStep === 'select' && (
 						<div className="space-y-6">
-							<UploadZone onFileUploaded={handleFileUploaded} onError={handleUploadError} />
+							<UploadZone
+								onFileUploaded={handleFileUploaded}
+								onError={handleUploadError}
+								initialSourceFormat={initialSourceFormat}
+								title={
+									initialSourceFormat && initialTargetFormat
+										? `Upload your ${initialSourceFormat.toUpperCase()} file to convert to ${initialTargetFormat.toUpperCase()}`
+										: 'Select File to Convert'
+								}
+							/>
 
 							{selectedFile && (
 								<>
@@ -392,40 +421,37 @@ export function ConversionFlow() {
 												</p>
 											</div>
 										</div>
-										<div>
-											<Button
-												variant="ghost"
-												size="icon"
-												onClick={() => {
-													setSelectedFile(null)
-													setTargetFormat('')
-												}}
+										<Button variant="ghost" size="sm" onClick={handleReset}>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="mr-1"
 											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="16"
-													height="16"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													strokeWidth="2"
-													strokeLinecap="round"
-													strokeLinejoin="round"
-												>
-													<line x1="18" y1="6" x2="6" y2="18"></line>
-													<line x1="6" y1="6" x2="18" y2="18"></line>
-												</svg>
-												<span className="sr-only">Remove file</span>
-											</Button>
-										</div>
+												<path d="M18 6 6 18"></path>
+												<path d="m6 6 12 12"></path>
+											</svg>
+											Remove
+										</Button>
 									</div>
 
-									{availableFormats.length > 0 && (
-										<FormatSelector
-											currentFormat={targetFormat}
-											availableFormats={availableFormats}
-											onFormatChange={handleFormatChange}
-										/>
+									{!initialTargetFormat && (
+										<div>
+											<h3 className="mb-2 text-sm font-medium">Select Target Format</h3>
+											<FormatSelector
+												sourceFormat={getFileExtension(selectedFile.name)}
+												availableFormats={availableFormats}
+												selectedFormat={targetFormat}
+												onFormatChange={handleFormatChange}
+												disabled={isConverting}
+											/>
+										</div>
 									)}
 								</>
 							)}

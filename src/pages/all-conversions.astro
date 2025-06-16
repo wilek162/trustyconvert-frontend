@@ -1,0 +1,54 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro'
+import { ConversionSitemap } from '@/components/ConversionSitemap'
+import { DetailedConversionOptions } from '@/components/DetailedConversionOptions'
+import { BenefitsSection } from '@/components/BenefitsSection'
+import { FAQ } from '@/components/FAQ'
+
+// SEO and structured data
+const title = 'All File Conversion Options - TrustyConvert'
+const description =
+	'Explore all available file conversion options with TrustyConvert. Convert between document, image, spreadsheet, and presentation formats securely and for free.'
+
+// Structured data for better SEO - simplified to match expected type
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'WebPage',
+	name: 'All File Conversion Options',
+	description: description
+}
+
+const alternateLanguages = [{ code: 'en', name: 'English' }]
+---
+
+<MainLayout
+	title={title}
+	description={description}
+	extraStructuredData={structuredData}
+	alternateLanguages={alternateLanguages}
+>
+	<div class="bg-white">
+		<div class="trusty-container py-12">
+			<div class="mb-12 text-center">
+				<h1 class="font-heading text-4xl font-semibold text-deepNavy md:text-5xl">
+					All File Conversion Options
+				</h1>
+				<p class="mx-auto mt-6 max-w-2xl text-lg text-deepNavy/80">
+					Explore our complete list of file conversion options. Fast, secure, and free.
+				</p>
+			</div>
+		</div>
+
+		<!-- Styled format cards -->
+		<ConversionSitemap client:load />
+
+		<!-- Detailed conversion options -->
+		<DetailedConversionOptions client:load />
+
+		<!-- Benefits section -->
+		<BenefitsSection client:load />
+
+		<!-- FAQ section -->
+		<FAQ client:load />
+	</div>
+</MainLayout>

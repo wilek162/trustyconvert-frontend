@@ -160,3 +160,18 @@ export function isSupportedFileType(fileType: string, supportedTypes: string[]):
 export function isMobileDevice(): boolean {
 	return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 }
+
+/**
+ * Format a date for display
+ * @param date Date to format
+ * @returns Formatted date string (e.g., "October 15, 2023")
+ */
+export function formatDate(date: Date | string): string {
+	const dateObj = date instanceof Date ? date : new Date(date)
+
+	return dateObj.toLocaleDateString('en-US', {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric'
+	})
+}

@@ -1,0 +1,88 @@
+---
+/**
+ * Related posts component for blog posts
+ * This component displays related posts based on tags and category
+ */
+import { getCollection, type CollectionEntry } from 'astro:content'
+import { formatDate } from '@/lib/utils'
+
+export interface Props {
+	currentSlug: string
+	tags: string[]
+	category: string
+}
+
+const { currentSlug, tags, category } = Astro.props
+
+// Get all blog posts
+const allPosts = await getCollection('blog', ({ data }) => !data.draft)
+
+// Filter out current post and find related posts
+const relatedPosts = allPosts
+	.filter((post) => post.slug !== currentSlug)
+	.filter((post) => {
+		// First prioritize posts with the same category
+		if (post.data.category === category) {
+			return true
+		}
+		// Then include posts that share at least one tag
+		return post.data.tags.some((tag) => tags.includes(tag))
+	})
+	.sort((a, b) => {
+		// Sort by number of matching tags (descending)
+		const aMatchCount = a.data.tags.filter((tag) => tags.includes(tag)).length
+		const bMatchCount = b.data.tags.filter((tag) => tags.includes(tag)).length
+
+		// If tag match count is the same, prioritize same category
+		if (aMatchCount === bMatchCount) {
+			if (a.data.category === category && b.data.category !== category) return -1
+			if (a.data.category !== category && b.data.category === category) return 1
+			// If categories are the same or both different, sort by date
+			return new Date(b.data.publishDate).valueOf() - new Date(a.data.publishDate).valueOf()
+		}
+
+		return bMatchCount - aMatchCount
+	})
+	.slice(0, 3) // Limit to 3 related posts
+
+// Helper function to get the correct URL for a post
+function getPostUrl(post: CollectionEntry<'blog'>): string {
+	const slugParts = post.slug.split('/')
+	if (slugParts.length > 1) {
+		const category = slugParts[0]
+		const postSlug = slugParts[1]
+		return `/blog/${category}/${postSlug}/`
+	} else {
+		return `/blog/${post.slug}/`
+	}
+}
+---
+
+{
+	relatedPosts.length > 0 ? (
+		<div class="space-y-4">
+			{relatedPosts.map((post) => (
+				<div class="flex items-start gap-3">
+					<a href={getPostUrl(post)} class="shrink-0">
+						<img
+							src={post.data.image}
+							alt={post.data.title}
+							class="h-16 w-16 rounded-md object-cover"
+							width="64"
+							height="64"
+							loading="lazy"
+						/>
+					</a>
+					<div class="flex-1 space-y-1">
+						<a href={getPostUrl(post)} class="hover:text-trustTeal">
+							<h4 class="line-clamp-2 text-sm font-medium">{post.data.title}</h4>
+						</a>
+						<p class="text-xs text-muted-foreground">{formatDate(post.data.publishDate)}</p>
+					</div>
+				</div>
+			))}
+		</div>
+	) : (
+		<p class="text-sm text-muted-foreground">No related posts found.</p>
+	)
+}
