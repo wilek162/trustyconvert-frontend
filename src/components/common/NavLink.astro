@@ -1,0 +1,22 @@
+import { formatLocalizedPath } from '@/lib/i18n/config';
+
+interface Props {
+  href: string;
+  class?: string;
+  activeClass?: string;
+}
+
+const { href, class: className = '', activeClass = 'text-foreground' } = Astro.props;
+const currentLang = Astro.locals.lang || 'en';
+const localizedHref = formatLocalizedPath(href, currentLang);
+
+// Check if this link is active
+const isActive = Astro.url.pathname === localizedHref || 
+                Astro.url.pathname === `${localizedHref}/` || 
+                (localizedHref !== '/' && Astro.url.pathname.startsWith(`${localizedHref}/`));
+                
+const classes = `${className} ${isActive ? activeClass : 'text-muted-foreground'}`;
+
+<a href={localizedHref} class={classes}>
+  <slot />
+</a> 

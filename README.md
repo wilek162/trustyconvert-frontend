@@ -122,6 +122,84 @@ This project is licensed under the [MIT License](LICENSE).
 
 For questions or feedback, please contact us at support@trustyconvert.com.
 
+## Multilingual Support
+
+TrustyConvert now supports multiple languages to improve SEO and accessibility. The implementation follows these principles:
+
+### Key Features
+
+- **URL Structure**: Language-specific URLs (e.g., `/es/about`, `/fr/blog/article-name`)
+- **Default Language**: English is the default language and uses URLs without a language prefix
+- **SEO Optimization**: Proper `hreflang` tags, localized metadata, and structured data
+- **Content Translation**: Separate translation files for UI elements and content
+- **Language Detection**: Automatic language detection based on browser preferences
+- **Language Switching**: Easy language selector component
+
+### Directory Structure
+
+```
+src/
+├── lib/
+│   └── i18n/
+│       ├── config.ts             # Language configuration
+│       ├── middleware.ts         # Language detection middleware
+│       ├── utils.ts              # i18n utility functions
+│       ├── hooks/                # React hooks for i18n
+│       └── translations/         # Translation files
+│           ├── index.ts          # Translation utilities
+│           ├── en.ts             # English translations
+│           ├── es.ts             # Spanish translations
+│           ├── fr.ts             # French translations
+│           ├── de.ts             # German translations
+│           └── zh.ts             # Chinese translations
+├── pages/
+│   ├── [lang]/                   # Localized routes
+│   │   ├── index.astro           # Localized home page
+│   │   ├── blog/                 # Localized blog routes
+│   │   └── ...                   # Other localized routes
+│   └── ...                       # Default language routes
+└── components/
+    └── common/
+        └── LanguageSelector.astro # Language selector component
+```
+
+### Usage
+
+#### Adding a New Language
+
+1. Add the language to `src/lib/i18n/config.ts`
+2. Create a translation file in `src/lib/i18n/translations/`
+3. Update content as needed
+
+#### Translating UI Elements
+
+Use the translation functions in your components:
+
+```astro
+---
+import { t } from '@/lib/i18n/translations'
+const currentLang = Astro.locals.lang
+---
+
+<h1>{t('home_hero_title', currentLang)}</h1>
+```
+
+For React components:
+
+```jsx
+import { useTranslation } from '@/lib/i18n/hooks/useTranslation'
+
+export function MyComponent() {
+  const { t } = useTranslation()
+  
+  return <h1>{t('home_hero_title')}</h1>
+}
+```
+
+#### Creating Localized Routes
+
+Create files in the `src/pages/[lang]/` directory for localized versions of your pages.
+
 ```sh
 pnpm create astro@latest -- --template with-tailwindcss
 ```

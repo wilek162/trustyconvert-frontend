@@ -1,0 +1,32 @@
+---
+import { formatLocalizedPath } from '@/lib/i18n/config'
+import { t } from '@/lib/i18n/translations'
+import type { TranslationKey } from '@/lib/i18n/translations'
+
+interface Props {
+	href: string
+	textKey: TranslationKey
+	class?: string
+	activeClass?: string
+}
+
+const { href, textKey, class: className = '', activeClass = 'text-foreground' } = Astro.props
+const currentLang = Astro.locals.lang || 'en'
+const localizedHref = formatLocalizedPath(href, currentLang)
+
+// Check if this link is active
+const isActive =
+	Astro.url.pathname === localizedHref ||
+	Astro.url.pathname === `${localizedHref}/` ||
+	(localizedHref !== '/' && Astro.url.pathname.startsWith(`${localizedHref}/`))
+
+const classes = `${className} ${isActive ? activeClass : 'text-muted-foreground'}`
+
+// Get translated text
+const linkText = t(textKey, currentLang)
+---
+
+<a href={localizedHref} class={classes}>
+	{linkText}
+</a>
+

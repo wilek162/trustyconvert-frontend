@@ -1,4 +1,8 @@
 import { defineCollection, z } from 'astro:content'
+import { LANGUAGES } from '@/lib/i18n/config'
+
+// Define language schema
+const languageSchema = z.enum(LANGUAGES.map((lang) => lang.code))
 
 export const collections = {
 	blog: defineCollection({
@@ -15,7 +19,16 @@ export const collections = {
 			featured: z.boolean().default(false),
 			draft: z.boolean().default(false),
 			seoTitle: z.string().optional(),
-			seoDescription: z.string().optional()
+			seoDescription: z.string().optional(),
+			language: languageSchema.default('en'),
+			translations: z
+				.array(
+					z.object({
+						language: languageSchema,
+						slug: z.string()
+					})
+				)
+				.optional()
 		})
 	})
 }
