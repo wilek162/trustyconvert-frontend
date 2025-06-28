@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { DEFAULT_LANGUAGE, type Language } from '@/lib/i18n/config'
 import { t, tFormat, type TranslationKey } from '@/lib/i18n/translations'
 

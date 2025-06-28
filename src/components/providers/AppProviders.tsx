@@ -6,6 +6,7 @@
  */
 
 import * as React from 'react'
+import type { ReactNode } from 'react'
 import { ErrorBoundary } from '@/components/common'
 import { ToastProvider, QueryProvider, ToastListener } from '@/components/providers'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

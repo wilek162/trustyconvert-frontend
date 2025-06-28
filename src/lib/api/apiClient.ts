@@ -13,14 +13,16 @@ import type {
 	JobStatusResponse,
 	DownloadTokenResponse,
 	ConvertResponse,
-	SessionCloseResponse
+	SessionCloseResponse,
+	FormatsResponse
 } from '@/lib/types/api'
 import { NetworkError, SessionError, ValidationError, handleError } from '@/lib/utils/errorHandling'
+import { apiConfig } from './config'
 
 // Configuration
-const API_BASE_URL = import.meta.env.PUBLIC_API_URL || '/api'
-const DEFAULT_TIMEOUT = 30000 // 30 seconds
-const MAX_RETRIES = 2
+const API_BASE_URL = apiConfig.baseUrl
+const DEFAULT_TIMEOUT = apiConfig.timeout
+const MAX_RETRIES = apiConfig.retryAttempts
 
 /**
  * API request options with timeout and retry settings
@@ -60,11 +62,23 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 	const timeoutId = setTimeout(() => controller.abort(), timeout)
 
 	try {
-		const response = await fetch(url, {
+		// Check if we're in development mode to handle self-signed certificates
+		const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+
+		// Create fetch options with proper signal
+		const fetchOpts = {
 			...fetchOptions,
 			signal: controller.signal
-		})
+		}
 
+		// In development, we need to ignore SSL certificate errors for self-signed certs
+		if (isDev && typeof window !== 'undefined') {
+			// For browser environments, we rely on the NODE_TLS_REJECT_UNAUTHORIZED env var
+			// The browser will show a warning but allow the connection if user accepts
+			console.warn('Development mode: Using self-signed certificate')
+		}
+
+		const response = await fetch(url, fetchOpts)
 		return response
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
@@ -73,6 +87,17 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 				userMessage: 'The request timed out. Please try again.'
 			})
 		}
+
+		// Handle certificate errors more gracefully
+		if (error instanceof Error && error.message.includes('certificate')) {
+			console.error('Certificate error:', error)
+			throw new NetworkError({
+				message: 'SSL Certificate validation failed',
+				userMessage: 'Connection security error. Please check your SSL configuration.',
+				cause: error
+			})
+		}
+
 		throw error
 	} finally {
 		clearTimeout(timeoutId)
@@ -254,12 +279,18 @@ async function apiFetch<T>(
 		headers.set('Content-Type', 'application/json')
 	}
 
+	// Add origin header for CORS
+	if (typeof window !== 'undefined') {
+		headers.set('Origin', window.location.origin)
+	}
+
 	try {
 		const url = `${API_BASE_URL}${endpoint}`
 		const response = await fetchWithRetry(url, {
 			...fetchOptions,
 			headers,
-			credentials: 'include' // Include cookies in request
+			credentials: 'include', // Include cookies in request
+			mode: 'cors' // Explicitly set CORS mode
 		})
 
 		return await processApiResponse<T>(response, endpoint)
@@ -271,126 +302,178 @@ async function apiFetch<T>(
 }
 
 /**
- * Initialize a new session and get CSRF token
- * @returns Session init response with CSRF token
+ * Initialize a new session with the API
+ * This sets up the CSRF token and session cookies
+ *
+ * @returns Session initialization response
  */
 export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
 	setInitializing(true)
-
 	try {
-		const data = await apiFetch<SessionInitResponse>('/session/init', {
+		const response = await apiFetch<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
 			method: 'GET',
+			credentials: 'include',
 			skipAuthCheck: true
 		})
 
-		if (data.success && data.data.csrf_token) {
-			setCSRFToken(data.data.csrf_token)
+		// Store the CSRF token if it was returned
+		if (response.data.csrf_token) {
+			setCSRFToken(response.data.csrf_token, response.data.id, response.data.expires_at)
 		}
 
-		return data
+		return response
 	} catch (error) {
-		handleError(error, { context: { action: 'initSession' } })
+		handleError(error, 'Failed to initialize session')
 		throw error
 	} finally {
-		// Always mark initialization as complete
 		setInitializing(false)
 	}
 }
 
 /**
  * Upload a file to the server
- * @param file File to upload
- * @param jobId UUID for the job
+ *
+ * @param file - File to upload
+ * @param jobId - UUID for tracking the job
  * @returns Upload response
  */
 export async function uploadFile(file: File, jobId: string): Promise<ApiResponse<UploadResponse>> {
-	const formData = new FormData()
-	formData.append('file', file)
-	formData.append('job_id', jobId)
-
 	try {
-		// For large files, increase the timeout
-		const timeout = Math.max(DEFAULT_TIMEOUT, file.size / 10240) // 10KB/s minimum upload speed
+		const csrfToken = getCSRFToken()
+		const formData = new FormData()
+		formData.append('file', file)
+		formData.append('job_id', jobId)
 
-		return await apiFetch<UploadResponse>('/upload', {
+		return await apiFetch<UploadResponse>(apiConfig.endpoints.upload, {
 			method: 'POST',
+			headers: {
+				[apiConfig.csrfTokenHeader]: csrfToken || ''
+			},
 			body: formData,
-			timeout,
-			// Don't set Content-Type header for FormData
-			headers: {}
+			credentials: 'include'
 		})
 	} catch (error) {
-		handleError(error, { context: { action: 'uploadFile', jobId, fileName: file.name } })
+		handleError(error, 'Failed to upload file')
 		throw error
 	}
 }
 
 /**
- * Start file conversion
- * @param jobId Job ID of the uploaded file
- * @param targetFormat Target format for conversion
+ * Convert a previously uploaded file
+ *
+ * @param jobId - Job ID from the upload step
+ * @param targetFormat - Target format for conversion
+ * @param sourceFormat - Optional source format (usually auto-detected)
  * @returns Conversion response
  */
 export async function convertFile(
 	jobId: string,
-	targetFormat: string
+	targetFormat: string,
+	sourceFormat?: string
 ): Promise<ApiResponse<ConvertResponse>> {
 	try {
-		return await apiFetch<ConvertResponse>('/convert', {
+		const csrfToken = getCSRFToken()
+
+		return await apiFetch<ConvertResponse>(apiConfig.endpoints.convert, {
 			method: 'POST',
-			body: JSON.stringify({ job_id: jobId, target_format: targetFormat })
+			headers: {
+				'Content-Type': 'application/json',
+				[apiConfig.csrfTokenHeader]: csrfToken || ''
+			},
+			body: JSON.stringify({
+				job_id: jobId,
+				target_format: targetFormat,
+				...(sourceFormat && { source_format: sourceFormat })
+			}),
+			credentials: 'include'
 		})
 	} catch (error) {
-		handleError(error, { context: { action: 'convertFile', jobId, targetFormat } })
+		handleError(error, 'Failed to convert file')
 		throw error
 	}
 }
 
 /**
- * Get job status
- * @param jobId Job ID to check status for
+ * Get the status of a conversion job
+ *
+ * @param jobId - Job ID to check status for
  * @returns Job status response
  */
 export async function getJobStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>> {
 	try {
-		return await apiFetch<JobStatusResponse>(`/job_status?job_id=${jobId}`, {
-			method: 'GET'
-		})
+		return await apiFetch<JobStatusResponse>(
+			`${apiConfig.endpoints.jobStatus}?job_id=${encodeURIComponent(jobId)}`,
+			{
+				method: 'GET',
+				credentials: 'include'
+			}
+		)
 	} catch (error) {
-		// Don't report polling errors to avoid noise
-		handleError(error, { context: { action: 'getJobStatus', jobId }, silent: true })
+		handleError(error, 'Failed to get job status')
 		throw error
 	}
 }
 
 /**
- * Get download token for a completed job
- * @param jobId Job ID to get download token for
+ * Get a download token for a completed conversion job
+ *
+ * @param jobId - Job ID to get download token for
  * @returns Download token response
  */
 export async function getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>> {
 	try {
-		return await apiFetch<DownloadTokenResponse>('/download_token', {
+		const csrfToken = getCSRFToken()
+
+		return await apiFetch<DownloadTokenResponse>(apiConfig.endpoints.downloadToken, {
 			method: 'POST',
-			body: JSON.stringify({ job_id: jobId })
+			headers: {
+				'Content-Type': 'application/json',
+				[apiConfig.csrfTokenHeader]: csrfToken || ''
+			},
+			body: JSON.stringify({ job_id: jobId }),
+			credentials: 'include'
 		})
 	} catch (error) {
-		handleError(error, { context: { action: 'getDownloadToken', jobId } })
+		handleError(error, 'Failed to get download token')
 		throw error
 	}
 }
 
 /**
  * Close the current session and clean up resources
+ *
  * @returns Session close response
  */
 export async function closeSession(): Promise<ApiResponse<SessionCloseResponse>> {
 	try {
-		return await apiFetch<SessionCloseResponse>('/session/close', {
-			method: 'POST'
+		const csrfToken = getCSRFToken()
+
+		return await apiFetch<SessionCloseResponse>(apiConfig.endpoints.sessionClose, {
+			method: 'POST',
+			headers: {
+				[apiConfig.csrfTokenHeader]: csrfToken || ''
+			},
+			credentials: 'include'
 		})
 	} catch (error) {
-		handleError(error, { context: { action: 'closeSession' } })
+		handleError(error, 'Failed to close session')
+		throw error
+	}
+}
+
+/**
+ * Get supported conversion formats
+ *
+ * @returns Formats response
+ */
+export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse>> {
+	try {
+		return await apiFetch<FormatsResponse>(apiConfig.endpoints.formats, {
+			method: 'GET',
+			credentials: 'include'
+		})
+	} catch (error) {
+		handleError(error, 'Failed to get supported formats')
 		throw error
 	}
 }

@@ -211,3 +211,30 @@ pnpm create astro@latest -- --template with-tailwindcss
 Astro comes with [Tailwind](https://tailwindcss.com) support out of the box. This example showcases how to style your Astro project with Tailwind.
 
 For complete setup instructions, please see our [Tailwind Integration Guide](https://docs.astro.build/en/guides/integrations-guide/tailwind).
+
+## API Integration
+
+The frontend integrates with the TrustyConvert backend API for file conversion. The integration includes:
+
+- Session management with CSRF protection
+- File upload and conversion
+- Job status polling
+- Secure file download
+
+For detailed information, see:
+- [API Integration Guide](docs/API_INTEGRATION.md)
+- [API Integration Guide (Frontend)](API_INTEGRATION_GUIDE.md)
+
+### Testing the API Connection
+
+To test the API connection:
+
+```bash
+# Run the test script
+./test-api.sh
+
+# Or manually
+node test-api-connection.js
+```
+
+This will test the full API flow: session initialization, file upload, conversion, status polling, and download token generation.

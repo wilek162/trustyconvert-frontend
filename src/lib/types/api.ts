@@ -22,21 +22,22 @@ export interface ApiErrorInfo {
 export interface ApiResponse<T> {
 	success: boolean
 	data: T & ApiErrorInfo
+	correlation_id?: string
 }
 
 /**
  * Session initialization response
  */
 export interface SessionInitResponse {
+	id: string
 	csrf_token: string
-	session_id: string
 	expires_at: string
 }
 
 /**
  * Job status values
  */
-export type JobStatus = 'pending' | 'uploaded' | 'processing' | 'completed' | 'failed'
+export type JobStatus = 'pending' | 'uploaded' | 'queued' | 'processing' | 'completed' | 'failed'
 
 /**
  * File upload response
@@ -44,9 +45,9 @@ export type JobStatus = 'pending' | 'uploaded' | 'processing' | 'completed' | 'f
 export interface UploadResponse {
 	job_id: string
 	status: JobStatus
-	original_filename: string
-	file_size: number
-	mime_type: string
+	original_filename?: string
+	file_size?: number
+	mime_type?: string
 }
 
 /**
@@ -76,10 +77,7 @@ export interface DownloadTokenResponse {
  */
 export interface ConvertResponse {
 	job_id: string
-	task_id: string
 	status: JobStatus
-	original_filename: string
-	target_format: string
 }
 
 /**
@@ -87,7 +85,7 @@ export interface ConvertResponse {
  */
 export interface SessionCloseResponse {
 	message: string
-	session_id: string
+	session_id?: string
 }
 
 /**
@@ -96,9 +94,9 @@ export interface SessionCloseResponse {
 export interface ConversionFormat {
 	id: string
 	name: string
-	description: string
-	input_formats: string[]
-	output_formats: string[]
+	description?: string
+	inputFormats: string[]
+	outputFormats: string[]
 	icon?: string
 }
 

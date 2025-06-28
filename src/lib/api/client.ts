@@ -12,8 +12,11 @@ import {
 	convertFile,
 	getJobStatus,
 	getDownloadToken,
-	closeSession
+	closeSession,
+	getSupportedFormats
 } from '@/lib/api/apiClient'
+import type { ConversionFormat, JobStatus } from '@/lib/types'
+import { v4 as uuidv4 } from 'uuid'
 
 /**
  * Custom error class for API request errors
@@ -34,13 +37,13 @@ export class APIRequestError extends Error {
  * Schema for conversion status response
  */
 export const ConversionStatusResponseSchema = z.object({
-	status: z.enum(['idle', 'pending', 'processing', 'completed', 'failed']),
+	status: z.enum(['idle', 'pending', 'uploaded', 'queued', 'processing', 'completed', 'failed']),
 	progress: z.number().min(0).max(100).optional(),
 	download_url: z.string().url().optional().nullable(),
-	filename: z.string().optional().nullable(),
+	error_message: z.string().optional().nullable(),
 	file_size: z.number().optional().nullable(),
-	error: z.string().optional().nullable(),
-	message: z.string().optional()
+	started_at: z.string().optional().nullable(),
+	completed_at: z.string().optional().nullable()
 })
 
 /**
@@ -59,11 +62,12 @@ export const apiClient = {
 	/**
 	 * Upload a file to the server
 	 * @param file File to upload
-	 * @param jobId Job ID for tracking
+	 * @param jobId Job ID for tracking (optional, will be generated if not provided)
 	 * @returns Upload response
 	 */
-	uploadFile: async (file: File, jobId: string) => {
-		const response = await uploadFile(file, jobId)
+	uploadFile: async (file: File, jobId?: string) => {
+		const fileJobId = jobId || uuidv4()
+		const response = await uploadFile(file, fileJobId)
 		return response.data
 	},
 
@@ -71,11 +75,35 @@ export const apiClient = {
 	 * Start the conversion process
 	 * @param jobId Job ID of the uploaded file
 	 * @param targetFormat Target format for conversion
+	 * @param sourceFormat Optional source format (usually auto-detected)
 	 * @returns Conversion response
 	 */
-	convertFile: async (jobId: string, targetFormat: string) => {
-		const response = await convertFile(jobId, targetFormat)
+	convertFile: async (jobId: string, targetFormat: string, sourceFormat?: string) => {
+		const response = await convertFile(jobId, targetFormat, sourceFormat)
 		return response.data
+	},
+
+	/**
+	 * Convenience method to upload and convert in one step
+	 * @param file File to upload and convert
+	 * @param targetFormat Target format for conversion
+	 * @returns Job ID and initial status
+	 */
+	startConversion: async (file: File, targetFormat: string) => {
+		// Generate a job ID
+		const jobId = uuidv4()
+
+		// Step 1: Upload the file
+		await uploadFile(file, jobId)
+
+		// Step 2: Start conversion
+		const convertResponse = await convertFile(jobId, targetFormat)
+
+		return {
+			job_id: jobId,
+			task_id: jobId, // For backward compatibility
+			status: convertResponse.data.status
+		}
 	},
 
 	/**
@@ -105,5 +133,33 @@ export const apiClient = {
 	closeSession: async () => {
 		const response = await closeSession()
 		return response.data
+	},
+
+	/**
+	 * Get supported conversion formats
+	 * @returns Array of supported formats
+	 */
+	getSupportedFormats: async (): Promise<ConversionFormat[]> => {
+		try {
+			const response = await getSupportedFormats()
+			if (response.success) {
+				return response.data.formats
+			}
+			return []
+		} catch (error) {
+			console.error('Error fetching supported formats:', error)
+			return []
+		}
+	},
+
+	/**
+	 * Get the download URL for a job
+	 * @param downloadToken Download token
+	 * @returns Full download URL
+	 */
+	getDownloadUrl: (downloadToken: string): string => {
+		// Construct the download URL using the current origin
+		const baseUrl = window.location.origin
+		return `${baseUrl}/api/download?token=${downloadToken}`
 	}
 }

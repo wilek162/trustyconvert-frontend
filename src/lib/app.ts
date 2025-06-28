@@ -47,6 +47,8 @@ export async function initializeBrowser(): Promise<void> {
 		// Initialize offline detection
 		// Offline detection is temporarily disabled
 		// initOfflineDetection()
+		const { initOfflineDetection } = await import('@/lib/utils/offlineDetection')
+		initOfflineDetection()
 
 		// Initialize IndexedDB for job persistence
 		const { initIndexedDB } = await import('@/lib/stores/upload')

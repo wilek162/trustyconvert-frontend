@@ -4,24 +4,55 @@ import { ConversionFlow } from '@/components/features/conversion'
 import { mockFormats } from '@/mocks/data'
 import { SupportedFormats } from '@/components/SupportedFormats'
 import { FAQ } from '@/components/FAQ'
+import { getSupportedFormats } from '@/lib/api/apiClient'
 
-// Define types for the mock data
-type MockFormat = {
+// Define types for the format data
+type FormatInfo = {
 	id: string
 	name: string
-	inputFormats: string[]
+	inputFormats?: string[]
 	outputFormats: string[]
-	maxSize: number
+	maxSize?: number
 	features?: string[]
 	extensions?: string[]
 	mimeTypes?: string[]
 	canConvertTo?: string[]
 	icon?: string
+	description?: string
 }
 
 export async function getStaticPaths() {
-	// Use mock data instead of fetching from API
-	const formats = mockFormats as MockFormat[]
+	// Move isStaticMode here
+	const isStaticMode = import.meta.env.OUTPUT === 'static';
+	// Try to fetch real formats from API, fall back to mock data
+	let formats: FormatInfo[] = []
+
+	// In static mode, always use mock data to avoid API requests during build
+	if (isStaticMode) {
+		formats = mockFormats as FormatInfo[]
+	} else {
+		try {
+			const response = await getSupportedFormats()
+			if (response.success && response.data.formats) {
+				// Map API format structure to our internal format structure
+				formats = response.data.formats.map((format) => ({
+					id: format.id,
+					name: format.name,
+					inputFormats: format.input_formats,
+					outputFormats: format.output_formats,
+					description: format.description,
+					icon: format.icon
+				}))
+			}
+		} catch (error) {
+			console.warn('Failed to fetch formats from API, using mock data:', error)
+		}
+
+		// Fall back to mock data if API call failed
+		if (formats.length === 0) {
+			formats = mockFormats as FormatInfo[]
+		}
+	}
 
 	// Create paths for each source-target format combination
 	return formats.flatMap((format) =>
@@ -46,7 +77,8 @@ export async function getStaticPaths() {
 						'100% secure and private conversion',
 						'No registration required',
 						'Download converted files immediately'
-					]
+					],
+					allFormats: formats
 				}
 			}
 		})
@@ -61,7 +93,8 @@ const {
 	targetFormat,
 	sourceFormatInfo,
 	targetFormatInfo,
-	conversionFeatures
+	conversionFeatures,
+	allFormats
 } = Astro.props
 
 // Structured data for better SEO
@@ -77,12 +110,12 @@ const structuredData = {
 		priceCurrency: 'USD'
 	},
 	description: description
-}
+} as any // Type assertion to avoid structured data type issues
 
 const alternateLanguages = [{ code: 'en', name: 'English' }]
 
 // Get related conversions (other formats that can be converted to the target format)
-const relatedConversions = mockFormats
+const relatedConversions = allFormats
 	.filter((format) => format.id !== sourceFormat && format.outputFormats.includes(targetFormat))
 	.slice(0, 4)
 ---

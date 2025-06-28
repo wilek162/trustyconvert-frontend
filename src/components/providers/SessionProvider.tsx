@@ -1,23 +1,35 @@
 import React, { useEffect } from 'react'
 import { useCsrf } from './CsrfProvider'
 import { apiClient } from '@/lib/api/client'
+import { useSessionInitializer } from '@/hooks/useSessionInitializer'
+import { useToast } from '@/lib/hooks/useToast'
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const { setCsrfToken } = useCsrf()
+	const { isInitialized, isInitializing, error } = useSessionInitializer()
+	const { addToast } = useToast()
 
+	// Show error toast if session initialization fails
 	useEffect(() => {
-		const initializeSession = async () => {
-			try {
-				const response = await apiClient.initSession()
-				setCsrfToken(response.csrf_token)
-			} catch (error) {
-				console.error('Failed to initialize session:', error)
-				// You might want to show a toast notification here
+		if (error) {
+			addToast({
+				title: 'Session Error',
+				description: error,
+				variant: 'destructive'
+			})
+		}
+	}, [error, addToast])
+
+	// Clean up session on unmount (e.g., when user navigates away)
+	useEffect(() => {
+		return () => {
+			// Only attempt to close the session if it was initialized
+			if (isInitialized) {
+				apiClient.closeSession().catch((err) => {
+					console.error('Failed to close session:', err)
+				})
 			}
 		}
-
-		initializeSession()
-	}, [setCsrfToken])
+	}, [isInitialized])
 
 	return <>{children}</>
 }

@@ -1,9 +1,17 @@
 ---
 import MainLayout from '@/layouts/MainLayout.astro'
+import { DEFAULT_LANGUAGE } from '@/lib/i18n/config'
+import { LANGUAGES } from '@/lib/i18n/config'
 
 const title = 'Page Not Found'
 const description = "The page you're looking for doesn't exist."
-const alternateLanguages = [{ code: 'en', name: 'English' }]
+
+// Generate alternate language URLs for static build
+const alternateLanguages = LANGUAGES.map((lang) => ({
+	code: lang.code,
+	name: lang.name,
+	url: `${Astro.url.origin}${lang.code === DEFAULT_LANGUAGE.code ? '' : `/${lang.code}`}`
+}))
 ---
 
 <MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
@@ -13,4 +21,3 @@ const alternateLanguages = [{ code: 'en', name: 'English' }]
 		<a href="/" class="btn btn-primary">Return Home</a>
 	</div>
 </MainLayout>
-

@@ -15,13 +15,13 @@ export default defineConfig({
     enabled: true,
   },
   // Configure build output
-  output: 'static', // Use 'static' or 'server' for Astro v5
+  output: 'static', // Use 'static' for Cloudflare Pages
   compressHTML: true, // Compress HTML output
   // Configure integrations
   integrations: [
     react({
       // Only hydrate components that need interactivity
-      include: ['**/features/**/*', '**/ui/**/*', '**/providers/**/*'],
+      include: ['**/features/**/*', '**/ui/**/*', '**/providers/**/*', '**/Hero.tsx', '**/ConversionForm.tsx'],
       // Exclude static components
       exclude: ['**/common/**/*', '**/seo/**/*', '**/*.stories.*'],
     }),
@@ -44,12 +44,15 @@ export default defineConfig({
   ],
   // Configure Vite
   vite: {
-    plugins: [mkcert({
-      hosts: ['localhost', '127.0.0.1'],
-      mkcertPath: undefined, // Let it auto-detect
-      autoUpgrade: true,
-      force: true,
-    })],
+    plugins: [
+      // Only use mkcert in development
+      process.env.NODE_ENV === 'development' ? mkcert({
+        hosts: ['localhost', '127.0.0.1'],
+        mkcertPath: undefined, // Let it auto-detect
+        autoUpgrade: true,
+        force: true,
+      }) : null
+    ].filter(Boolean),
     // Enable CSS modules for all .module.css files
     css: {
       modules: {
@@ -87,17 +90,35 @@ export default defineConfig({
         '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
       },
     },
-    // Server configuration 
-    server: {
+    // Server configuration - only used in development
+    server: process.env.NODE_ENV === 'development' ? {
       proxy: {
         '/api': {
           target: 'https://127.0.0.1:9443',
           changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path.replace(/^\/api/, '')
+          secure: false, // Don't verify SSL certificate
+          rewrite: (path) => path.replace(/^\/api/, ''),
+          configure: (proxy, _options) => {
+            // Set up SSL handling
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Disable certificate validation
+
+            proxy.on('error', (err, _req, _res) => {
+              console.log('proxy error', err);
+            });
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              console.log('Sending Request to the Target:', req.method, req.url);
+            });
+            proxy.on('proxyRes', (proxyRes, req, _res) => {
+              console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+            });
+          }
         }
+      },
+      https: {
+        key: process.env.SSL_KEY_FILE,
+        cert: process.env.SSL_CERT_FILE
       }
-    },
+    } : {},
     optimizeDeps: {
       include: ['react', 'react-dom', '@tanstack/react-query'],
       exclude: [],

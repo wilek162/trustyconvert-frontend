@@ -1,6 +1,9 @@
 import type { AstroGlobal } from 'astro'
 import { LANGUAGES, DEFAULT_LANGUAGE, extractLanguageFromPath } from './config'
 
+// Check if we're in static mode
+const isStaticMode = import.meta.env.OUTPUT === 'static'
+
 /**
  * Detect user's preferred language from browser settings
  */
@@ -36,7 +39,7 @@ export function detectBrowserLanguage(acceptLanguageHeader: string | null): stri
  */
 export function createLanguageMiddleware() {
 	return async function languageMiddleware(context: AstroGlobal) {
-		const { url, request } = context
+		const { url } = context
 		const { pathname } = url
 
 		// Extract language from URL path
@@ -47,9 +50,20 @@ export function createLanguageMiddleware() {
 		context.locals.languages = LANGUAGES
 		context.locals.defaultLanguage = DEFAULT_LANGUAGE
 
-		// Detect browser language for potential redirection
-		const acceptLanguage = request.headers.get('accept-language')
-		context.locals.detectedLanguage = detectBrowserLanguage(acceptLanguage)
+		// In static mode, always use default language
+		context.locals.detectedLanguage = DEFAULT_LANGUAGE.code
+
+		// Only try to detect browser language in server mode with SSR
+		if (!isStaticMode && import.meta.env.SSR && context.request?.headers) {
+			try {
+				const acceptLanguage = context.request.headers.get('accept-language')
+				if (acceptLanguage) {
+					context.locals.detectedLanguage = detectBrowserLanguage(acceptLanguage)
+				}
+			} catch (error) {
+				console.error('Error detecting browser language:', error)
+			}
+		}
 
 		return context
 	}
@@ -57,15 +71,17 @@ export function createLanguageMiddleware() {
 
 /**
  * Generate alternate language URLs for SEO
+ * Safe version that doesn't depend on request headers
  */
 export function getAlternateLanguages(
 	astro: AstroGlobal
 ): { code: string; name: string; url: string }[] {
 	const { pathname } = astro.url
 	const { langCode, cleanPath } = extractLanguageFromPath(pathname)
+	const origin = astro.url.origin || 'https://trustyconvert.com'
 
 	return LANGUAGES.map((lang) => {
-		let url = astro.url.origin
+		let url = origin
 
 		if (lang.code !== DEFAULT_LANGUAGE.code) {
 			url += `/${lang.code}`

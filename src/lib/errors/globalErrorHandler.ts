@@ -6,7 +6,7 @@
  */
 
 import { reportError } from '@/lib/monitoring/init'
-import { toast } from '@/components/providers/ToastListener'
+import { showToast } from '@/components/providers/ToastListener'
 
 /**
  * Initialize global error handlers for uncaught exceptions and unhandled promise rejections
@@ -70,7 +70,7 @@ function handleGlobalError(error: Error, context: Record<string, any>): void {
 	// Show user feedback for client-side errors
 	// Only show for production and not for expected errors
 	if (!import.meta.env.DEV && shouldShowUserFeedback(error)) {
-		toast.error('Something went wrong. Please try again or refresh the page.', 10000)
+		showToast('Something went wrong. Please try again or refresh the page.', 'error', 10000)
 	}
 }
 

@@ -12,7 +12,7 @@ import { SupportedFormats } from '@/components/SupportedFormats'
 import { Testimonials } from '@/components/Testimonials'
 import { DEFAULT_LANGUAGE } from '@/lib/i18n/config'
 import { t } from '@/lib/i18n/translations'
-import { getAlternateLanguages } from '@/lib/i18n/middleware'
+import { LANGUAGES } from '@/lib/i18n/config'
 
 // Get the default language
 const lang = DEFAULT_LANGUAGE.code
@@ -34,38 +34,24 @@ const structuredData = {
 		price: '0',
 		priceCurrency: 'USD'
 	}
-}
+} as any // Type assertion to avoid structured data type issues
 
-// Get alternate languages for SEO
-const alternateLanguages = getAlternateLanguages(Astro)
+// Generate alternate language URLs for static build
+const alternateLanguages = LANGUAGES.map((lang) => ({
+	code: lang.code,
+	name: lang.name,
+	url: `${Astro.url.origin}${lang.code === DEFAULT_LANGUAGE.code ? '' : `/${lang.code}`}`
+}))
 
-// Get formats data (from API or fallback to mock)
-let formats = []
-if (import.meta.env.SSR) {
-	try {
-		const response = await fetch(
-			`${import.meta.env.PUBLIC_API_URL || '/api'}/supported-conversions`,
-			{
-				headers: {
-					Accept: 'application/json'
-				}
-			}
-		)
-		const data = await response.json()
-		formats = data.data
-	} catch (error) {
-		console.error('Failed to fetch formats:', error)
-		// Fallback to mock data if fetch fails with appropriate type conversion
-		formats = mockFormats.map((mock) => ({
-			id: mock.id,
-			name: mock.name,
-			description: mock.name, // Use name as description
-			input_formats: mock.inputFormats,
-			output_formats: mock.outputFormats,
-			icon: mock.icon
-		}))
-	}
-}
+// Always use mock data for static builds
+const formats = mockFormats.map((mock) => ({
+	id: mock.id,
+	name: mock.name,
+	description: mock.name, // Use name as description
+	input_formats: mock.inputFormats,
+	output_formats: mock.outputFormats,
+	icon: mock.icon
+}))
 ---
 
 <MainLayout

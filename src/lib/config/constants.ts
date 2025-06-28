@@ -10,7 +10,7 @@ export const API = {
 	MAX_RETRIES: 2,
 	POLLING_INTERVAL: 2000, // 2 seconds
 	ENDPOINTS: {
-		SESSION_INIT: '/session/init',
+		SESSION_INIT: '/session',
 		SESSION_CLOSE: '/session/close',
 		UPLOAD: '/upload',
 		CONVERT: '/convert',

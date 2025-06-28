@@ -1,10 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 32 32">
-    <rect width="32" height="32" rx="8" fill="#4ECDC4"/>
-    <path d="M10 10H22V14L16 22L10 14V10Z" fill="#2C3E50"/>
-    <style>
-        @media (prefers-color-scheme: dark) {
-            rect { fill: #4ECDC4; }
-            path { fill: #2C3E50; }
-        }
-    </style>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="8" fill="#1E88E5"/>
+  <path d="M8 12L16 6L24 12V22L16 28L8 22V12Z" fill="white" stroke="white" stroke-width="2"/>
+  <path d="M16 16L16 22" stroke="#1E88E5" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 10L16 14" stroke="#1E88E5" stroke-width="2" stroke-linecap="round"/>
 </svg>
