@@ -34,6 +34,17 @@ The integration follows the specifications in the [API Integration Guide](../API
 - **`src/components/features/conversion/ConversionStats.tsx`**: Component for displaying conversion statistics.
 - **`src/components/features/conversion/ConversionProgress.tsx`**: Component for displaying conversion progress.
 - **`src/components/features/upload/UploadZone.tsx`**: Component for handling file uploads.
+- **`src/components/features/conversion/DownloadManager.tsx`**: Component for handling secure download token retrieval and file download.
+
+## Download Flow Implementation
+
+The download process follows these steps:
+
+1. **Token Retrieval**: When a conversion job completes, the `DownloadManager` component requests a secure download token from the API using the `getDownloadToken` function.
+2. **Token Storage**: The download token is stored in the upload store using `setJobDownloadToken` for potential reuse.
+3. **Download URL Construction**: A secure download URL is constructed using the API configuration: `${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${token}`.
+4. **Download Initiation**: The user clicks the download button, which opens the download URL.
+5. **Token Expiration**: Download tokens are short-lived (10 minutes) and single-use for security.
 
 ## Security Implementation
 
@@ -51,12 +62,26 @@ The implementation uses the Double Submit Cookie pattern for CSRF protection:
 - The session cookie is managed by the browser and server.
 - The CSRF token is stored both in a cookie and in memory for validation.
 
+### Secure Downloads
+
+- Download tokens are single-use and short-lived.
+- Tokens are bound to specific sessions and job IDs.
+- The download endpoint is protected by the token validation.
+- File downloads use proper Content-Disposition headers for security.
+
 ## Error Handling
 
 - Centralized error handling in the API client.
 - Typed error responses for different error scenarios (network, validation, session).
 - User-friendly error messages displayed in the UI.
 - Correlation IDs tracked for debugging.
+- Retry mechanisms for transient errors with exponential backoff.
+
+## Data Persistence
+
+- Job information is stored in IndexedDB for persistence across page refreshes.
+- Download tokens are cached to allow redownloading without requesting new tokens.
+- Session information is maintained in memory and cookies.
 
 ## Testing
 
@@ -79,6 +104,18 @@ function ConversionPage() {
     </div>
   );
 }
+
+// Example usage of the DownloadManager component
+import { DownloadManager } from '@/components/features/conversion';
+
+function DownloadPage({ jobId }) {
+  return (
+    <div>
+      <h1>Download Your Converted File</h1>
+      <DownloadManager jobId={jobId} />
+    </div>
+  );
+}
 ```
 
 ## Best Practices Implemented
@@ -89,6 +126,8 @@ function ConversionPage() {
 4. **Modular Design**: Components are modular and reusable.
 5. **Progressive Enhancement**: The UI provides feedback during all stages of the conversion process.
 6. **Security**: CSRF protection, secure cookie handling, and input validation.
+7. **Configuration**: Centralized API configuration for easy updates.
+8. **Cross-Origin Support**: Proper CORS handling with credentials.
 
 ## Future Improvements
 
@@ -96,4 +135,6 @@ function ConversionPage() {
 2. Add file preview functionality.
 3. Enhance error recovery mechanisms.
 4. Implement offline support with upload queue.
-5. Add analytics tracking for conversion metrics. 
+5. Add analytics tracking for conversion metrics.
+6. Implement download resumability for large files.
+7. Add support for direct sharing of converted files. 

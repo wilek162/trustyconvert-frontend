@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { getDownloadToken } from '@/lib/api/apiClient'
 import { getJob, setJobDownloadToken } from '@/lib/stores/upload'
 import type { FileUploadData } from '@/lib/stores/upload'
+import { apiConfig } from '@/lib/api/config'
 
 interface DownloadManagerProps {
 	jobId: string
@@ -24,7 +25,9 @@ function DownloadManager({ jobId, onDownloadComplete, onError }: DownloadManager
 
 			// If job already has a download token, use it
 			if (jobData.downloadToken) {
-				setDownloadUrl(`/api/download?token=${jobData.downloadToken}`)
+				setDownloadUrl(
+					`${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${jobData.downloadToken}`
+				)
 			} else {
 				// Otherwise get a new token
 				fetchDownloadToken()
@@ -50,7 +53,7 @@ function DownloadManager({ jobId, onDownloadComplete, onError }: DownloadManager
 				await setJobDownloadToken(jobId, token)
 
 				// Set download URL
-				setDownloadUrl(`/api/download?token=${token}`)
+				setDownloadUrl(`${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${token}`)
 			} else {
 				throw new Error('Failed to get download token')
 			}
