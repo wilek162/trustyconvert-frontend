@@ -94,10 +94,9 @@ export default defineConfig({
     server: process.env.NODE_ENV === 'development' ? {
       proxy: {
         '/api': {
-          target: 'https://127.0.0.1:9443',
+          target: 'https://api.trustyconvert.com',
           changeOrigin: true,
           secure: false, // Don't verify SSL certificate
-          rewrite: (path) => path.replace(/^\/api/, ''),
           configure: (proxy, _options) => {
             // Set up SSL handling
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Disable certificate validation

@@ -13,7 +13,6 @@ import { useFileUpload } from '@/lib/hooks/useApi'
 import { addJob, updateJobStatus, updateJobProgress } from '@/lib/stores/upload'
 import { getCSRFToken } from '@/lib/stores/session'
 import { getFileInfo } from '@/lib/utils/files'
-import { mockFormats } from '@/mocks/data'
 
 interface UploadZoneProps {
 	onFileUploaded?: (jobId: string, file: File) => void
@@ -54,19 +53,6 @@ export function UploadZone({
 	useEffect(() => {
 		if (initialSourceFormat) {
 			// Find the format info from mock data
-			const formatInfo = mockFormats.find((format) => format.id === initialSourceFormat)
-
-			if (formatInfo && formatInfo.mimeTypes && formatInfo.extensions) {
-				// Create a filtered format object that only includes the specified source format
-				const filtered: Record<string, string[]> = {}
-
-				// Add MIME types
-				formatInfo.mimeTypes.forEach((mimeType) => {
-					filtered[mimeType] = formatInfo.extensions || []
-				})
-
-				setFilteredFormats(filtered)
-			}
 		} else {
 			// Use the props or default if no initialSourceFormat is provided
 			setFilteredFormats(propAcceptedFormats || FILE_UPLOAD.MIME_TYPES)
@@ -218,10 +204,7 @@ export function UploadZone({
 	// Get format-specific message
 	const getFormatMessage = () => {
 		if (initialSourceFormat) {
-			const formatInfo = mockFormats.find((format) => format.id === initialSourceFormat)
-			if (formatInfo) {
-				return `Upload a ${formatInfo.name} file`
-			}
+			return `Upload a ${initialSourceFormat} file`
 		}
 		return 'Drag & drop a file here, or click to select'
 	}

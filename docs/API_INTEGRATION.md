@@ -1,141 +1,131 @@
-# API Integration Guide
+# TrustyConvert API Integration
 
-This document explains how the TrustyConvert frontend integrates with the backend API for file conversion.
+This document explains how the TrustyConvert frontend integrates with the backend API.
 
 ## Overview
 
-The frontend interacts with the backend API for file conversion using a RESTful API with session-based authentication and CSRF protection. The integration follows these key principles:
+The TrustyConvert frontend communicates with the backend API to perform file conversions. The API integration follows the specifications outlined in the [API Integration Guide](../API_INTEGRATION_GUIDE.md).
 
-1. **Session Management**: All API requests are made within a session that's initialized before any file operations.
-2. **CSRF Protection**: Uses the Double Submit Cookie pattern with CSRF tokens for all state-changing requests.
-3. **File Upload Flow**: File upload, conversion, status polling, and download are handled as separate steps.
-4. **Error Handling**: Comprehensive error handling with correlation IDs for debugging.
+## API Client Architecture
 
-## Key Components
+The API client is implemented in a modular, layered approach:
 
-### 1. API Client (`src/lib/api/apiClient.ts`)
+1. **Low-level API Client** (`src/lib/api/apiClient.ts`):
+   - Handles direct communication with the API endpoints
+   - Manages CSRF tokens and session cookies
+   - Implements error handling, retries, and timeouts
+   - Provides type-safe API responses
 
-Low-level API client that handles:
-- Session initialization and CSRF token management
-- File upload and conversion requests
-- Job status polling
-- Download token generation
-- Error handling and retries
+2. **High-level API Client** (`src/lib/api/client.ts`):
+   - Provides a simplified interface for components and hooks
+   - Abstracts away implementation details
+   - Handles common workflows (e.g., upload + convert in one call)
 
-### 2. API Client Wrapper (`src/lib/api/client.ts`)
+3. **React Hooks** (`src/lib/hooks/useApi.ts`, `src/lib/hooks/useFileConversion.ts`, etc.):
+   - Integrate API calls with React's state management
+   - Provide loading, error, and data states
+   - Handle polling for job status
 
-High-level wrapper around the API client that:
-- Provides a simpler interface for components
-- Handles data transformation
-- Adds convenience methods like `startConversion`
+## Key API Endpoints
 
-### 3. Session Management
+The API client interacts with the following endpoints:
 
-- `SessionProvider`: Initializes the session when the app loads
-- `useSessionInitializer`: Hook that handles session initialization and CSRF token management
-- CSRF utilities: Handles CSRF token extraction from cookies and error handling
+- **Session Management**:
+  - `GET /api/session/init`: Initialize a session and get CSRF token
+  - `POST /api/session/close`: Close a session and clean up resources
 
-### 4. Conversion Hooks
+- **File Operations**:
+  - `POST /api/upload`: Upload a file for conversion
+  - `POST /api/convert`: Start a conversion job
+  - `GET /api/job_status`: Check the status of a conversion job
+  - `POST /api/download_token`: Get a token for downloading a converted file
+  - `GET /api/download`: Download a converted file using a token
 
-- `useConversion`: Main hook for the file conversion flow
-- `useFileConversion`: More detailed hook for managing the conversion process
-- `useConversionStatus`: Hook for polling job status
-
-## Typical Flow
-
-1. **Session Initialization**:
-   ```typescript
-   // Happens automatically via SessionProvider
-   const { isInitialized } = useSessionInitializer();
-   ```
-
-2. **File Upload and Conversion**:
-   ```typescript
-   const { convertFile, isProcessing } = useConversion();
-   
-   // Later, when user selects a file and format
-   const result = await convertFile(file, targetFormat);
-   
-   if (result.success) {
-     // Show download link
-     window.location.href = result.downloadUrl;
-   }
-   ```
-
-3. **Manual Flow (if needed)**:
-   ```typescript
-   // 1. Upload file
-   const uploadResult = await apiClient.uploadFile(file, jobId);
-   
-   // 2. Start conversion
-   const convertResult = await apiClient.convertFile(jobId, targetFormat);
-   
-   // 3. Poll for status
-   let status;
-   do {
-     await new Promise(resolve => setTimeout(resolve, 2000));
-     status = await apiClient.getConversionStatus(jobId);
-   } while (status.status !== 'completed' && status.status !== 'failed');
-   
-   // 4. Get download token
-   const downloadToken = await apiClient.getDownloadToken(jobId);
-   
-   // 5. Generate download URL
-   const downloadUrl = apiClient.getDownloadUrl(downloadToken.download_token);
-   ```
-
-## Testing
-
-Use the `test-api-connection.js` script to test the API integration:
-
-```bash
-node test-api-connection.js
-```
-
-This script tests:
-1. CORS configuration
-2. Session initialization
-3. File upload
-4. File conversion
-5. Job status retrieval
-6. Download token generation
-7. Session closure
-
-## Error Handling
-
-The API integration includes comprehensive error handling:
-
-- Network errors (timeout, connection issues)
-- API errors (validation, server errors)
-- Session errors (expired sessions, CSRF issues)
-
-All errors include:
-- User-friendly messages
-- Detailed error information for debugging
-- Correlation IDs for tracing issues across frontend and backend
+- **Format Information**:
+  - `GET /api/convert/formats`: Get supported conversion formats
 
 ## Security Considerations
 
-1. **CSRF Protection**: All state-changing requests include CSRF tokens.
-2. **Credentials**: All requests include credentials (cookies).
-3. **Download Tokens**: Single-use, short-lived tokens for file downloads.
-4. **Session Cleanup**: Sessions are closed when no longer needed.
+The API integration implements several security measures:
 
-## Configuration
+1. **CSRF Protection**:
+   - CSRF tokens are obtained from `/api/session/init`
+   - Tokens are sent in the `X-CSRF-Token` header for all state-changing requests
 
-API configuration is centralized in `src/lib/api/config.ts` and can be customized using environment variables:
+2. **Cookie Handling**:
+   - All requests include credentials (cookies)
+   - Session cookies are managed by the browser
 
-- `PUBLIC_API_URL`: Base URL for the API
-- `PUBLIC_API_DOMAIN`: Domain for the API (for CORS)
-- `PUBLIC_FRONTEND_DOMAIN`: Domain for the frontend (for CORS)
+3. **CORS Configuration**:
+   - Requests are configured with the appropriate CORS settings
+   - The frontend domain is whitelisted on the backend
+
+4. **Secure Downloads**:
+   - Single-use, time-limited download tokens
+   - Proper Content-Disposition headers for secure file downloads
+
+## Error Handling
+
+The API client implements comprehensive error handling:
+
+1. **Network Errors**:
+   - Timeout handling
+   - Retry logic for transient errors
+   - SSL/TLS error handling for development environments
+
+2. **API Errors**:
+   - Structured error responses with error codes and messages
+   - Validation error handling
+   - Session expiration detection and handling
+
+3. **User Feedback**:
+   - User-friendly error messages
+   - Correlation IDs for debugging and support
+
+## Testing API Integration
+
+To test the API integration:
+
+1. **Test Script**:
+   - Run `./test-api.sh` to test the API connection
+   - This script tests all key endpoints and workflows
+
+2. **JavaScript Test**:
+   - Run `node test-api-connection.js` for a more detailed test
+   - This script provides more verbose output and handles edge cases
+
+## Development vs. Production
+
+The API client behaves differently in development and production:
+
+1. **Development**:
+   - Can use self-signed certificates (with appropriate warnings)
+   - More verbose logging
+   - Environment variables from `.env`
+
+2. **Production**:
+   - Strict SSL certificate validation
+   - Minimal logging (errors only)
+   - Environment variables from deployment configuration
+   - No mock data
 
 ## Troubleshooting
 
-Common issues and solutions:
+Common issues and their solutions:
 
-1. **CORS Errors**: Ensure the backend has the correct CORS configuration.
-2. **Session Initialization Failures**: Check network connectivity and SSL certificate configuration.
-3. **Upload Failures**: Check file size limits and supported formats.
-4. **Conversion Errors**: Check the job status for detailed error messages.
+1. **CORS Errors**:
+   - Ensure the frontend domain is whitelisted in the backend configuration
+   - Check that credentials are included in requests
 
-For detailed debugging, check the browser console and network tab for request/response details. 
+2. **SSL/TLS Errors**:
+   - In development, ensure self-signed certificates are properly configured
+   - In production, ensure certificates are valid and trusted
+
+3. **Session Errors**:
+   - Check that session initialization is called before other operations
+   - Verify CSRF token handling
+
+4. **File Upload Issues**:
+   - Check file size limits
+   - Verify supported file formats
+   - Ensure proper multipart/form-data formatting 

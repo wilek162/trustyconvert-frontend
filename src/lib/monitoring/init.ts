@@ -137,20 +137,13 @@ export async function initializeMonitoring(): Promise<void> {
 
 /**
  * Initialize MSW for API mocking in development
+ *
+ * NOTE: MSW has been disabled in favor of using the real API.
+ * This function is kept for backward compatibility but no longer initializes MSW.
  */
 export async function initializeMocks(): Promise<any> {
-	if (import.meta.env.DEV && typeof window !== 'undefined') {
-		try {
-			const { worker } = await import('../../mocks/browser')
-			return worker.start({
-				onUnhandledRequest: 'bypass'
-			})
-		} catch (error) {
-			console.error('Failed to initialize MSW:', error)
-			// Return a resolved promise to prevent uncaught errors
-			return Promise.resolve()
-		}
-	}
+	// MSW initialization has been disabled to use the real API
+	console.log('Mock Service Worker (MSW) has been disabled. Using real API endpoints.')
 	return Promise.resolve()
 }
 

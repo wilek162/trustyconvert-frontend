@@ -5,7 +5,7 @@
  * across different entry points (SSR, browser, etc.)
  */
 
-import { initializeMonitoring, initializeMocks } from '@/lib/monitoring/init'
+import { initializeMonitoring } from '@/lib/monitoring/init'
 import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
 // Offline detection is temporarily disabled
 // import { initOfflineDetection } from '@/lib/utils/offlineDetection'
@@ -18,11 +18,6 @@ export async function initializeApp(): Promise<void> {
 	try {
 		// Initialize monitoring first for error tracking
 		await initializeMonitoring()
-
-		// Initialize API mocks in development
-		if (import.meta.env.DEV) {
-			await initializeMocks()
-		}
 
 		// Log initialization in development
 		if (import.meta.env.DEV) {

@@ -29,11 +29,16 @@ const getApiUrl = () => {
 // Get the API domain for CORS settings
 const getApiDomain = () => {
 	if (typeof window !== 'undefined') {
-		return (
-			import.meta.env.PUBLIC_API_DOMAIN ||
-			new URL(import.meta.env.PUBLIC_API_URL || 'https://api.trustyconvert.com').origin ||
-			'https://api.trustyconvert.com'
-		)
+		try {
+			return (
+				import.meta.env.PUBLIC_API_DOMAIN ||
+				new URL(import.meta.env.PUBLIC_API_URL || 'https://api.trustyconvert.com').origin ||
+				'https://api.trustyconvert.com'
+			)
+		} catch (e) {
+			// Handle case where URL parsing fails
+			return 'https://api.trustyconvert.com'
+		}
 	}
 
 	return process.env.PUBLIC_API_DOMAIN || 'https://api.trustyconvert.com'
@@ -70,8 +75,8 @@ export const apiConfig = {
 	baseUrl: getApiUrl(),
 	apiDomain: getApiDomain(),
 	frontendDomain: getFrontendDomain(),
-	timeout: 30000, // ms
-	retryAttempts: 3,
+	timeout: Number(import.meta.env.API_TIMEOUT || 30000), // ms
+	retryAttempts: Number(import.meta.env.API_RETRY_ATTEMPTS || 3),
 	csrfTokenHeader: 'X-CSRF-Token',
 	endpoints: apiEndpoints,
 	cors: {

@@ -1,11 +1,15 @@
 import React, { useEffect } from 'react'
-import { useCsrf } from './CsrfProvider'
 import { apiClient } from '@/lib/api/client'
-import { useSessionInitializer } from '@/hooks/useSessionInitializer'
+import { useSessionInitializer } from '@/lib/hooks/useSessionInitializer'
 import { useToast } from '@/lib/hooks/useToast'
+import { handleError } from '@/lib/utils/errorHandling'
 
-export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const { isInitialized, isInitializing, error } = useSessionInitializer()
+interface SessionProviderProps {
+	children: React.ReactNode
+}
+
+export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) => {
+	const { isInitialized, isInitializing, error, resetSession } = useSessionInitializer()
 	const { addToast } = useToast()
 
 	// Show error toast if session initialization fails
@@ -14,10 +18,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 			addToast({
 				title: 'Session Error',
 				description: error,
-				variant: 'destructive'
+				variant: 'destructive',
+				action: {
+					label: 'Retry',
+					onClick: resetSession
+				}
 			})
 		}
-	}, [error, addToast])
+	}, [error, addToast, resetSession])
 
 	// Clean up session on unmount (e.g., when user navigates away)
 	useEffect(() => {
@@ -25,7 +33,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 			// Only attempt to close the session if it was initialized
 			if (isInitialized) {
 				apiClient.closeSession().catch((err) => {
-					console.error('Failed to close session:', err)
+					handleError(err, {
+						context: { component: 'SessionProvider', action: 'closeSession' },
+						silent: true // Don't show to user on page unload
+					})
 				})
 			}
 		}

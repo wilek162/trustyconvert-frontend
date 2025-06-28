@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
-import { apiClient, type DownloadProgress } from '@/lib/api/client'
+import { apiClient } from '@/lib/api/client'
+import type { DownloadProgress } from '@/lib/types/conversion'
 import { debugLog } from '@/lib/utils/debug'
+import { handleError } from '@/lib/utils/errorHandling'
 
 interface UseFileDownloadOptions {
 	onComplete?: () => void
@@ -49,7 +51,7 @@ export function useFileDownload({ onComplete, onError, onProgress }: UseFileDown
 
 				// Download the file
 				const blob = await apiClient.downloadConvertedFile(taskId, {
-					onProgress: (progress) => {
+					onProgress: (progress: DownloadProgress) => {
 						setState((prev) => ({ ...prev, progress }))
 						if (onProgress) onProgress(progress)
 					},
@@ -71,7 +73,9 @@ export function useFileDownload({ onComplete, onError, onProgress }: UseFileDown
 				if (onComplete) onComplete()
 			} catch (error) {
 				debugLog('Download failed', error)
-				const errorMessage = error instanceof Error ? error.message : 'Failed to download file'
+				const errorMessage = handleError(error, {
+					context: { action: 'downloadFile', taskId, fileName }
+				})
 				setState((prev) => ({
 					...prev,
 					isDownloading: false,

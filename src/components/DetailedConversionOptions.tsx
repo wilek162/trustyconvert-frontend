@@ -1,17 +1,4 @@
 import React from 'react'
-import { mockFormats } from '@/mocks/data'
-
-// Group formats by category
-const formatsByCategory = {
-	document: mockFormats.filter((format) =>
-		['pdf', 'docx', 'doc', 'txt', 'rtf', 'odt'].includes(format.id)
-	),
-	image: mockFormats.filter((format) =>
-		['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(format.id)
-	),
-	spreadsheet: mockFormats.filter((format) => ['xlsx', 'xls', 'csv', 'ods'].includes(format.id)),
-	presentation: mockFormats.filter((format) => ['pptx', 'ppt', 'odp'].includes(format.id))
-}
 
 const categoryNames = {
 	document: 'Document Conversions',
@@ -110,51 +97,7 @@ export function DetailedConversionOptions() {
 					</p>
 				</div>
 
-				<div className="grid gap-8 md:grid-cols-2">
-					{Object.entries(formatsByCategory).map(([category, formats]) => (
-						<div
-							id={category}
-							key={category}
-							className="trusty-card rounded-card border border-trustTeal/20 bg-white p-8 shadow-DEFAULT transition-all hover:shadow-lg"
-						>
-							<div className="mb-6 flex items-center">
-								<div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-trustTeal/20 to-trustTeal/30 shadow-inner">
-									{categoryIcons[category as keyof typeof categoryIcons]}
-								</div>
-								<h3 className="text-xl font-semibold text-deepNavy">
-									{categoryNames[category as keyof typeof categoryNames]}
-								</h3>
-							</div>
-
-							<div className="space-y-8">
-								{formats.map((format) => (
-									<div key={format.id} className="format-group">
-										<h4 className="mb-4 flex items-center font-medium text-deepNavy">
-											<span className="mr-2 text-trustTeal">{format.icon || '🔄'}</span>
-											Convert {format.name} to:
-										</h4>
-										<div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-											{format.outputFormats.map((outputFormat) => {
-												// Find the target format info
-												const targetFormat = mockFormats.find((f) => f.id === outputFormat)
-												return (
-													<a
-														key={outputFormat}
-														href={`/convert/${format.id}-to-${outputFormat}`}
-														className="flex items-center rounded-md border border-lightGray bg-lightGray px-3 py-2 text-sm font-medium text-deepNavy transition-all hover:border-trustTeal/20 hover:bg-trustTeal/10 hover:text-deepNavy"
-													>
-														<span className="mr-2">{targetFormat?.icon || '🔄'}</span>
-														<span>{targetFormat?.name || outputFormat.toUpperCase()}</span>
-													</a>
-												)
-											})}
-										</div>
-									</div>
-								))}
-							</div>
-						</div>
-					))}
-				</div>
+				<div className="grid gap-8 md:grid-cols-2"></div>
 			</div>
 		</section>
 	)

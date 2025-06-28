@@ -58,10 +58,22 @@ export interface JobStatusResponse {
 	status: JobStatus
 	progress?: number
 	error_message?: string
+	error_type?: string
 	started_at?: string
+	created_at?: string
+	updated_at?: string
 	completed_at?: string
+	failed_at?: string
 	estimated_time_remaining?: number
 	current_step?: string
+	original_filename?: string
+	converted_path?: string | null
+	output_size?: number | null
+	conversion_time?: number | null
+	download_token?: string | null
+	filename?: string // Alias for original_filename for backward compatibility
+	file_size?: number // Alias for output_size for backward compatibility
+	download_url?: string // Constructed URL for convenience
 }
 
 /**

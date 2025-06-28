@@ -1,4 +1,71 @@
 /**
+ * API Types
+ *
+ * This file defines types used by the API client and related components.
+ * It ensures consistency across the application.
+ */
+
+import type { JobStatus, ConversionFormat } from '@/lib/types'
+import type { DownloadProgress } from '@/lib/types/conversion'
+
+/**
+ * Task status for backward compatibility
+ */
+export type TaskStatus = JobStatus
+
+/**
+ * Conversion status response
+ */
+export interface ConversionStatusResponse {
+	job_id?: string
+	task_id?: string // For backward compatibility
+	status: JobStatus
+	progress?: number
+	download_url?: string | null
+	error_message?: string | null
+	error_type?: string | null
+	file_size?: number | null
+	output_size?: number | null
+	started_at?: string | null
+	created_at?: string | null
+	updated_at?: string | null
+	completed_at?: string | null
+	failed_at?: string | null
+	original_filename?: string | null
+	filename?: string | null // Alias for original_filename
+	converted_path?: string | null
+	conversion_time?: number | null
+	download_token?: string | null
+	current_step?: string | null
+	estimated_time_remaining?: number | null
+}
+
+/**
+ * Download options
+ */
+export interface DownloadOptions {
+	onProgress?: (progress: DownloadProgress) => void
+	signal?: AbortSignal
+}
+
+/**
+ * API client interface
+ * Defines the methods that should be implemented by any API client
+ */
+export interface ApiClientInterface {
+	initSession(): Promise<any>
+	uploadFile(file: File, jobId?: string): Promise<any>
+	convertFile(jobId: string, targetFormat: string, sourceFormat?: string): Promise<any>
+	startConversion(file: File, targetFormat: string): Promise<any>
+	getConversionStatus(jobId: string): Promise<ConversionStatusResponse>
+	getDownloadToken(jobId: string): Promise<any>
+	closeSession(): Promise<any>
+	getSupportedFormats(): Promise<ConversionFormat[]>
+	getDownloadUrl(downloadToken: string): string
+	downloadConvertedFile?(jobId: string, options?: DownloadOptions): Promise<Blob>
+}
+
+/**
  * API Type Definitions
  *
  * Contains type definitions for API requests and responses.
@@ -127,19 +194,6 @@ export interface SupportedFormatsResponse {
 		name: string
 	}>
 	conversion_matrix: Record<string, string[]>
-}
-
-export type TaskStatus = {
-	task_id: string
-	file_id: string
-	status: 'idle' | 'uploading' | 'processing' | 'completed' | 'failed'
-	progress: number
-	filename?: string
-	error?: string
-	error_details?: Record<string, unknown>
-	download_url?: string
-	created_at: string
-	updated_at: string
 }
 
 export type ApiResponse<T> = {

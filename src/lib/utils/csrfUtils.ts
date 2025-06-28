@@ -8,7 +8,8 @@
 import { setCSRFToken } from '@/lib/stores/session'
 import { apiConfig } from '@/lib/api/config'
 
-const CSRF_COOKIE_NAME = 'csrftoken'
+// Get the CSRF cookie name from environment variables or use a default
+const CSRF_COOKIE_NAME = import.meta.env.CSRF_COOKIE_NAME || 'XSRF-TOKEN'
 
 /**
  * Get the CSRF token from cookies

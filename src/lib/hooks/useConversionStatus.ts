@@ -1,32 +1,52 @@
 import { useQuery, Query } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
+import type { ConversionStatusResponse } from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import type { z } from 'zod'
-import { ConversionStatusResponseSchema } from '@/lib/api/client'
+import { handleError } from '@/lib/utils/errorHandling'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
 
 interface UseConversionStatusOptions {
 	taskId: string | null
 	onError?: (error: string) => void
+	pollingInterval?: number
+	maxRetries?: number
 }
 
 type ConversionStatus = 'idle' | 'pending' | 'processing' | 'completed' | 'failed'
-type ConversionStatusResponse = z.infer<typeof ConversionStatusResponseSchema>
 
-export function useConversionStatus({ taskId, onError }: UseConversionStatusOptions) {
+/**
+ * Hook for polling and tracking conversion status
+ *
+ * @param options - Configuration options
+ * @returns Status information and control functions
+ */
+export function useConversionStatus({
+	taskId,
+	onError,
+	pollingInterval = POLLING_INTERVAL,
+	maxRetries = 2
+}: UseConversionStatusOptions) {
 	const query = useQuery<ConversionStatusResponse, Error>({
 		queryKey: ['conversion-status', taskId],
 		queryFn: async () => {
 			if (!taskId) throw new Error('No task ID provided')
 			debugLog('[useConversionStatus] Checking status', { taskId })
 			try {
+				// taskId is used as jobId for API calls
 				const status = await apiClient.getConversionStatus(taskId)
+
+				// The apiClient.getConversionStatus now standardizes the response
+				// so we don't need to manually handle field aliases anymore
+
 				debugLog('[useConversionStatus] Status received', status)
 				return status
 			} catch (error) {
 				debugError('[useConversionStatus] Status check failed', error)
-				if (onError) onError(error instanceof Error ? error.message : 'Unknown error')
+				const errorMessage = handleError(error, {
+					context: { component: 'useConversionStatus', taskId }
+				})
+				if (onError) onError(errorMessage)
 				throw error
 			}
 		},
@@ -34,13 +54,13 @@ export function useConversionStatus({ taskId, onError }: UseConversionStatusOpti
 		refetchInterval: (q: Query<ConversionStatusResponse, Error>) => {
 			const data = q.state.data
 			const error = q.state.error
-			if (!data) return POLLING_INTERVAL
+			if (!data) return pollingInterval
 			if (data.status === 'completed' || data.status === 'failed' || error) {
 				return false
 			}
-			return POLLING_INTERVAL
+			return pollingInterval
 		},
-		retry: 2,
+		retry: maxRetries,
 		retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
 	})
 
@@ -52,6 +72,11 @@ export function useConversionStatus({ taskId, onError }: UseConversionStatusOpti
 		fileSize: query.data?.file_size ?? null,
 		isLoading: query.isLoading,
 		error: query.error instanceof Error ? query.error.message : null,
-		retryCount: query.failureCount
+		retryCount: query.failureCount,
+		// Add a cancel method for future implementation
+		cancel: () => {
+			// This would be implemented if the API supports cancellation
+			console.warn('Conversion cancellation not implemented')
+		}
 	}
 }

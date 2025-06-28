@@ -1,6 +1,4 @@
 import React from 'react'
-import { mockFormats } from '@/mocks/data'
-
 // Format categories with icons matching the original SupportedFormats component
 const formatCategories = [
 	{
@@ -98,20 +96,6 @@ const formatCategories = [
 ]
 
 export function ConversionSitemap() {
-	// Get all available format conversions from mock data
-	const getConversionsForFormat = (formatId: string) => {
-		const format = mockFormats.find((f) => f.id === formatId)
-		if (!format) return []
-
-		return format.outputFormats.map((outputFormat) => {
-			const targetFormat = mockFormats.find((f) => f.id === outputFormat)
-			return {
-				source: format,
-				target: targetFormat || { id: outputFormat, name: outputFormat.toUpperCase() }
-			}
-		})
-	}
-
 	return (
 		<section className="bg-white py-20">
 			<div className="trusty-container">
@@ -140,9 +124,6 @@ export function ConversionSitemap() {
 
 							<div className="flex flex-wrap gap-2">
 								{category.formats.map((formatId) => {
-									const format = mockFormats.find((f) => f.id === formatId)
-									const displayName = format ? format.name : formatId.toUpperCase()
-
 									return (
 										<a
 											key={formatId}

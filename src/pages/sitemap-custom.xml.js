@@ -1,5 +1,4 @@
 import { getCollection } from 'astro:content';
-import { mockFormats } from '../mocks/data';
 import { LANGUAGES, DEFAULT_LANGUAGE, formatLocalizedPath } from '../lib/i18n/config';
 
 /**
@@ -15,7 +14,7 @@ export async function get({ site }) {
        }
 
        // Get all conversion formats
-       const formats = mockFormats;
+       const formats = [];
 
        // Generate conversion page URLs
        const conversionUrls = formats.flatMap(format =>
