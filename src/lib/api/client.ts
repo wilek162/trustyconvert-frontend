@@ -73,7 +73,7 @@ export type ConversionStatusResponse = z.infer<typeof ConversionStatusResponseSc
  */
 function standardizeResponse<T extends Record<string, any>>(response: T): T {
 	// Create a copy to avoid mutating the original
-	const result = { ...response }
+	const result = { ...response } as Record<string, any>
 
 	// Standardize common field aliases
 	if ('task_id' in response && !('job_id' in response)) {
@@ -90,10 +90,10 @@ function standardizeResponse<T extends Record<string, any>>(response: T): T {
 
 	// Construct download URL if we have a token but no URL
 	if ('download_token' in response && !('download_url' in response)) {
-		result.download_url = `${apiConfig.baseUrl}/download?token=${response.download_token}`
+		result.download_url = `${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${response.download_token}`
 	}
 
-	return result
+	return result as T
 }
 
 /**
@@ -107,7 +107,7 @@ export const apiClient = {
 	initSession: async () => {
 		try {
 			const response = await initSession()
-			return response.data
+			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
 				context: { action: 'initSession' }
@@ -155,18 +155,27 @@ export const apiClient = {
 	 * Convenience method to upload and convert in one step
 	 * @param file File to upload and convert
 	 * @param targetFormat Target format for conversion
+	 * @param sourceFormat Optional source format (usually auto-detected)
 	 * @returns Job ID and initial status
 	 */
-	startConversion: async (file: File, targetFormat: string) => {
+	startConversion: async (file: File, targetFormat: string, sourceFormat?: string) => {
 		try {
 			// Generate a job ID
 			const jobId = uuidv4()
 
 			// Step 1: Upload the file
-			await uploadFile(file, jobId)
+			const uploadResponse = await uploadFile(file, jobId)
+
+			if (!uploadResponse.success) {
+				throw new Error('Upload failed: ' + (uploadResponse.data.message || 'Unknown error'))
+			}
 
 			// Step 2: Start conversion
-			const convertResponse = await convertFile(jobId, targetFormat)
+			const convertResponse = await convertFile(jobId, targetFormat, sourceFormat)
+
+			if (!convertResponse.success) {
+				throw new Error('Conversion failed: ' + (convertResponse.data.message || 'Unknown error'))
+			}
 
 			return standardizeResponse({
 				job_id: jobId,
@@ -179,7 +188,8 @@ export const apiClient = {
 					action: 'startConversion',
 					fileName: file.name,
 					fileSize: file.size,
-					targetFormat
+					targetFormat,
+					sourceFormat
 				}
 			})
 		}
@@ -218,6 +228,15 @@ export const apiClient = {
 	},
 
 	/**
+	 * Generate a download URL from a token
+	 * @param token Download token
+	 * @returns Full download URL
+	 */
+	getDownloadUrl: (token: string): string => {
+		return `${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${token}`
+	},
+
+	/**
 	 * Close the current session
 	 * @returns Session close response
 	 */
@@ -249,116 +268,6 @@ export const apiClient = {
 				silent: true
 			})
 			return []
-		}
-	},
-
-	/**
-	 * Get the download URL for a job
-	 * @param downloadToken Download token
-	 * @returns Full download URL
-	 */
-	getDownloadUrl: (downloadToken: string): string => {
-		// Use the API base URL from config
-		return `${apiConfig.baseUrl}/download?token=${downloadToken}`
-	},
-
-	/**
-	 * Download a converted file with progress tracking
-	 * @param jobId Job ID to download
-	 * @param options Download options (progress callback, abort signal)
-	 * @returns Blob of the downloaded file
-	 */
-	downloadConvertedFile: async (jobId: string, options?: DownloadOptions): Promise<Blob> => {
-		try {
-			// Step 1: Get download token
-			const tokenResponse = await getDownloadToken(jobId)
-
-			if (!tokenResponse.success || !tokenResponse.data.download_token) {
-				throw new NetworkError({
-					message: 'Failed to get download token',
-					userMessage: 'Unable to download file. Please try again.'
-				})
-			}
-
-			const downloadToken = tokenResponse.data.download_token
-			const downloadUrl = `${apiConfig.baseUrl}/download?token=${downloadToken}`
-
-			// Step 2: Download the file with progress tracking
-			const response = await fetch(downloadUrl, {
-				method: 'GET',
-				credentials: 'include',
-				signal: options?.signal
-			})
-
-			if (!response.ok) {
-				throw new NetworkError({
-					message: `Download failed: ${response.status} ${response.statusText}`,
-					userMessage: 'Download failed. Please try again.',
-					context: { status: response.status, statusText: response.statusText }
-				})
-			}
-
-			// If we have a progress callback and the response has a Content-Length header
-			if (options?.onProgress && response.headers.has('Content-Length')) {
-				const contentLength = Number(response.headers.get('Content-Length'))
-				const reader = response.body?.getReader()
-
-				if (!reader) {
-					throw new NetworkError({
-						message: 'Response body reader could not be created',
-						userMessage: 'Download failed. Please try again.'
-					})
-				}
-
-				let receivedLength = 0
-				const chunks: Uint8Array[] = []
-				const startTime = Date.now()
-
-				while (true) {
-					const { done, value } = await reader.read()
-
-					if (done) {
-						break
-					}
-
-					chunks.push(value)
-					receivedLength += value.length
-
-					// Calculate progress metrics
-					const elapsedTime = (Date.now() - startTime) / 1000 // seconds
-					const speed = elapsedTime > 0 ? receivedLength / elapsedTime : 0 // bytes per second
-					const estimatedTime = speed > 0 ? (contentLength - receivedLength) / speed : 0
-
-					// Report progress with the proper type
-					const progressData: DownloadProgress = {
-						loaded: receivedLength,
-						total: contentLength,
-						startTime,
-						estimatedTime,
-						speed
-					}
-					options.onProgress(progressData)
-				}
-
-				// Concatenate chunks into a single Uint8Array
-				const allChunks = new Uint8Array(receivedLength)
-				let position = 0
-
-				for (const chunk of chunks) {
-					allChunks.set(chunk, position)
-					position += chunk.length
-				}
-
-				// Convert to Blob
-				return new Blob([allChunks])
-			}
-
-			// If no progress tracking is needed, just return the blob
-			return await response.blob()
-		} catch (error) {
-			throw handleError(error, {
-				context: { action: 'downloadConvertedFile', jobId }
-			})
 		}
 	}
 }

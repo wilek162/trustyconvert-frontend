@@ -74,5 +74,5 @@ See `.env.example` file for required environment variables.
 ## Further Documentation
 
 - Security implementation details: See `docs/security.md`
-- API integration guide: See `docs/api-integration.md`
+- API integration guide: See `API_INTEGRATION_GUIDE.md`
 - Component styling guide: See `trustyconvert docs/trustyconvert_brand_guide.md` 

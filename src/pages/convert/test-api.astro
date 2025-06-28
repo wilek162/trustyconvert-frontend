@@ -1,0 +1,47 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro'
+import { ConversionFlow } from '@/components/features/conversion'
+---
+
+<MainLayout title="API Integration Test">
+	<div class="container mx-auto py-12">
+		<div class="mb-8 text-center">
+			<h1 class="mb-2 text-3xl font-bold text-deepNavy">API Integration Test</h1>
+			<p class="text-lg text-deepNavy/70">
+				This page tests the integration with the TrustyConvert API
+			</p>
+		</div>
+
+		<div class="mx-auto max-w-3xl">
+			<ConversionFlow client:load />
+		</div>
+
+		<div class="mt-12 rounded-lg border border-trustTeal/20 bg-trustTeal/5 p-6">
+			<h2 class="mb-4 text-xl font-semibold text-deepNavy">API Integration Notes</h2>
+			<ul class="list-disc space-y-2 pl-6 text-deepNavy/80">
+				<li>The conversion flow follows the API integration guide specifications</li>
+				<li>Session initialization happens automatically when the component loads</li>
+				<li>CSRF tokens are managed using the Double Submit Cookie pattern</li>
+				<li>
+					File uploads use the <code class="rounded bg-gray-100 px-1 py-0.5 font-mono text-sm"
+						>/api/upload</code
+					> endpoint
+				</li>
+				<li>
+					Conversions use the <code class="rounded bg-gray-100 px-1 py-0.5 font-mono text-sm"
+						>/api/convert</code
+					> endpoint
+				</li>
+				<li>
+					Job status is polled from <code class="rounded bg-gray-100 px-1 py-0.5 font-mono text-sm"
+						>/api/job_status</code>
+				</li>
+				<li>
+					Download tokens are retrieved from <code
+						class="rounded bg-gray-100 px-1 py-0.5 font-mono text-sm">/api/download_token</code>
+				</li>
+			</ul>
+		</div>
+	</div>
+</MainLayout>
+

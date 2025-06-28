@@ -1,5 +1,11 @@
-export { default as ConversionFlow } from './ConversionFlow'
-export { default as ConversionProgress } from './ConversionProgress'
-export { default as DownloadManager } from './DownloadManager'
-export { default as FormatSelector } from './FormatSelector'
-export { default as ConversionStats } from './ConversionStats'
+/**
+ * Conversion feature components
+ *
+ * This index file exports all components related to the file conversion feature
+ */
+
+export { ConversionFlow } from './ConversionFlow'
+export { ConversionStats } from './ConversionStats'
+export { FormatSelector } from './FormatSelector'
+export { ConversionProgress } from './ConversionProgress'
+export { DownloadManager } from './DownloadManager'
