@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { apiClient } from '@/lib/api/client'
 import { useToast } from '@/lib/hooks/useToast'
+import { useSessionInitializer } from '@/lib/hooks/useSessionInitializer'
 import type { JobStatus } from '@/lib/types'
 
 export interface ConversionResult {
@@ -20,6 +21,34 @@ export function useConversion() {
 	const [jobId, setJobId] = useState<string | null>(null)
 	const { addToast } = useToast()
 
+	// Use session initializer to ensure we have a valid session
+	const {
+		isInitialized,
+		isInitializing,
+		error: sessionError,
+		resetSession
+	} = useSessionInitializer()
+
+	// Initialize session when hook is first used
+	useEffect(() => {
+		const initSession = async () => {
+			if (!isInitialized && !isInitializing && !sessionError) {
+				try {
+					await apiClient.initSession()
+				} catch (error) {
+					console.error('Failed to initialize session:', error)
+					addToast({
+						title: 'Session Error',
+						description: 'Failed to initialize session. Please refresh the page.',
+						variant: 'destructive'
+					})
+				}
+			}
+		}
+
+		initSession()
+	}, [isInitialized, isInitializing, sessionError, addToast])
+
 	/**
 	 * Upload a file and start conversion
 	 * @param file File to convert
@@ -29,20 +58,17 @@ export function useConversion() {
 	const convertFile = useCallback(
 		async (file: File, targetFormat: string): Promise<ConversionResult> => {
 			try {
-				// For static builds or when API is not available, simulate conversion
-				if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-					// Simulate API call with a delay
-					await new Promise((resolve) => setTimeout(resolve, 2000))
-
-					// Create a mock download URL using object URL
-					const blob = new Blob([await file.arrayBuffer()], { type: file.type })
-					const downloadUrl = URL.createObjectURL(blob)
-
-					return {
-						success: true,
-						jobId: 'mock-job-id',
-						status: 'completed',
-						downloadUrl
+				// Ensure we have a valid session
+				if (!isInitialized) {
+					// Try to initialize session if not already done
+					if (!isInitializing) {
+						try {
+							await apiClient.initSession()
+						} catch (error) {
+							throw new Error('Failed to initialize session. Please refresh the page.')
+						}
+					} else {
+						throw new Error('Session is initializing. Please try again in a moment.')
 					}
 				}
 
@@ -55,26 +81,34 @@ export function useConversion() {
 				const uploadResponse = await apiClient.uploadFile(file, newJobId)
 				setIsUploading(false)
 
-				if (!uploadResponse.job_id) {
+				if (!uploadResponse || !uploadResponse.job_id) {
 					throw new Error('Upload failed: No job ID returned')
 				}
 
 				// Step 2: Start conversion
 				setIsConverting(true)
 				const convertResponse = await apiClient.convertFile(newJobId, targetFormat)
-				setIsConverting(false)
+
+				if (!convertResponse) {
+					throw new Error('Conversion failed: No response from server')
+				}
 
 				// Step 3: Poll for status until complete or failed
 				setIsPolling(true)
 				const finalStatus = await pollJobStatus(newJobId)
 				setIsPolling(false)
+				setIsConverting(false)
 
 				if (finalStatus.status === 'completed') {
 					// Step 4: Get download token
 					const downloadTokenResponse = await apiClient.getDownloadToken(newJobId)
 
-					// Create download URL
-					const downloadUrl = `${window.location.origin}/api/download?token=${downloadTokenResponse.download_token}`
+					if (!downloadTokenResponse || !downloadTokenResponse.download_token) {
+						throw new Error('Failed to get download token')
+					}
+
+					// Create download URL using the API client utility
+					const downloadUrl = apiClient.getDownloadUrl(downloadTokenResponse.download_token)
 
 					return {
 						success: true,
@@ -109,7 +143,7 @@ export function useConversion() {
 				setIsPolling(false)
 			}
 		},
-		[addToast]
+		[isInitialized, isInitializing, addToast]
 	)
 
 	/**
@@ -122,25 +156,51 @@ export function useConversion() {
 		const pollInterval = 5000 // 5 seconds
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			const statusResponse = await apiClient.getConversionStatus(jobId)
+			try {
+				const statusResponse = await apiClient.getConversionStatus(jobId)
 
-			if (['completed', 'failed'].includes(statusResponse.status)) {
-				return statusResponse
+				if (!statusResponse) {
+					throw new Error('Failed to get job status')
+				}
+
+				if (['completed', 'failed'].includes(statusResponse.status)) {
+					return statusResponse
+				}
+
+				// Wait before polling again
+				await new Promise((resolve) => setTimeout(resolve, pollInterval))
+			} catch (error) {
+				console.error('Error polling job status:', error)
+				// Continue polling despite errors
+				await new Promise((resolve) => setTimeout(resolve, pollInterval))
 			}
-
-			// Wait before polling again
-			await new Promise((resolve) => setTimeout(resolve, pollInterval))
 		}
 
 		throw new Error('Polling timed out')
 	}, [])
 
+	/**
+	 * Close the current session
+	 * Call this when done with conversions
+	 */
+	const closeSession = useCallback(async () => {
+		try {
+			await apiClient.closeSession()
+		} catch (error) {
+			console.error('Failed to close session:', error)
+		}
+	}, [])
+
 	return {
 		convertFile,
+		closeSession,
 		isUploading,
 		isConverting,
 		isPolling,
 		isProcessing: isUploading || isConverting || isPolling,
+		isSessionInitialized: isInitialized,
+		isSessionInitializing: isInitializing,
+		sessionError,
 		jobId
 	}
 }

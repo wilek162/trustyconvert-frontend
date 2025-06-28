@@ -1,10 +1,7 @@
 import React from 'react'
-import { ConversionForm } from './ConversionForm'
-import { useConversion } from '@/hooks/useConversion'
+import { ConversionFlow } from '@/components/features/conversion/ConversionFlow'
 
 export function Hero() {
-	const { convertFile, isConverting } = useConversion()
-
 	return (
 		<section className="relative bg-gradient-to-b from-lightGray/30 to-white py-10">
 			{/* Background elements */}
@@ -30,7 +27,7 @@ export function Hero() {
 				</div>
 
 				<div className="relative mb-14">
-					<ConversionForm onSubmit={convertFile} isLoading={isConverting} />
+					<ConversionFlow title="Convert Your File" />
 				</div>
 
 				{/* Feature badges with improved contrast */}

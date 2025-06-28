@@ -5,4 +5,4 @@
  */
 
 export { UploadZone } from './UploadZone'
-export { FileValidation } from './FileValidation'
+export * from './FileValidation'

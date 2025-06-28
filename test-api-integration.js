@@ -1,12 +1,11 @@
 /**
  * TrustyConvert API Integration Test Script
  * 
- * This script tests the integration with the TrustyConvert backend API
- * following the API integration guide.
- * 
- * Usage: node test-api-integration.js
+ * This script tests the API integration according to the API Integration Guide.
+ * It verifies session initialization, file upload, conversion, status polling, and download.
  */
 
+// Import required modules
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
@@ -15,98 +14,107 @@ const { v4: uuidv4 } = require('uuid');
 
 // Configuration
 const API_BASE_URL = process.env.API_URL || 'https://api.trustyconvert.com/api';
-const TEST_FILE_PATH = path.join(__dirname, 'test-file.txt');
-const TARGET_FORMAT = 'pdf';
+const TEST_FILE_PATH = path.join(__dirname, 'test-files', 'sample.pdf');
+const TARGET_FORMAT = 'docx';
+const POLLING_INTERVAL = 2000; // 2 seconds
+const MAX_POLLING_ATTEMPTS = 30; // 1 minute max
 
-// Create a test file if it doesn't exist
-if (!fs.existsSync(TEST_FILE_PATH)) {
-       fs.writeFileSync(TEST_FILE_PATH, 'This is a test file for TrustyConvert API integration.');
-       console.log(`Created test file: ${TEST_FILE_PATH}`);
+// Store cookies and CSRF token
+let cookies = [];
+let csrfToken = null;
+let sessionId = null;
+let jobId = null;
+let downloadToken = null;
+
+// Helper function to extract cookies from response headers
+function extractCookies(headers) {
+       const cookieHeader = headers.get('set-cookie');
+       if (cookieHeader) {
+              return cookieHeader.split(',').map(cookie => cookie.split(';')[0]);
+       }
+       return [];
 }
 
-// Store cookies between requests
-const cookies = [];
+// Helper function to extract CSRF token from cookies
+function extractCsrfToken(cookieArray) {
+       const csrfCookie = cookieArray.find(cookie => cookie.startsWith('XSRF-TOKEN='));
+       if (csrfCookie) {
+              return csrfCookie.split('=')[1];
+       }
+       return null;
+}
 
-/**
- * Make an API request with cookie handling
- * @param {string} endpoint - API endpoint
- * @param {Object} options - Fetch options
- * @returns {Promise<Object>} - API response
- */
+// Helper function for API requests with cookies
 async function apiRequest(endpoint, options = {}) {
        const url = `${API_BASE_URL}${endpoint}`;
 
-       // Add cookies to request
+       // Add cookies to headers
+       const headers = options.headers || {};
        if (cookies.length > 0) {
-              options.headers = {
-                     ...options.headers,
-                     'Cookie': cookies.join('; ')
-              };
+              headers['Cookie'] = cookies.join('; ');
        }
 
-       console.log(`\n🔄 ${options.method || 'GET'} ${url}`);
+       // Add CSRF token for state-changing requests
+       if (['POST', 'PUT', 'DELETE'].includes(options.method) && csrfToken) {
+              headers['X-CSRF-Token'] = csrfToken;
+       }
 
-       const response = await fetch(url, {
+       const fetchOptions = {
               ...options,
+              headers,
               credentials: 'include'
-       });
+       };
 
-       // Store cookies from response
-       const setCookieHeader = response.headers.raw()['set-cookie'];
-       if (setCookieHeader) {
-              setCookieHeader.forEach(cookie => {
-                     const cookieName = cookie.split('=')[0];
-                     // Replace existing cookie or add new one
-                     const cookieIndex = cookies.findIndex(c => c.startsWith(`${cookieName}=`));
-                     if (cookieIndex >= 0) {
-                            cookies[cookieIndex] = cookie.split(';')[0];
-                     } else {
-                            cookies.push(cookie.split(';')[0]);
-                     }
-              });
+       console.log(`Making ${options.method || 'GET'} request to ${endpoint}`);
+
+       const response = await fetch(url, fetchOptions);
+
+       // Update cookies from response
+       const newCookies = extractCookies(response.headers);
+       if (newCookies.length > 0) {
+              cookies = [...cookies, ...newCookies];
+              const newCsrfToken = extractCsrfToken(newCookies);
+              if (newCsrfToken) {
+                     csrfToken = newCsrfToken;
+                     console.log('Updated CSRF token:', csrfToken);
+              }
        }
 
-       // Parse JSON response
-       let data;
-       try {
-              data = await response.json();
-       } catch (error) {
-              console.error('Error parsing response:', error);
-              return { success: false, error: 'Failed to parse response' };
-       }
-
-       // Log response summary
-       console.log(`✅ Status: ${response.status} ${response.statusText}`);
-       console.log(`📄 Response: ${JSON.stringify(data, null, 2)}`);
-
-       return data;
+       return response;
 }
 
-/**
- * Run the complete API integration test
- */
-async function runTest() {
-       console.log('🚀 Starting TrustyConvert API Integration Test');
-
+// Test steps
+async function runTests() {
        try {
-              // Step 1: Initialize session
-              console.log('\n📌 Step 1: Initialize Session');
-              const sessionResponse = await apiRequest('/session/init', {
-                     method: 'GET'
-              });
+              console.log('Starting API integration tests...');
 
-              if (!sessionResponse.success) {
-                     throw new Error('Session initialization failed');
+              // Step 1: Initialize session
+              console.log('\n=== Step 1: Initialize Session ===');
+              const sessionResponse = await apiRequest('/session/init', { method: 'GET' });
+
+              if (!sessionResponse.ok) {
+                     throw new Error(`Session initialization failed: ${sessionResponse.status} ${sessionResponse.statusText}`);
               }
 
-              const csrfToken = sessionResponse.data.csrf_token;
-              console.log(`🔑 CSRF Token: ${csrfToken}`);
+              const sessionData = await sessionResponse.json();
+              console.log('Session initialized successfully');
+              console.log('Session ID:', sessionData.data.id);
+              console.log('CSRF Token:', csrfToken);
+              sessionId = sessionData.data.id;
 
               // Step 2: Upload file
-              console.log('\n📌 Step 2: Upload File');
-              const jobId = uuidv4();
-              console.log(`📋 Job ID: ${jobId}`);
+              console.log('\n=== Step 2: Upload File ===');
 
+              // Create a unique job ID
+              jobId = uuidv4();
+              console.log('Generated Job ID:', jobId);
+
+              // Check if test file exists
+              if (!fs.existsSync(TEST_FILE_PATH)) {
+                     throw new Error(`Test file not found: ${TEST_FILE_PATH}`);
+              }
+
+              // Create form data with file and job_id
               const formData = new FormData();
               formData.append('file', fs.createReadStream(TEST_FILE_PATH));
               formData.append('job_id', jobId);
@@ -114,22 +122,23 @@ async function runTest() {
               const uploadResponse = await apiRequest('/upload', {
                      method: 'POST',
                      body: formData,
-                     headers: {
-                            'X-CSRF-Token': csrfToken
-                     }
+                     headers: formData.getHeaders()
               });
 
-              if (!uploadResponse.success) {
-                     throw new Error('File upload failed');
+              if (!uploadResponse.ok) {
+                     throw new Error(`File upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
               }
 
+              const uploadData = await uploadResponse.json();
+              console.log('File uploaded successfully');
+              console.log('Upload response:', JSON.stringify(uploadData, null, 2));
+
               // Step 3: Convert file
-              console.log('\n📌 Step 3: Convert File');
+              console.log('\n=== Step 3: Convert File ===');
               const convertResponse = await apiRequest('/convert', {
                      method: 'POST',
                      headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-Token': csrfToken
+                            'Content-Type': 'application/json'
                      },
                      body: JSON.stringify({
                             job_id: jobId,
@@ -137,91 +146,96 @@ async function runTest() {
                      })
               });
 
-              if (!convertResponse.success) {
-                     throw new Error('File conversion failed');
+              if (!convertResponse.ok) {
+                     throw new Error(`Conversion request failed: ${convertResponse.status} ${convertResponse.statusText}`);
               }
 
-              // Step 4: Poll job status
-              console.log('\n📌 Step 4: Poll Job Status');
-              let jobStatus;
+              const convertData = await convertResponse.json();
+              console.log('Conversion started successfully');
+              console.log('Conversion response:', JSON.stringify(convertData, null, 2));
+
+              // Step 4: Poll for job status
+              console.log('\n=== Step 4: Poll for Job Status ===');
+              let statusData = null;
               let attempts = 0;
-              const MAX_ATTEMPTS = 10;
 
-              while (attempts < MAX_ATTEMPTS) {
-                     attempts++;
-                     console.log(`\n🔄 Polling attempt ${attempts}/${MAX_ATTEMPTS}`);
+              while (attempts < MAX_POLLING_ATTEMPTS) {
+                     console.log(`Polling attempt ${attempts + 1}/${MAX_POLLING_ATTEMPTS}...`);
 
-                     const statusResponse = await apiRequest(`/job_status?job_id=${jobId}`, {
-                            method: 'GET'
-                     });
+                     const statusResponse = await apiRequest(`/job_status?job_id=${jobId}`, { method: 'GET' });
 
-                     if (!statusResponse.success) {
-                            throw new Error('Failed to get job status');
+                     if (!statusResponse.ok) {
+                            console.error(`Status check failed: ${statusResponse.status} ${statusResponse.statusText}`);
+                            await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
+                            attempts++;
+                            continue;
                      }
 
-                     jobStatus = statusResponse.data.status;
-                     console.log(`📊 Status: ${jobStatus}`);
+                     statusData = await statusResponse.json();
+                     console.log('Status:', statusData.data.status);
+                     console.log('Progress:', statusData.data.progress || 0);
 
-                     if (jobStatus === 'completed') {
+                     if (['completed', 'failed'].includes(statusData.data.status)) {
                             break;
-                     } else if (jobStatus === 'failed') {
-                            throw new Error(`Conversion failed: ${statusResponse.data.error_message || 'Unknown error'}`);
                      }
 
-                     // Wait before next poll
-                     console.log('⏳ Waiting 2 seconds before next poll...');
-                     await new Promise(resolve => setTimeout(resolve, 2000));
+                     await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
+                     attempts++;
               }
 
-              if (jobStatus !== 'completed') {
-                     throw new Error('Job did not complete within the expected time');
+              if (!statusData || !['completed', 'failed'].includes(statusData.data.status)) {
+                     throw new Error('Job status polling timed out or failed');
               }
+
+              if (statusData.data.status === 'failed') {
+                     throw new Error(`Conversion failed: ${statusData.data.error_message || 'Unknown error'}`);
+              }
+
+              console.log('Conversion completed successfully');
 
               // Step 5: Get download token
-              console.log('\n📌 Step 5: Get Download Token');
+              console.log('\n=== Step 5: Get Download Token ===');
               const tokenResponse = await apiRequest('/download_token', {
                      method: 'POST',
                      headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-Token': csrfToken
+                            'Content-Type': 'application/json'
                      },
-                     body: JSON.stringify({
-                            job_id: jobId
-                     })
+                     body: JSON.stringify({ job_id: jobId })
               });
 
-              if (!tokenResponse.success) {
-                     throw new Error('Failed to get download token');
+              if (!tokenResponse.ok) {
+                     throw new Error(`Download token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
               }
 
-              const downloadToken = tokenResponse.data.download_token;
-              console.log(`🎟️ Download Token: ${downloadToken}`);
+              const tokenData = await tokenResponse.json();
+              downloadToken = tokenData.data.download_token;
+              console.log('Download token received successfully');
+              console.log('Token:', downloadToken);
+              console.log('Expires at:', tokenData.data.expires_at);
 
-              // Step 6: Generate download URL
-              const downloadUrl = `${API_BASE_URL}/download?token=${downloadToken}`;
-              console.log(`\n📌 Step 6: Download URL Generated`);
-              console.log(`🔗 Download URL: ${downloadUrl}`);
+              // Step 6: Download file (simulate only)
+              console.log('\n=== Step 6: Download File ===');
+              console.log(`Download URL: ${API_BASE_URL}/download?token=${downloadToken}`);
+              console.log('Skipping actual download for this test');
 
               // Step 7: Close session
-              console.log('\n📌 Step 7: Close Session');
-              const closeResponse = await apiRequest('/session/close', {
-                     method: 'POST',
-                     headers: {
-                            'X-CSRF-Token': csrfToken
-                     }
-              });
+              console.log('\n=== Step 7: Close Session ===');
+              const closeResponse = await apiRequest('/session/close', { method: 'POST' });
 
-              if (!closeResponse.success) {
-                     throw new Error('Failed to close session');
+              if (!closeResponse.ok) {
+                     throw new Error(`Session close failed: ${closeResponse.status} ${closeResponse.statusText}`);
               }
 
-              console.log('\n✅ API Integration Test Completed Successfully');
+              const closeData = await closeResponse.json();
+              console.log('Session closed successfully');
+
+              console.log('\n✅ All tests passed successfully!');
 
        } catch (error) {
-              console.error(`\n❌ Test Failed: ${error.message}`);
+              console.error('\n❌ Test failed:', error.message);
               process.exit(1);
        }
 }
 
-// Run the test
-runTest(); 
+// Run tests
+runTests(); 

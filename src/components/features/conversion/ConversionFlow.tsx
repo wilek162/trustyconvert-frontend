@@ -67,6 +67,22 @@ export function ConversionFlow({
 	const [error, setError] = useState<string | null>(null)
 	const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
+	// Initialize session when component mounts
+	useEffect(() => {
+		const initSession = async () => {
+			if (!isInitialized && !isInitializing && !sessionError) {
+				try {
+					await apiClient.initSession()
+				} catch (error) {
+					console.error('Failed to initialize session:', error)
+					setError('Failed to initialize session. Please refresh the page.')
+				}
+			}
+		}
+
+		initSession()
+	}, [isInitialized, isInitializing, sessionError])
+
 	// Clean up polling on unmount
 	useEffect(() => {
 		return () => {
@@ -316,6 +332,16 @@ export function ConversionFlow({
 			setStatusPollingInterval(null)
 		}
 	}, [initialTargetFormat, statusPollingInterval])
+
+	// Close session when component unmounts
+	useEffect(() => {
+		return () => {
+			// Only close session if we're done with conversion
+			if (currentStep === 'download' || currentStep === 'select') {
+				apiClient.closeSession().catch(console.error)
+			}
+		}
+	}, [currentStep])
 
 	// Handle session errors
 	useEffect(() => {

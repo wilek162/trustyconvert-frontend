@@ -250,95 +250,100 @@ async function processApiResponse<T>(
  * Base fetch wrapper that handles API responses and CSRF tokens
  *
  * @param endpoint - API endpoint path
- * @param options - Extended fetch options
- * @returns Typed API response
+ * @param options - Request options
+ * @returns Processed API response
  */
 async function apiFetch<T>(
 	endpoint: string,
 	options: ApiRequestOptions = {}
 ): Promise<ApiResponse<T>> {
-	const { skipAuthCheck = false, ...fetchOptions } = options
-
-	// Ensure we have a valid session for non-init requests
-	if (!skipAuthCheck && !endpoint.includes('/session/init') && !getCSRFToken()) {
-		throw new SessionError({
-			message: 'No CSRF token available for request',
-			userMessage: 'Your session has expired. Please refresh the page.',
-			context: { endpoint }
-		})
-	}
-
-	// Construct full URL
+	// Build full URL
 	const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`
 
-	// Set up headers with CSRF token
-	const headers = new Headers(fetchOptions.headers || {})
+	// Include credentials for all requests to handle cookies properly
+	const fetchOptions: ApiRequestOptions = {
+		...options,
+		credentials: 'include' // Always include credentials for cookies
+	}
 
-	// Add CSRF token to header for state-changing requests
-	if (!skipAuthCheck && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(fetchOptions.method || '')) {
+	// Add CSRF token to headers for state-changing requests if not session init
+	if (
+		!endpoint.includes('/session/init') &&
+		['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method || 'GET')
+	) {
 		const csrfToken = getCSRFToken()
-		if (csrfToken) {
+		if (csrfToken && !options.skipAuthCheck) {
+			const headers = new Headers(options.headers || {})
 			headers.set(apiConfig.csrfTokenHeader, csrfToken)
+			fetchOptions.headers = headers
 		}
 	}
 
-	// Always include credentials for cookies
-	const response = await fetchWithRetry(url, {
-		...fetchOptions,
-		headers,
-		credentials: 'include'
-	})
+	// Execute fetch with retry and timeout
+	const response = await fetchWithRetry(url, fetchOptions)
 
+	// Process the response
 	return processApiResponse<T>(response, endpoint)
 }
 
 /**
- * Initialize a new session with the API
- * Sets session and CSRF cookies
+ * Initialize a session with the API
+ * This sets up session cookies and CSRF token
  *
  * @returns Session initialization response
  */
 export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
+	setInitializing(true)
 	try {
 		const response = await apiFetch<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
 			method: 'GET',
-			skipAuthCheck: true
+			skipAuthCheck: true // Skip CSRF check for session init
 		})
 
-		// Store the CSRF token from the response
-		if (response.success && response.data.csrf_token) {
+		// Store CSRF token if returned directly in the response
+		if (response.data && response.data.csrf_token) {
 			setCSRFToken(response.data.csrf_token, response.data.id, response.data.expires_at)
-			setInitializing(false)
 		}
 
 		return response
 	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'initSession' }
+		})
+	} finally {
 		setInitializing(false)
-		throw error
 	}
 }
 
 /**
  * Upload a file to the server
+ * Requires valid session and CSRF token
  *
  * @param file - File to upload
- * @param jobId - UUID4 string for tracking the job
+ * @param jobId - Job ID for tracking
  * @returns Upload response
  */
 export async function uploadFile(file: File, jobId: string): Promise<ApiResponse<UploadResponse>> {
-	// Create form data with file and job ID
-	const formData = new FormData()
-	formData.append('file', file)
-	formData.append('job_id', jobId)
+	try {
+		// Create form data with file and job_id
+		const formData = new FormData()
+		formData.append('file', file)
+		formData.append('job_id', jobId)
 
-	return apiFetch<UploadResponse>(apiConfig.endpoints.upload, {
-		method: 'POST',
-		body: formData
-	})
+		return await apiFetch<UploadResponse>(apiConfig.endpoints.upload, {
+			method: 'POST',
+			body: formData
+		})
+	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'uploadFile', fileName: file.name, fileSize: file.size, jobId }
+		})
+	}
 }
 
 /**
  * Convert an uploaded file
+ * Requires valid session, CSRF token, and previously uploaded file
  *
  * @param jobId - Job ID of the uploaded file
  * @param targetFormat - Target format for conversion
@@ -350,73 +355,104 @@ export async function convertFile(
 	targetFormat: string,
 	sourceFormat?: string
 ): Promise<ApiResponse<ConvertResponse>> {
-	// Create request body
-	const body: Record<string, string> = {
-		job_id: jobId,
-		target_format: targetFormat
-	}
+	try {
+		// Create request body
+		const body: Record<string, any> = {
+			job_id: jobId,
+			target_format: targetFormat
+		}
 
-	// Add source format if provided
-	if (sourceFormat) {
-		body.source_format = sourceFormat
-	}
+		// Add source format if provided
+		if (sourceFormat) {
+			body.source_format = sourceFormat
+		}
 
-	return apiFetch<ConvertResponse>(apiConfig.endpoints.convert, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify(body)
-	})
+		return await apiFetch<ConvertResponse>(apiConfig.endpoints.convert, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(body)
+		})
+	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'convertFile', jobId, targetFormat, sourceFormat }
+		})
+	}
 }
 
 /**
  * Get the status of a conversion job
  *
- * @param jobId - Job ID to check
+ * @param jobId - Job ID to check status for
  * @returns Job status response
  */
 export async function getJobStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>> {
-	return apiFetch<JobStatusResponse>(`${apiConfig.endpoints.jobStatus}?job_id=${jobId}`, {
-		method: 'GET'
-	})
+	try {
+		return await apiFetch<JobStatusResponse>(`${apiConfig.endpoints.jobStatus}?job_id=${jobId}`, {
+			method: 'GET'
+		})
+	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'getJobStatus', jobId }
+		})
+	}
 }
 
 /**
- * Get a download token for a completed job
+ * Get a download token for a completed conversion job
+ * Requires valid session and CSRF token
  *
  * @param jobId - Job ID to get download token for
  * @returns Download token response
  */
 export async function getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>> {
-	return apiFetch<DownloadTokenResponse>(apiConfig.endpoints.downloadToken, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify({ job_id: jobId })
-	})
+	try {
+		return await apiFetch<DownloadTokenResponse>(apiConfig.endpoints.downloadToken, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ job_id: jobId })
+		})
+	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'getDownloadToken', jobId }
+		})
+	}
 }
 
 /**
  * Close the current session
- * Cleans up session, deletes cookies and files
+ * This cleans up session data and files on the server
  *
  * @returns Session close response
  */
 export async function closeSession(): Promise<ApiResponse<SessionCloseResponse>> {
-	return apiFetch<SessionCloseResponse>(apiConfig.endpoints.sessionClose, {
-		method: 'POST'
-	})
+	try {
+		return await apiFetch<SessionCloseResponse>(apiConfig.endpoints.sessionClose, {
+			method: 'POST'
+		})
+	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'closeSession' }
+		})
+	}
 }
 
 /**
  * Get supported conversion formats
  *
- * @returns Formats response
+ * @returns Supported formats response
  */
 export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse>> {
-	return apiFetch<FormatsResponse>(apiConfig.endpoints.formats, {
-		method: 'GET'
-	})
+	try {
+		return await apiFetch<FormatsResponse>(apiConfig.endpoints.formats, {
+			method: 'GET'
+		})
+	} catch (error) {
+		throw handleError(error, {
+			context: { action: 'getSupportedFormats' }
+		})
+	}
 }
