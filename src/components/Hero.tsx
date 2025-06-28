@@ -1,7 +1,15 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { ConversionFlow } from '@/components/features/conversion/ConversionFlow'
 
 export function Hero() {
+	// Use client-side only rendering to prevent hydration mismatches
+	const [isClient, setIsClient] = useState(false)
+
+	// Set client-side rendering flag
+	useEffect(() => {
+		setIsClient(true)
+	}, [])
+
 	return (
 		<section className="relative bg-gradient-to-b from-lightGray/30 to-white py-10">
 			{/* Background elements */}
@@ -27,7 +35,32 @@ export function Hero() {
 				</div>
 
 				<div className="relative mb-14">
-					<ConversionFlow title="Convert Your File" />
+					{/* Only render ConversionFlow on client-side to prevent hydration issues */}
+					{isClient ? (
+						<ConversionFlow title="Convert Your File" />
+					) : (
+						<div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border-0 bg-white shadow-lg">
+							<div className="border-b border-border/50 bg-gradient-to-r from-trustTeal/20 to-transparent pb-4 pt-5">
+								<h2 className="text-center text-xl font-semibold text-deepNavy">
+									Convert Your File
+								</h2>
+							</div>
+							<div className="bg-gradient-to-b from-white to-lightGray/10 p-6">
+								<div className="flex flex-col items-center justify-center py-8">
+									<div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-trustTeal/20 border-t-trustTeal"></div>
+									<p className="text-deepNavy">Loading conversion tool...</p>
+								</div>
+							</div>
+							<div className="flex justify-center border-t border-border/50 bg-gradient-to-b from-lightGray/10 to-lightGray/20 px-8 py-7">
+								<button
+									disabled
+									className="w-full max-w-xs rounded-md bg-trustTeal/50 px-4 py-2 text-white"
+								>
+									Loading...
+								</button>
+							</div>
+						</div>
+					)}
 				</div>
 
 				{/* Feature badges with improved contrast */}

@@ -14,6 +14,10 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'sonner'
 import { LanguageProvider } from './LanguageProvider'
 
+// Import API initialization module
+// This will initialize the API session when the module is imported
+import '@/lib/api/initializeApi'
+
 export interface AppProvidersProps {
 	/**
 	 * Child components to be wrapped with providers

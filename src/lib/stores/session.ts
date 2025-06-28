@@ -1,4 +1,5 @@
 import { atom } from 'nanostores'
+import { handleError } from '@/lib/utils/errorHandling'
 
 interface SessionState {
 	csrfToken: string | null
@@ -6,13 +7,16 @@ interface SessionState {
 	isInitializing: boolean
 	sessionId?: string
 	expiresAt?: string
+	initializationAttempts: number
+	lastInitializationError?: string
 }
 
 // Create the session store with initial state
 export const sessionStore = atom<SessionState>({
 	csrfToken: null,
 	isInitialized: false,
-	isInitializing: false
+	isInitializing: false,
+	initializationAttempts: 0
 })
 
 /**
@@ -79,7 +83,23 @@ export function getInitialized(): boolean {
 export function setInitializing(status: boolean): void {
 	sessionStore.set({
 		...sessionStore.get(),
-		isInitializing: status
+		isInitializing: status,
+		// If turning off initialization, don't reset attempts
+		// If turning on initialization, increment attempts
+		initializationAttempts: status
+			? sessionStore.get().initializationAttempts + 1
+			: sessionStore.get().initializationAttempts
+	})
+}
+
+/**
+ * Record an initialization error
+ * @param error Error message
+ */
+export function setInitializationError(error: string): void {
+	sessionStore.set({
+		...sessionStore.get(),
+		lastInitializationError: error
 	})
 }
 
@@ -92,6 +112,43 @@ export function clearSession(): void {
 		isInitialized: false,
 		isInitializing: false,
 		sessionId: undefined,
-		expiresAt: undefined
+		expiresAt: undefined,
+		initializationAttempts: 0,
+		lastInitializationError: undefined
 	})
+}
+
+/**
+ * Check if a CSRF token exists in the cookies
+ * @returns Whether a CSRF token exists in cookies
+ */
+export function hasCsrfToken(): boolean {
+	if (typeof document === 'undefined') return false
+
+	// Check for token in cookies
+	const cookies = document.cookie.split(';')
+	return cookies.some((cookie) => cookie.trim().startsWith('csrftoken='))
+}
+
+/**
+ * Sync CSRF token from cookie to store
+ * This is used when the server sets a CSRF token cookie
+ * @returns Whether a token was found and synced
+ */
+export function syncCsrfTokenFromCookie(): boolean {
+	if (typeof document === 'undefined') return false
+
+	// Get token from cookies
+	const cookies = document.cookie.split(';')
+	const csrfCookie = cookies.find((cookie) => cookie.trim().startsWith('csrftoken='))
+
+	if (csrfCookie) {
+		const token = csrfCookie.trim().substring('csrftoken='.length)
+		if (token) {
+			setCSRFToken(token)
+			return true
+		}
+	}
+
+	return false
 }

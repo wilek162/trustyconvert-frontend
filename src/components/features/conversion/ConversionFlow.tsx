@@ -17,8 +17,11 @@ import {
 	updateJobProgress,
 	setJobDownloadToken
 } from '@/lib/stores/upload'
-import type { JobStatus } from '@/lib/types/api'
+import type { JobStatus as ApiJobStatus } from '@/lib/types/api'
 import { getFileExtension, formatFileSize } from '@/lib/utils/files'
+
+// Ensure we're not accessing browser APIs during SSR
+const isBrowser = typeof window !== 'undefined'
 
 // Polling interval for job status
 const STATUS_POLLING_INTERVAL = 2000 // 2 seconds
@@ -37,13 +40,44 @@ interface ConversionFlowProps {
 	title?: string
 }
 
+// Map API job status to upload store job status
+function mapApiStatusToUploadStatus(
+	apiStatus: ApiJobStatus
+): 'idle' | 'uploading' | 'uploaded' | 'processing' | 'completed' | 'failed' {
+	switch (apiStatus) {
+		case 'pending':
+			return 'uploading'
+		case 'queued':
+			return 'uploaded'
+		case 'processing':
+			return 'processing'
+		case 'completed':
+			return 'completed'
+		case 'failed':
+			return 'failed'
+		case 'uploaded':
+			return 'uploaded'
+		default:
+			return 'idle'
+	}
+}
+
 // Main conversion workflow component
 export function ConversionFlow({
 	initialSourceFormat,
 	initialTargetFormat,
 	title = 'Convert Your File'
 }: ConversionFlowProps) {
+	// Use client-side only rendering to prevent hydration mismatches
+	const [isClient, setIsClient] = useState(false)
+
+	// Use effect to set client-side rendering flag
+	useEffect(() => {
+		setIsClient(true)
+	}, [])
+
 	// Use session initializer hook to ensure we have a valid session
+	// This hook now uses the centralized session manager
 	const {
 		isInitialized,
 		isInitializing,
@@ -67,21 +101,36 @@ export function ConversionFlow({
 	const [error, setError] = useState<string | null>(null)
 	const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
-	// Initialize session when component mounts
+	// Handle session errors
 	useEffect(() => {
-		const initSession = async () => {
-			if (!isInitialized && !isInitializing && !sessionError) {
-				try {
-					await apiClient.initSession()
-				} catch (error) {
-					console.error('Failed to initialize session:', error)
-					setError('Failed to initialize session. Please refresh the page.')
-				}
-			}
+		if (sessionError) {
+			setError(sessionError)
 		}
+	}, [sessionError])
 
-		initSession()
-	}, [isInitialized, isInitializing, sessionError])
+	// Handle restart after error
+	const handleRestart = useCallback(() => {
+		setError(null)
+		resetSession()
+
+		// Reset all state
+		setSelectedFile(null)
+		setTargetFormat(initialTargetFormat || '')
+		setAvailableFormats([])
+		setIsUploading(false)
+		setIsConverting(false)
+		setUploadProgress(0)
+		setConversionProgress(0)
+		setCurrentStep('select')
+		setJobId('')
+		setDownloadUrl('')
+
+		// Clear any polling interval
+		if (statusPollingInterval) {
+			clearInterval(statusPollingInterval)
+			setStatusPollingInterval(null)
+		}
+	}, [resetSession, initialTargetFormat, statusPollingInterval])
 
 	// Clean up polling on unmount
 	useEffect(() => {
@@ -170,8 +219,8 @@ export function ConversionFlow({
 				const { status, progress = 0 } = statusResponse
 				setConversionProgress(progress)
 
-				// Update job status in store
-				await updateJobStatus(jobId, status as JobStatus)
+				// Update job status in store - map API status to upload store status
+				await updateJobStatus(jobId, mapApiStatusToUploadStatus(status as ApiJobStatus))
 				await updateJobProgress(jobId, progress)
 
 				if (status === 'completed') {
@@ -283,26 +332,13 @@ export function ConversionFlow({
 			const interval = setInterval(() => pollJobStatus(newJobId), STATUS_POLLING_INTERVAL)
 			setStatusPollingInterval(interval)
 		} catch (error) {
-			console.error('Conversion error:', error)
 			setIsUploading(false)
 			setIsConverting(false)
-			setError(error instanceof Error ? error.message : 'Unknown error occurred')
-			toast.error('Error during conversion. Please try again.')
-
-			// Clean up any intervals
-			if (statusPollingInterval) {
-				clearInterval(statusPollingInterval)
-				setStatusPollingInterval(null)
-			}
+			setError('Conversion failed. Please try again.')
+			console.error('Conversion error:', error)
+			toast.error('Conversion failed. Please try again.')
 		}
-	}, [
-		selectedFile,
-		targetFormat,
-		isInitialized,
-		resetSession,
-		pollJobStatus,
-		statusPollingInterval
-	])
+	}, [selectedFile, targetFormat, isInitialized, resetSession, pollJobStatus])
 
 	// Handle download click
 	const handleDownload = useCallback(() => {
@@ -310,28 +346,6 @@ export function ConversionFlow({
 			window.location.href = downloadUrl
 		}
 	}, [downloadUrl])
-
-	// Handle restart conversion
-	const handleRestart = useCallback(() => {
-		// Reset state for new conversion
-		setSelectedFile(null)
-		setTargetFormat(initialTargetFormat || '')
-		setAvailableFormats([])
-		setIsUploading(false)
-		setIsConverting(false)
-		setUploadProgress(0)
-		setConversionProgress(0)
-		setCurrentStep('select')
-		setJobId('')
-		setDownloadUrl('')
-		setError(null)
-
-		// Clear any polling interval
-		if (statusPollingInterval) {
-			clearInterval(statusPollingInterval)
-			setStatusPollingInterval(null)
-		}
-	}, [initialTargetFormat, statusPollingInterval])
 
 	// Close session when component unmounts
 	useEffect(() => {
@@ -343,12 +357,27 @@ export function ConversionFlow({
 		}
 	}, [currentStep])
 
-	// Handle session errors
-	useEffect(() => {
-		if (sessionError) {
-			setError(`Session error: ${sessionError}`)
-		}
-	}, [sessionError])
+	// If not client-side yet, render a minimal loading state to prevent hydration mismatch
+	if (!isClient) {
+		return (
+			<Card className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border-0 bg-white shadow-lg">
+				<CardHeader className="border-b border-border/50 bg-gradient-to-r from-trustTeal/20 to-transparent pb-4 pt-5">
+					<CardTitle className="text-center text-xl font-semibold text-deepNavy">{title}</CardTitle>
+				</CardHeader>
+				<CardContent className="bg-gradient-to-b from-white to-lightGray/10 p-6">
+					<div className="flex flex-col items-center justify-center py-8">
+						<div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-trustTeal/20 border-t-trustTeal"></div>
+						<p className="text-deepNavy">Loading...</p>
+					</div>
+				</CardContent>
+				<CardFooter className="flex justify-center border-t border-border/50 bg-gradient-to-b from-lightGray/10 to-lightGray/20 px-8 py-7">
+					<Button disabled className="w-full max-w-xs">
+						Loading...
+					</Button>
+				</CardFooter>
+			</Card>
+		)
+	}
 
 	return (
 		<Card className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border-0 bg-white shadow-lg">

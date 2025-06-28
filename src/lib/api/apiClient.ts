@@ -5,7 +5,7 @@
  * session management, and consistent request/response patterns.
  */
 
-import { getCSRFToken, setCSRFToken, setInitializing } from '@/lib/stores/session'
+import { getCSRFToken, setCSRFToken } from '@/lib/stores/session'
 import type {
 	ApiResponse,
 	SessionInitResponse,
@@ -18,18 +18,19 @@ import type {
 } from '@/lib/types/api'
 import { NetworkError, SessionError, ValidationError, handleError } from '@/lib/utils/errorHandling'
 import { apiConfig } from './config'
+import { withRetry, RETRY_STRATEGIES, isRetryableError } from '@/lib/utils/retry'
 
 // Configuration
 const API_BASE_URL = apiConfig.baseUrl
 const DEFAULT_TIMEOUT = apiConfig.timeout
-const MAX_RETRIES = apiConfig.retryAttempts
+
+// We no longer need the module-level flag as we're using the session store
 
 /**
  * API request options with timeout and retry settings
  */
 interface ApiRequestOptions extends RequestInit {
 	timeout?: number
-	retries?: number
 	skipAuthCheck?: boolean
 }
 
@@ -48,7 +49,7 @@ interface ApiErrorData {
 }
 
 /**
- * Execute a fetch request with timeout and retry logic
+ * Execute a fetch request with timeout
  *
  * @param url - Request URL
  * @param options - Extended fetch options
@@ -102,53 +103,6 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 	} finally {
 		clearTimeout(timeoutId)
 	}
-}
-
-/**
- * Execute a fetch request with retries
- *
- * @param url - Request URL
- * @param options - Extended fetch options
- * @returns Fetch response
- */
-async function fetchWithRetry(url: string, options: ApiRequestOptions = {}): Promise<Response> {
-	const { retries = MAX_RETRIES, ...fetchOptions } = options
-
-	let lastError: Error | null = null
-
-	for (let attempt = 0; attempt <= retries; attempt++) {
-		try {
-			// Add retry attempt to headers for logging
-			const headers = new Headers(fetchOptions.headers)
-			if (attempt > 0) {
-				headers.set('X-Retry-Attempt', attempt.toString())
-			}
-
-			return await fetchWithTimeout(url, {
-				...fetchOptions,
-				headers
-			})
-		} catch (error) {
-			lastError = error instanceof Error ? error : new Error(String(error))
-
-			// Don't retry client aborts or certain response codes
-			if (lastError.name === 'AbortError') {
-				throw lastError
-			}
-
-			// Last attempt failed
-			if (attempt === retries) {
-				throw lastError
-			}
-
-			// Wait before retry with exponential backoff (300ms, 900ms, 2700ms)
-			const delay = Math.min(300 * Math.pow(3, attempt), 10000)
-			await new Promise((resolve) => setTimeout(resolve, delay))
-		}
-	}
-
-	// This should not happen due to the loop above
-	throw lastError || new Error('Retry failed for unknown reason')
 }
 
 /**
@@ -279,12 +233,42 @@ async function apiFetch<T>(
 		}
 	}
 
-	// Execute fetch with retry and timeout
-	const response = await fetchWithRetry(url, fetchOptions)
+	// Execute fetch with retry using our centralized retry utility
+	const makeRequest = async () => {
+		const response = await fetchWithTimeout(url, fetchOptions)
+		return processApiResponse<T>(response, endpoint)
+	}
 
-	// Process the response
-	return processApiResponse<T>(response, endpoint)
+	// Use the retry utility with API request strategy
+	return withRetry(makeRequest, {
+		...RETRY_STRATEGIES.API_REQUEST,
+		isRetryable: (error) => {
+			// Don't retry session errors or validation errors
+			if (error instanceof SessionError || error instanceof ValidationError) {
+				return false
+			}
+
+			// For session initialization, use fewer retries
+			if (endpoint.includes('/session/init')) {
+				// Only retry network errors for session init
+				return (
+					error instanceof NetworkError &&
+					!error.message.includes('timeout') &&
+					!error.message.includes('certificate')
+				)
+			}
+
+			return isRetryableError(error)
+		},
+		onRetry: (error, attempt) => {
+			console.warn(`Retrying API request to ${endpoint} (attempt ${attempt}):`, error.message)
+		}
+	})
 }
+
+// Module-level variables to track initialization attempts
+let isInitializingSession = false
+let lastInitResponse: ApiResponse<SessionInitResponse> | null = null
 
 /**
  * Initialize a session with the API
@@ -293,7 +277,40 @@ async function apiFetch<T>(
  * @returns Session initialization response
  */
 export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
-	setInitializing(true)
+	// If we're already initializing, return a promise that resolves with the last response
+	// or rejects after a timeout
+	if (isInitializingSession) {
+		console.log('Session initialization already in progress, waiting for completion')
+		return new Promise((resolve, reject) => {
+			// Wait for up to 5 seconds for the initialization to complete
+			const timeout = setTimeout(() => {
+				if (lastInitResponse) {
+					resolve(lastInitResponse)
+				} else {
+					// This should rarely happen - only if the first initialization is taking too long
+					console.warn('Session initialization timeout, returning empty response')
+					resolve({
+						success: true,
+						data: { id: '', csrf_token: '', expires_at: '' },
+						correlation_id: ''
+					})
+				}
+			}, 5000)
+
+			// Check every 100ms if initialization has completed
+			const interval = setInterval(() => {
+				if (!isInitializingSession && lastInitResponse) {
+					clearTimeout(timeout)
+					clearInterval(interval)
+					resolve(lastInitResponse)
+				}
+			}, 100)
+		})
+	}
+
+	// Set initializing flag
+	isInitializingSession = true
+
 	try {
 		const response = await apiFetch<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
 			method: 'GET',
@@ -305,13 +322,16 @@ export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
 			setCSRFToken(response.data.csrf_token, response.data.id, response.data.expires_at)
 		}
 
+		// Store the response for future duplicate calls
+		lastInitResponse = response
 		return response
 	} catch (error) {
 		throw handleError(error, {
 			context: { action: 'initSession' }
 		})
 	} finally {
-		setInitializing(false)
+		// Reset initializing flag
+		isInitializingSession = false
 	}
 }
 
@@ -455,4 +475,14 @@ export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse
 			context: { action: 'getSupportedFormats' }
 		})
 	}
+}
+
+/**
+ * Get a download URL from a download token
+ *
+ * @param token - Download token
+ * @returns Download URL
+ */
+export function getDownloadUrl(token: string): string {
+	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodeURIComponent(token)}`
 }

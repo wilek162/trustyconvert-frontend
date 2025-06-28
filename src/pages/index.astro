@@ -13,6 +13,8 @@ import { DEFAULT_LANGUAGE } from '@/lib/i18n/config'
 import { t } from '@/lib/i18n/translations'
 import { LANGUAGES } from '@/lib/i18n/config'
 
+// Remove prerender=false flag as it's incompatible with static site generation
+
 // Get the default language
 const lang = DEFAULT_LANGUAGE.code
 
@@ -51,7 +53,8 @@ const alternateLanguages = LANGUAGES.map((lang) => ({
 >
 	<div class="bg-gradient-to-b from-white to-lightGray/20">
 		<div id="convert" class="scroll-mt-24">
-			<Hero client:load />
+			<!-- Use client:only for Hero component to avoid hydration issues -->
+			<Hero client:only="react" />
 		</div>
 
 		<HowItWorks />

@@ -4,6 +4,7 @@ import { apiClient } from '@/lib/api/client'
 import { useToast } from '@/lib/hooks/useToast'
 import { useSessionInitializer } from '@/lib/hooks/useSessionInitializer'
 import type { JobStatus } from '@/lib/types'
+import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
 
 export interface ConversionResult {
 	success: boolean
@@ -29,26 +30,6 @@ export function useConversion() {
 		resetSession
 	} = useSessionInitializer()
 
-	// Initialize session when hook is first used
-	useEffect(() => {
-		const initSession = async () => {
-			if (!isInitialized && !isInitializing && !sessionError) {
-				try {
-					await apiClient.initSession()
-				} catch (error) {
-					console.error('Failed to initialize session:', error)
-					addToast({
-						title: 'Session Error',
-						description: 'Failed to initialize session. Please refresh the page.',
-						variant: 'destructive'
-					})
-				}
-			}
-		}
-
-		initSession()
-	}, [isInitialized, isInitializing, sessionError, addToast])
-
 	/**
 	 * Upload a file and start conversion
 	 * @param file File to convert
@@ -60,15 +41,15 @@ export function useConversion() {
 			try {
 				// Ensure we have a valid session
 				if (!isInitialized) {
-					// Try to initialize session if not already done
-					if (!isInitializing) {
-						try {
-							await apiClient.initSession()
-						} catch (error) {
+					// If session is initializing, wait for it
+					if (isInitializing) {
+						throw new Error('Session is initializing. Please try again in a moment.')
+					} else {
+						// If session failed to initialize, try to reset it
+						await resetSession()
+						if (!isInitialized) {
 							throw new Error('Failed to initialize session. Please refresh the page.')
 						}
-					} else {
-						throw new Error('Session is initializing. Please try again in a moment.')
 					}
 				}
 
@@ -143,7 +124,7 @@ export function useConversion() {
 				setIsPolling(false)
 			}
 		},
-		[isInitialized, isInitializing, addToast]
+		[isInitialized, isInitializing, resetSession, addToast]
 	)
 
 	/**
@@ -152,11 +133,9 @@ export function useConversion() {
 	 * @returns Final job status
 	 */
 	const pollJobStatus = useCallback(async (jobId: string) => {
-		const maxAttempts = 60 // 5 minutes at 5-second intervals
-		const pollInterval = 5000 // 5 seconds
-
-		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			try {
+		// Use the centralized retry utility with polling strategy
+		return withRetry(
+			async () => {
 				const statusResponse = await apiClient.getConversionStatus(jobId)
 
 				if (!statusResponse) {
@@ -167,16 +146,18 @@ export function useConversion() {
 					return statusResponse
 				}
 
-				// Wait before polling again
-				await new Promise((resolve) => setTimeout(resolve, pollInterval))
-			} catch (error) {
-				console.error('Error polling job status:', error)
-				// Continue polling despite errors
-				await new Promise((resolve) => setTimeout(resolve, pollInterval))
+				// If not complete or failed, throw an error to trigger retry
+				throw new Error('Job not complete yet')
+			},
+			{
+				...RETRY_STRATEGIES.POLLING,
+				onRetry: (error, attempt) => {
+					console.log(
+						`Polling job status (attempt ${attempt}/${RETRY_STRATEGIES.POLLING.maxRetries}): ${error.message}`
+					)
+				}
 			}
-		}
-
-		throw new Error('Polling timed out')
+		)
 	}, [])
 
 	/**

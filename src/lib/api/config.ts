@@ -3,6 +3,8 @@
  * Uses environment variables for flexibility.
  */
 
+import { RETRY_STRATEGIES } from '@/lib/utils/retry'
+
 // Determine if we're in a secure context
 const isSecureContext = typeof window !== 'undefined' && window.isSecureContext
 
@@ -71,13 +73,28 @@ export const apiEndpoints = {
 	formats: '/convert/formats'
 }
 
+// Get API URL from environment variables
+const API_URL = getApiUrl()
+
+// Default timeout in milliseconds
+const DEFAULT_TIMEOUT = parseInt(import.meta.env.API_TIMEOUT || '30000', 10)
+
+// Default retry settings - use the API_REQUEST strategy
+const DEFAULT_RETRY_ATTEMPTS = RETRY_STRATEGIES.API_REQUEST.maxRetries
+
+// CSRF token header name
+const CSRF_TOKEN_HEADER = 'X-CSRF-Token'
+
+/**
+ * API configuration object
+ */
 export const apiConfig = {
-	baseUrl: getApiUrl(),
+	baseUrl: API_URL,
 	apiDomain: getApiDomain(),
 	frontendDomain: getFrontendDomain(),
-	timeout: Number(import.meta.env.API_TIMEOUT || 30000), // ms
-	retryAttempts: Number(import.meta.env.API_RETRY_ATTEMPTS || 3),
-	csrfTokenHeader: 'X-CSRF-Token',
+	timeout: DEFAULT_TIMEOUT,
+	retryAttempts: DEFAULT_RETRY_ATTEMPTS,
+	csrfTokenHeader: CSRF_TOKEN_HEADER,
 	endpoints: apiEndpoints,
 	cors: {
 		credentials: true,
@@ -88,3 +105,15 @@ export const apiConfig = {
 		maxAge: 86400 // 24 hours
 	}
 }
+
+/**
+ * Get a download URL from a download token
+ *
+ * @param token - Download token
+ * @returns Download URL
+ */
+export function getDownloadUrl(token: string): string {
+	return `${API_URL}${apiEndpoints.download}?token=${encodeURIComponent(token)}`
+}
+
+export default apiConfig

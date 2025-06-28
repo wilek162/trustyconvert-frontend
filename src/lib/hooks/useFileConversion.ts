@@ -3,15 +3,13 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 
 import { apiClient, APIRequestError } from '@/lib/api/client'
 import type { TaskStatus } from '@/lib/api/types'
-import { withRetry } from '@/lib/retry'
+import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
 import { useToast } from '@/lib/hooks/useToast'
 import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
 import { useConversionStatus } from '@/lib/hooks/useConversionStatus'
 import { debugLog, debugError } from '@/lib/utils/debug'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
-const MAX_RETRIES = 3
-const RETRY_DELAY = 1000
 
 // Debug logging
 const debug = {
@@ -81,18 +79,26 @@ export function useFileConversion() {
 				file: file.name,
 				format: targetFormat
 			})
-			try {
-				const response = await apiClient.startConversion(file, targetFormat)
-				debugLog('[conversion.mutationFn] Conversion response', response)
-				if (!response?.task_id) {
-					throw new Error('No task ID returned from server')
+			
+			// Use the centralized retry utility with API request strategy
+			return withRetry(async () => {
+				try {
+					const response = await apiClient.startConversion(file, targetFormat)
+					debugLog('[conversion.mutationFn] Conversion response', response)
+					if (!response?.task_id) {
+						throw new Error('No task ID returned from server')
+					}
+					return response
+				} catch (err) {
+					debugError('[conversion.mutationFn] Error during conversion', err)
+					throw err
 				}
-				return response
-			} catch (err) {
-				debugError('[conversion.mutationFn] Error during conversion', err)
-				setIsPosting(false)
-				throw err
-			}
+			}, {
+				...RETRY_STRATEGIES.API_REQUEST,
+				onRetry: (error, attempt) => {
+					debugLog(`[conversion.mutationFn] Retrying conversion (attempt ${attempt})`, { error: error.message })
+				}
+			})
 		},
 		onSuccess: (data) => {
 			debugLog('[conversion.onSuccess] called', data)
@@ -116,10 +122,7 @@ export function useFileConversion() {
 				description: error.message,
 				variant: 'destructive'
 			})
-		},
-		// Configure React Query's retry behavior
-		retry: 2, // Only retry twice
-		retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000) // Exponential backoff with max 30s
+		}
 	})
 
 	const startConversion = useCallback(() => {
@@ -186,8 +189,7 @@ type ConversionStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'fai
  * Handles file selection, format selection, and conversion status
  */
 export function useConversionFlow() {
-	const { conversion, useConversionStatus, formats, isLoadingFormats, formatsError } =
-		useFileConversion()
+	const fileConversion = useFileConversion()
 	const [file, setFile] = useState<File | null>(null)
 	const [format, setFormat] = useState<string>('')
 	const queryClient = useQueryClient()
@@ -200,26 +202,25 @@ export function useConversionFlow() {
 		}
 	}, [])
 
-	const taskId = conversion.data?.task_id ?? null
-	const statusQuery = useConversionStatus(taskId)
-	const status = statusQuery.data?.status || 'idle'
-	const progress = statusQuery.data?.progress || 0
-	const downloadUrl = statusQuery.data?.download_url
+	const taskId = fileConversion.conversion.data?.task_id ?? null
+	const { status, progress, downloadUrl } = useConversionStatus({
+		taskId
+	})
 
 	// Memoize the formats data to prevent unnecessary re-renders
 	const formatsData = useMemo(() => {
 		debug.log('Memoizing formats data', {
-			hasData: !!formats,
-			dataLength: formats?.length
+			hasData: !!fileConversion.formats,
+			dataLength: fileConversion.formats?.length
 		})
-		return formats || []
-	}, [formats])
+		return fileConversion.formats || []
+	}, [fileConversion.formats])
 
 	const startConversion = useCallback(() => {
 		if (!file || !format) return
 		debug.log('Starting conversion flow', { file: file.name, format })
-		conversion.mutate({ file, targetFormat: format })
-	}, [file, format, conversion])
+		fileConversion.conversion.mutate({ file, targetFormat: format })
+	}, [file, format, fileConversion.conversion])
 
 	const reset = useCallback(() => {
 		debug.log('Resetting conversion flow')
@@ -249,12 +250,14 @@ export function useConversionFlow() {
 		status: status as ConversionStatus,
 		progress,
 		downloadUrl,
-		// Error state
-		error: conversion.error || statusQuery.error || formatsError,
+		// Loading states
+		isLoading: fileConversion.isPosting || fileConversion.isStatusLoading,
+		isError: !!fileConversion.error,
+		error: fileConversion.error,
 		// Reset function
 		reset,
 		// Format data
 		formats: formatsData,
-		isLoadingFormats
+		isLoadingFormats: fileConversion.isLoadingFormats
 	}
 }

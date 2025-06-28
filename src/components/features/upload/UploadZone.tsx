@@ -25,23 +25,32 @@ export function UploadZone({
 	className = '',
 	title = 'Upload Your File'
 }: UploadZoneProps) {
+	// Track if we're rendering on the client to prevent hydration issues
+	const [isClient, setIsClient] = useState(false)
 	const [file, setFile] = useState<File | null>(null)
 	const [validationResult, setValidationResult] = useState<FileValidationResult | null>(null)
 	const [filteredFormats, setFilteredFormats] = useState<Record<string, string[]>>(
 		propAcceptedFormats || FILE_UPLOAD.MIME_TYPES
 	)
 
+	// Set client-side rendering flag
+	useEffect(() => {
+		setIsClient(true)
+	}, [])
+
 	// Filter accepted formats based on initialSourceFormat
 	useEffect(() => {
 		if (initialSourceFormat) {
 			// Find the format info from constants
-			const formatKey = Object.keys(FILE_UPLOAD.MIME_TYPES).find((key) =>
-				FILE_UPLOAD.MIME_TYPES[key].some((type) => type.includes(initialSourceFormat.toLowerCase()))
-			)
+			const formatKey = Object.keys(FILE_UPLOAD.MIME_TYPES).find((key) => {
+				// Safely access the MIME_TYPES with the key as a known property
+				const mimeTypes = FILE_UPLOAD.MIME_TYPES[key as keyof typeof FILE_UPLOAD.MIME_TYPES]
+				return mimeTypes.some((type: string) => type.includes(initialSourceFormat.toLowerCase()))
+			})
 
 			if (formatKey) {
 				const filteredTypes = {
-					[formatKey]: FILE_UPLOAD.MIME_TYPES[formatKey]
+					[formatKey]: FILE_UPLOAD.MIME_TYPES[formatKey as keyof typeof FILE_UPLOAD.MIME_TYPES]
 				}
 				setFilteredFormats(filteredTypes)
 			} else {
@@ -93,14 +102,23 @@ export function UploadZone({
 		[maxFileSize, filteredFormats, onFileRejected, onFileAccepted]
 	)
 
-	// Configure dropzone
-	const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
-		onDrop,
-		accept: filteredFormats,
-		maxFiles: 1,
-		maxSize: maxFileSize,
-		multiple: false
-	})
+	// Configure dropzone - only on client side
+	const dropzoneProps = isClient
+		? useDropzone({
+				onDrop,
+				accept: filteredFormats,
+				maxFiles: 1,
+				maxSize: maxFileSize,
+				multiple: false
+			})
+		: {
+				getRootProps: () => ({}),
+				getInputProps: () => ({}),
+				isDragActive: false,
+				isDragReject: false
+			}
+
+	const { getRootProps, getInputProps, isDragActive, isDragReject } = dropzoneProps
 
 	// Get format-specific message
 	const getFormatMessage = () => {
@@ -108,6 +126,44 @@ export function UploadZone({
 			return `Upload a ${initialSourceFormat.toUpperCase()} file`
 		}
 		return 'Drag & drop a file here, or click to select'
+	}
+
+	// If not client-side yet, render a simplified version to prevent hydration mismatch
+	if (!isClient) {
+		return (
+			<div className={className}>
+				<div className="cursor-pointer rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
+					<div className="flex flex-col items-center justify-center space-y-4">
+						<div className="rounded-full bg-trustTeal/10 p-3">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="text-trustTeal"
+							>
+								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+								<polyline points="17 8 12 3 7 8" />
+								<line x1="12" y1="3" x2="12" y2="15" />
+							</svg>
+						</div>
+
+						<div className="space-y-2">
+							<h3 className="text-lg font-medium text-deepNavy">{title}</h3>
+							<p className="text-sm text-deepNavy/70">Loading file uploader...</p>
+							<p className="text-xs text-deepNavy/60">
+								Max file size: {(maxFileSize / 1024 / 1024).toFixed(0)} MB
+							</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		)
 	}
 
 	return (
