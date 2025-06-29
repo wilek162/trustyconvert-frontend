@@ -7,8 +7,13 @@
 
 import { initializeMonitoring } from '@/lib/monitoring/init'
 import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
-// Offline detection is temporarily disabled
+import { apiClient } from '@/lib/api/client'
+import { debugLog } from '@/lib/utils/debug' // Offline detection is temporarily disabled
+import { hasCsrfToken } from '@/lib/stores/session'
 // import { initOfflineDetection } from '@/lib/utils/offlineDetection'
+
+// Flag to track initialization status
+let isInitializing = false
 
 /**
  * Initialize the application
@@ -34,6 +39,19 @@ export async function initializeApp(): Promise<void> {
  */
 export async function initializeBrowser(): Promise<void> {
 	if (typeof window === 'undefined') return
+
+	// Initialize session if needed and not already initializing
+	if (!hasCsrfToken() && !isInitializing) {
+		try {
+			isInitializing = true
+			debugLog('Initializing session during browser startup')
+			await apiClient.initSession()
+			isInitializing = false
+		} catch (error) {
+			debugLog('Failed to initialize session during startup:', error)
+			isInitializing = false
+		}
+	}
 
 	try {
 		// Initialize global error handlers
@@ -67,19 +85,6 @@ export async function initializeBrowser(): Promise<void> {
 			}
 
 			return originalFetch(resource, defaultOptions)
-		}
-
-		// Initialize session
-		const { initSession } = await import('@/lib/api/apiClient')
-
-		// Only initialize session if not already initializing
-		const { getInitializing } = await import('@/lib/stores/session')
-		if (!getInitializing()) {
-			try {
-				await initSession()
-			} catch (error) {
-				console.error('Failed to initialize session:', error)
-			}
 		}
 
 		// Register service worker if available

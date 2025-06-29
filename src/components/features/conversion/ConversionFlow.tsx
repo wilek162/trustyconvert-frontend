@@ -275,7 +275,11 @@ export function ConversionFlow({
 
 		if (!isInitialized) {
 			toast.error('Session not initialized. Please try again.')
-			resetSession()
+			try {
+				await resetSession()
+			} catch (error) {
+				console.error('Failed to reset session:', error)
+			}
 			return
 		}
 

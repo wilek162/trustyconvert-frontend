@@ -187,8 +187,8 @@ export function FileUploadZone({
 
 			// Configure request
 			// Use centralized API config for the upload URL
-            const uploadUrl = `${apiConfig.baseUrl}${apiConfig.endpoints.upload}`
-            xhr.open('POST', uploadUrl, true)
+			const uploadUrl = `${apiConfig.baseUrl}${apiConfig.endpoints.upload}`
+			xhr.open('POST', uploadUrl, true)
 			xhr.setRequestHeader(apiConfig.csrfTokenHeader, csrfToken)
 			xhr.withCredentials = true
 			xhr.send(formData)

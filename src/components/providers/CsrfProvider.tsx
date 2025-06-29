@@ -1,22 +1,49 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { getCsrfTokenFromCookie } from '@/lib/utils/csrfUtils'
+import { debugLog } from '@/lib/utils/debug'
 
 interface CsrfContextType {
 	csrfToken: string | null
-	setCsrfToken: (token: string) => void
 }
 
 const CsrfContext = createContext<CsrfContextType | undefined>(undefined)
 
+/**
+ * CsrfProvider component
+ *
+ * Provides access to the CSRF token from cookies to React components
+ */
 export const CsrfProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const [csrfToken, setCsrfTokenState] = useState<string | null>(null)
+	const [csrfToken, setCsrfToken] = useState<string | null>(null)
 
-	const setCsrfToken = useCallback((token: string) => {
-		setCsrfTokenState(token)
-	}, [])
+	// Update CSRF token from cookie when component mounts and on interval
+	useEffect(() => {
+		// Function to get token from cookie
+		const updateTokenFromCookie = () => {
+			const token = getCsrfTokenFromCookie()
+			if (token !== csrfToken) {
+				setCsrfToken(token)
+				debugLog('CSRF token updated from cookie')
+			}
+		}
 
-	return <CsrfContext.Provider value={{ csrfToken, setCsrfToken }}>{children}</CsrfContext.Provider>
+		// Update immediately
+		updateTokenFromCookie()
+
+		// Set up interval to check for token changes
+		const intervalId = setInterval(updateTokenFromCookie, 60000) // Check every minute
+
+		return () => {
+			clearInterval(intervalId)
+		}
+	}, [csrfToken])
+
+	return <CsrfContext.Provider value={{ csrfToken }}>{children}</CsrfContext.Provider>
 }
 
+/**
+ * Hook to access the CSRF token
+ */
 export function useCsrf() {
 	const context = useContext(CsrfContext)
 	if (!context) {

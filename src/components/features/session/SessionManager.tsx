@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { closeSession } from '@/lib/api/apiClient'
-import { getInitializing, getCSRFToken, clearSession } from '@/lib/stores/session'
+import { getCSRFToken } from '@/lib/stores/session'
 import { getAllJobs } from '@/lib/stores/upload'
 import type { FileUploadData } from '@/lib/stores/upload'
 import { CloseSession } from '@/components/features/session'
@@ -11,6 +11,11 @@ interface SessionManagerProps {
 	showExportOption?: boolean
 }
 
+/**
+ * SessionManager component
+ *
+ * Displays session information and allows the user to close their session
+ */
 function SessionManager({
 	onSessionClosed,
 	onSessionError,
@@ -72,100 +77,56 @@ function SessionManager({
 		}
 	}
 
-	// Handle session cleanup
+	// Handle session close
 	const handleCloseSession = async () => {
-		// Confirm with user
-		if (
-			!window.confirm(
-				'Are you sure you want to close this session? All conversion data will be cleared.'
-			)
-		) {
-			return
-		}
+		setIsClosing(true)
+		setError(null)
 
 		try {
-			setIsClosing(true)
-			setError(null)
-
-			// Call API to close session
-			const response = await closeSession()
-
-			if (response.success) {
-				// Clear local session data
-				clearSession()
-
-				// Notify parent
-				if (onSessionClosed) {
-					onSessionClosed()
-				}
-
-				// Reload page to start fresh
-				window.location.reload()
-			} else {
-				throw new Error('Failed to close session')
+			await closeSession()
+			if (onSessionClosed) {
+				onSessionClosed()
 			}
-		} catch (error) {
-			console.error('Session close error:', error)
-			setError('Failed to close session. Please try again.')
-
+			// Reload page to get a fresh session
+			window.location.reload()
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Failed to close session'
+			setError(errorMessage)
 			if (onSessionError) {
-				onSessionError('Failed to close session')
+				onSessionError(errorMessage)
 			}
 		} finally {
 			setIsClosing(false)
 		}
 	}
 
-	// Export job history as JSON
-	const handleExportHistory = () => {
+	// Handle job export
+	const handleExportJobs = () => {
 		try {
 			const jobs = getAllJobs()
-
-			// Create export data
-			const exportData = {
-				exported_at: new Date().toISOString(),
-				job_count: jobs.length,
-				jobs: jobs.map((job) => ({
-					id: job.jobId,
-					filename: job.originalFilename,
-					target_format: job.targetFormat,
-					status: job.status,
-					size: job.fileSize,
-					created_at: job.createdAt,
-					completed_at: job.completedAt || null
-				}))
+			if (jobs.length === 0) {
+				setError('No jobs to export')
+				return
 			}
 
-			// Convert to JSON string
-			const jsonString = JSON.stringify(exportData, null, 2)
-
-			// Create blob and download link
-			const blob = new Blob([jsonString], { type: 'application/json' })
+			// Create a JSON blob and download it
+			const jobsJson = JSON.stringify(jobs, null, 2)
+			const blob = new Blob([jobsJson], { type: 'application/json' })
 			const url = URL.createObjectURL(blob)
 			const a = document.createElement('a')
 			a.href = url
-			a.download = `trustyconvert-history-${new Date().toISOString().slice(0, 10)}.json`
+			a.download = `trustyconvert-jobs-${new Date().toISOString().split('T')[0]}.json`
+			document.body.appendChild(a)
 			a.click()
-
-			// Clean up
+			document.body.removeChild(a)
 			URL.revokeObjectURL(url)
-		} catch (error) {
-			console.error('Export error:', error)
-			setError('Failed to export conversion history')
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Failed to export jobs'
+			setError(errorMessage)
 		}
 	}
 
-	// If initializing, show loading
-	if (getInitializing()) {
-		return (
-			<div className="flex items-center rounded-lg bg-trustTeal/10 p-3 text-deepNavy">
-				<div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-trustTeal border-t-transparent"></div>
-				<span className="text-sm">Initializing session...</span>
-			</div>
-		)
-	}
-
-	// If no session token, show warning
+	// If no CSRF token, show warning
 	if (!getCSRFToken()) {
 		return (
 			<div className="rounded-lg bg-yellow-50 p-3 text-deepNavy">
@@ -201,42 +162,33 @@ function SessionManager({
 				<div className="mb-3 rounded-md bg-warningRed/10 p-2 text-xs text-warningRed">{error}</div>
 			)}
 
-			<div className="flex flex-wrap gap-2">
-				<CloseSession variant="default" />
+			<div className="flex flex-col gap-2">
+				<button
+					onClick={handleCloseSession}
+					disabled={isClosing}
+					className="flex w-full items-center justify-center rounded-md bg-deepNavy px-4 py-2 text-sm font-medium text-white hover:bg-deepNavy/90 disabled:opacity-50"
+				>
+					{isClosing ? (
+						<>
+							<span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+							Closing Session...
+						</>
+					) : (
+						'Close Session'
+					)}
+				</button>
 
-				{showExportOption && jobCount > 0 && (
+				{showExportOption && (
 					<button
-						onClick={handleExportHistory}
-						className="flex items-center rounded-full border border-deepNavy/30 bg-white px-3 py-1.5 text-xs font-medium text-deepNavy transition-colors hover:bg-deepNavy/10"
+						onClick={handleExportJobs}
+						className="flex w-full items-center justify-center rounded-md border border-deepNavy/20 bg-white px-4 py-2 text-sm font-medium text-deepNavy hover:bg-deepNavy/5"
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							className="mr-1.5 h-3.5 w-3.5"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-							/>
-						</svg>
-						Export History
+						Export Conversion History
 					</button>
 				)}
-			</div>
-
-			<div className="mt-4 text-xs text-muted-foreground">
-				<p>
-					Your session will automatically end after 24 hours. All uploaded files are processed
-					securely and will be deleted when your session ends.
-				</p>
 			</div>
 		</div>
 	)
 }
 
 export default SessionManager
-export { SessionManager }

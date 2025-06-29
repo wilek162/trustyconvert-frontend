@@ -14,7 +14,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'sonner'
 import { LanguageProvider } from './LanguageProvider'
 import { SessionProvider } from './SessionProvider'
-import { initializeApi } from '@/lib/api/initializeApi'
 import { debugLog } from '@/lib/utils/debug'
 
 export interface AppProvidersProps {
@@ -41,16 +40,9 @@ export function AppProviders({ children, enableDevtools = false }: AppProvidersP
 			})
 	)
 
-	// Initialize API when the component mounts
+	// Log when the component mounts
 	React.useEffect(() => {
-		debugLog('AppProviders mounted, initializing API')
-
-		// Initialize the API but don't wait for it to complete
-		// The SessionProvider will handle initialization status and errors
-		initializeApi().catch((error) => {
-			console.error('Failed to initialize API:', error)
-			// We don't rethrow the error here as SessionProvider will handle it
-		})
+		debugLog('AppProviders mounted')
 	}, [])
 
 	return (

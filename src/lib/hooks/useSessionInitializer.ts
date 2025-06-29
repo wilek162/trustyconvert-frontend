@@ -1,148 +1,109 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useStore } from '@nanostores/react'
-import { sessionStore, isSessionValid } from '@/lib/stores/session'
-import { sessionManager } from '@/lib/api/sessionManager'
-import { useToast } from '@/lib/hooks/useToast'
-import { debugLog, debugError } from '@/lib/utils/debug'
+import { hasCsrfToken } from '@/lib/stores/session'
+import { debugLog } from '@/lib/utils/debug'
+import { apiClient } from '@/lib/api/client'
 
 /**
  * A hook that provides access to session state and initialization
- * This is a thin wrapper around the sessionManager that provides React integration
+ * This is a simplified version that checks for the presence of a CSRF token
+ * and provides methods to initialize or reset the session.
  *
- * @returns {Object} Session state including initialization status, errors, and reset function
+ * @returns {Object} Session state including CSRF token status and methods
  */
 export function useSessionInitializer() {
-	const session = useStore(sessionStore)
+	const [hasToken, setHasToken] = useState<boolean>(hasCsrfToken())
+	const [isInitializing, setIsInitializing] = useState<boolean>(false)
 	const [error, setError] = useState<string | null>(null)
-	const { addToast } = useToast()
-	const validationTimerRef = useRef<number | null>(null)
 
-	/**
-	 * Reset the session and attempt to initialize again
-	 */
-	const resetSession = useCallback(async () => {
-		setError(null)
-		debugLog('Resetting session via useSessionInitializer')
+	// Use a ref to track initialization attempts to avoid redundant API calls
+	const initializationAttemptRef = useRef<number>(0)
+	const lastCheckTimeRef = useRef<number>(Date.now())
 
-		try {
-			await sessionManager.reset()
-			debugLog('Session reset successful')
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-			debugError('Session reset failed', error)
-			setError(errorMessage)
-			addToast({
-				title: 'Session Error',
-				description: 'Failed to initialize session. Please refresh the page.',
-				variant: 'destructive'
-			})
-		}
-	}, [addToast])
-
-	/**
-	 * Check if the session is valid and initialize if needed
-	 */
-	const checkAndInitializeSession = useCallback(async () => {
-		// Check if session is valid
-		if (isSessionValid()) {
-			debugLog('Session is valid, no initialization needed')
+	// Check for CSRF token with throttling to avoid excessive checks
+	const checkToken = useCallback(() => {
+		// Only check if it's been at least 5 seconds since the last check
+		const now = Date.now()
+		if (now - lastCheckTimeRef.current < 5000) {
 			return
 		}
 
-		// Session is invalid or not initialized, try to initialize
-		debugLog('Session is invalid or not initialized, initializing')
-		const sessionState = sessionManager.getState()
+		lastCheckTimeRef.current = now
+		const tokenExists = hasCsrfToken()
 
-		// Only initialize if not already initializing
-		if (!sessionState.isInitializing) {
-			try {
-				await sessionManager.initialize()
-				debugLog('Session initialization successful')
-				setError(null)
-			} catch (err) {
-				debugError('Session initialization failed', err)
-				const errorMessage = err instanceof Error ? err.message : String(err)
-				setError(errorMessage)
-			}
+		// Only update state if the token status has changed
+		if (tokenExists !== hasToken) {
+			setHasToken(tokenExists)
+			debugLog(`CSRF token check: ${tokenExists ? 'found' : 'not found'}`)
 		}
-	}, [])
+	}, [hasToken])
 
-	// Initialize the session when the component mounts, but only if not already initialized
+	// Check for CSRF token on mount
 	useEffect(() => {
-		// Use a local variable to track if the component is still mounted
-		let isMounted = true
+		// Check immediately
+		checkToken()
 
-		const sessionState = sessionManager.getState()
-		if (!sessionState.isInitialized && !sessionState.isInitializing) {
-			debugLog('Session not initialized, initializing')
+		// Set up interval to periodically check, but less frequently
+		const intervalId = setInterval(checkToken, 60000) // Check every minute
 
-			sessionManager
-				.initialize()
-				.then(() => {
-					// Only update state if the component is still mounted
-					if (isMounted && sessionState.error) {
-						setError(sessionState.error)
-					}
-				})
-				.catch((error) => {
-					// Only update state if the component is still mounted
-					if (isMounted) {
-						debugError('Session initialization failed in useEffect', error)
-						const errorMessage = error instanceof Error ? error.message : String(error)
-						setError(errorMessage)
-					}
-				})
-		} else if (!isSessionValid() && !sessionState.isInitializing) {
-			// Session is initialized but not valid (e.g., expired), reset it
-			debugLog('Session initialized but invalid, resetting')
-			resetSession()
-		}
-
-		// Set up a timer to periodically validate the session
-		validationTimerRef.current = window.setInterval(() => {
-			if (isMounted && !sessionState.isInitializing) {
-				// Check session validity every minute
-				const isValid = isSessionValid()
-				debugLog('Periodic session validation check', { isValid })
-
-				if (!isValid) {
-					debugLog('Session invalid during periodic check, refreshing')
-					sessionManager.checkRefresh().catch((err) => {
-						debugError('Error refreshing session during periodic check', err)
-					})
-				}
-			}
-		}, 60 * 1000) // Check every minute
-
-		// Cleanup function to prevent state updates after unmount
 		return () => {
-			isMounted = false
-			if (validationTimerRef.current !== null) {
-				window.clearInterval(validationTimerRef.current)
-				validationTimerRef.current = null
+			clearInterval(intervalId)
+		}
+	}, [checkToken])
+
+	// Initialize session
+	const initSession = useCallback(async () => {
+		// Avoid multiple simultaneous initialization attempts
+		if (isInitializing) return false
+
+		// Limit initialization attempts to avoid API hammering
+		if (initializationAttemptRef.current >= 3) {
+			debugLog('Maximum session initialization attempts reached')
+			return false
+		}
+
+		try {
+			setIsInitializing(true)
+			setError(null)
+
+			initializationAttemptRef.current += 1
+			await apiClient.initSession()
+
+			// Check if token was set after initialization
+			const tokenExists = hasCsrfToken()
+			setHasToken(tokenExists)
+
+			if (!tokenExists) {
+				setError('Failed to initialize session: CSRF token not found')
+				return false
 			}
-		}
-	}, [resetSession])
 
-	// Update local error state when store error changes
-	useEffect(() => {
-		if (session.lastInitializationError && !error) {
-			setError(session.lastInitializationError)
+			// Reset attempt counter on success
+			initializationAttemptRef.current = 0
+			return true
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+			debugLog('Failed to initialize session:', error)
+			setError(`Failed to initialize session: ${errorMessage}`)
+			return false
+		} finally {
+			setIsInitializing(false)
 		}
-	}, [session.lastInitializationError, error])
+	}, [isInitializing])
 
-	const sessionState = sessionManager.getState()
+	// Reset session (initialize a new one)
+	const resetSession = useCallback(async () => {
+		// Reset attempt counter when explicitly requesting a reset
+		initializationAttemptRef.current = 0
+		return initSession()
+	}, [initSession])
 
 	return {
-		isInitialized: sessionState.isInitialized,
-		isInitializing: sessionState.isInitializing,
-		error: error || sessionState.error,
-		resetSession,
-		checkSession: checkAndInitializeSession,
-		attempts: sessionState.attempts,
-		isValid: sessionState.isValid,
-		sessionId: sessionState.sessionId,
-		expiresAt: sessionState.expiresAt
+		isInitialized: hasToken,
+		isInitializing,
+		error,
+		hasCsrfToken: hasToken,
+		initSession,
+		resetSession
 	}
 }
 

@@ -1,25 +1,21 @@
-import { useStore as useNanoStore } from '@nanostores/react'
-import { sessionStore, setCSRFToken, clearSession } from '@/lib/stores/session'
+import { getCSRFToken, hasCsrfToken } from '@/lib/stores/session'
 import { apiClient } from '@/lib/api/client'
+import { debugLog } from '@/lib/utils/debug'
 
 /**
- * Hook for accessing and managing the session store in both Astro and React components
+ * Hook for accessing session information in both Astro and React components
  * This provides a convenient interface for session-related operations
  */
 export function useSessionStore() {
-	// Get the current session state
-	const session = useNanoStore(sessionStore)
-
 	/**
 	 * Initialize the session
 	 */
 	const initSession = async () => {
 		try {
-			const response = await apiClient.initSession()
-			setCSRFToken(response.csrf_token)
+			await apiClient.initSession()
 			return true
 		} catch (error) {
-			console.error('Failed to initialize session:', error)
+			debugLog('Failed to initialize session:', error)
 			return false
 		}
 	}
@@ -30,20 +26,18 @@ export function useSessionStore() {
 	const closeSession = async () => {
 		try {
 			await apiClient.closeSession()
-			clearSession()
 			return true
 		} catch (error) {
-			console.error('Failed to close session:', error)
+			debugLog('Failed to close session:', error)
 			return false
 		}
 	}
 
 	return {
-		session,
+		csrfToken: getCSRFToken(),
+		hasSession: hasCsrfToken(),
 		initSession,
-		closeSession,
-		csrfToken: session.csrfToken,
-		isInitialized: session.isInitialized
+		closeSession
 	}
 }
 

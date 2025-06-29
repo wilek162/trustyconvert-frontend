@@ -16,11 +16,14 @@ import {
 	getSupportedFormats
 } from '@/lib/api/apiClient'
 import type { ConversionFormat, JobStatus } from '@/lib/types'
+import type { ApiResponse, UploadResponse, ConvertResponse, ApiErrorInfo } from '@/lib/types/api'
 import type { DownloadProgress } from '@/lib/types/conversion'
 import { v4 as uuidv4 } from 'uuid'
 import { apiConfig } from './config'
 import type { DownloadOptions } from './types'
-import { handleError, NetworkError } from '@/lib/utils/errorHandling'
+import { handleError, NetworkError, SessionError } from '@/lib/utils/errorHandling'
+import { setCsrfTokenCookie, getCsrfTokenFromCookie } from '@/lib/utils/csrfUtils'
+import { debugLog, debugError } from '@/lib/utils/debug'
 
 /**
  * Custom error class for API request errors
@@ -68,32 +71,47 @@ export const ConversionStatusResponseSchema = z.object({
 export type ConversionStatusResponse = z.infer<typeof ConversionStatusResponseSchema>
 
 /**
- * Standardize API response to ensure consistent field access patterns
- * This normalizes field names that might differ between API versions
+ * Standardize response data format
+ * This normalizes various API response formats into a consistent structure
  */
-function standardizeResponse<T extends Record<string, any>>(response: T): T {
-	// Create a copy to avoid mutating the original
-	const result = { ...response } as Record<string, any>
+function standardizeResponse(data: any) {
+	if (!data) return {}
 
-	// Standardize common field aliases
-	if ('task_id' in response && !('job_id' in response)) {
-		result.job_id = response.task_id
-	}
+	// Handle various response formats
+	const normalized: Record<string, any> = {}
 
-	if ('original_filename' in response && !('filename' in response)) {
-		result.filename = response.original_filename
-	}
+	// Copy all properties
+	Object.keys(data).forEach((key) => {
+		// Convert snake_case to camelCase
+		const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
+		normalized[camelKey] = data[key]
+	})
 
-	if ('output_size' in response && !('file_size' in response)) {
-		result.file_size = response.output_size
-	}
+	return normalized
+}
 
-	// Construct download URL if we have a token but no URL
-	if ('download_token' in response && !('download_url' in response)) {
-		result.download_url = `${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${response.download_token}`
-	}
+/**
+ * Check if the response indicates a CSRF error
+ * @param response API response object
+ * @returns True if the response indicates a CSRF error
+ */
+function isCsrfError(response: ApiResponse<any>): boolean {
+	return (
+		response &&
+		!response.success &&
+		(response.data?.error === 'CSRFValidationError' ||
+			(response.data?.message &&
+				typeof response.data.message === 'string' &&
+				response.data.message.includes('CSRF')))
+	)
+}
 
-	return result as T
+// Add type for error responses
+interface ApiErrorResponse {
+	success: false
+	error?: string
+	message?: string
+	correlation_id?: string
 }
 
 /**
@@ -107,6 +125,19 @@ export const apiClient = {
 	initSession: async () => {
 		try {
 			const response = await initSession()
+
+			// Extract CSRF token from response body and set it in a cookie
+			if (response.success && response.data?.csrf_token) {
+				debugLog('Received CSRF token from session init')
+				setCsrfTokenCookie(response.data.csrf_token)
+
+				// Add a small delay to ensure cookie is properly set
+				// This helps avoid race conditions with subsequent requests
+				await new Promise((resolve) => setTimeout(resolve, 50))
+			} else {
+				debugLog('No CSRF token in session init response', response)
+			}
+
 			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
@@ -123,8 +154,26 @@ export const apiClient = {
 	 */
 	uploadFile: async (file: File, jobId?: string) => {
 		try {
+			// Check for CSRF token before making the request
+			const csrfToken = getCsrfTokenFromCookie()
+			if (!csrfToken) {
+				debugError('No CSRF token available for upload request - initializing session')
+				await apiClient.initSession()
+			}
+
 			const fileJobId = jobId || uuidv4()
 			const response = await uploadFile(file, fileJobId)
+
+			// Check for CSRF error
+			if (isCsrfError(response)) {
+				debugError('CSRF error during upload - retrying with new session')
+				// Initialize a new session and retry once
+				await apiClient.initSession()
+				// Retry the upload with the new CSRF token
+				const retryResponse = await uploadFile(file, fileJobId)
+				return standardizeResponse(retryResponse.data)
+			}
+
 			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
@@ -142,7 +191,25 @@ export const apiClient = {
 	 */
 	convertFile: async (jobId: string, targetFormat: string, sourceFormat?: string) => {
 		try {
+			// Check for CSRF token before making the request
+			const csrfToken = getCsrfTokenFromCookie()
+			if (!csrfToken) {
+				debugError('No CSRF token available for convert request - initializing session')
+				await apiClient.initSession()
+			}
+
 			const response = await convertFile(jobId, targetFormat, sourceFormat)
+
+			// Check for CSRF error
+			if (isCsrfError(response)) {
+				debugError('CSRF error during convert - retrying with new session')
+				// Initialize a new session and retry once
+				await apiClient.initSession()
+				// Retry the conversion with the new CSRF token
+				const retryResponse = await convertFile(jobId, targetFormat, sourceFormat)
+				return standardizeResponse(retryResponse.data)
+			}
+
 			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
@@ -160,22 +227,69 @@ export const apiClient = {
 	 */
 	startConversion: async (file: File, targetFormat: string, sourceFormat?: string) => {
 		try {
+			// Check for CSRF token before making the request
+			const csrfToken = getCsrfTokenFromCookie()
+			if (!csrfToken) {
+				debugError('No CSRF token available for startConversion - initializing session')
+				await apiClient.initSession()
+			}
+
 			// Generate a job ID
 			const jobId = uuidv4()
 
 			// Step 1: Upload the file
 			const uploadResp = await uploadFile(file, jobId)
 
+			// Check for CSRF error in upload
+			if (isCsrfError(uploadResp)) {
+				debugError('CSRF error during upload in startConversion - retrying with new session')
+				// Initialize a new session and retry
+				await apiClient.initSession()
+				// Retry the upload with the new CSRF token
+				const retryUploadResp = await uploadFile(file, jobId)
+				if (!retryUploadResp.success) {
+					throw new APIRequestError(
+						retryUploadResp.data?.message || 'Upload failed after retry',
+						403,
+						retryUploadResp.data?.error || 'upload_failed'
+					)
+				}
+			}
+
 			// Prefer the job_id returned by the backend (some backends may ignore client-supplied UUIDs)
-			const serverJobId = (uploadResp as any).job_id ?? jobId
+			const serverJobId = (uploadResp.data as any).job_id ?? jobId
 
 			// Step 2: Start conversion (always reference the serverJobId)
 			const convertResp = await convertFile(serverJobId, targetFormat, sourceFormat)
 
+			// Check for CSRF error in convert
+			if (isCsrfError(convertResp)) {
+				debugError('CSRF error during convert in startConversion - retrying with new session')
+				// Initialize a new session and retry
+				await apiClient.initSession()
+				// Retry the conversion with the new CSRF token
+				const retryConvertResp = await convertFile(serverJobId, targetFormat, sourceFormat)
+				if (!retryConvertResp.success) {
+					throw new APIRequestError(
+						retryConvertResp.data?.message || 'Conversion failed after retry',
+						403,
+						retryConvertResp.data?.error || 'conversion_failed'
+					)
+				}
+
+				const normalized = standardizeResponse({
+					job_id: (retryConvertResp.data as any).job_id ?? serverJobId,
+					task_id: (retryConvertResp.data as any).task_id ?? serverJobId,
+					status: (retryConvertResp.data as any).status
+				})
+
+				return normalized
+			}
+
 			const normalized = standardizeResponse({
-				job_id: (convertResp as any).job_id ?? serverJobId,
-				task_id: (convertResp as any).task_id ?? serverJobId,
-				status: (convertResp as any).status
+				job_id: (convertResp.data as any).job_id ?? serverJobId,
+				task_id: (convertResp.data as any).task_id ?? serverJobId,
+				status: (convertResp.data as any).status
 			})
 
 			return normalized
@@ -197,10 +311,10 @@ export const apiClient = {
 	 * @param jobId Job ID to check
 	 * @returns Job status
 	 */
-	getConversionStatus: async (jobId: string): Promise<ConversionStatusResponse> => {
+	getConversionStatus: async (jobId: string) => {
 		try {
 			const response = await getJobStatus(jobId)
-			return standardizeResponse(response.data) as ConversionStatusResponse
+			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
 				context: { action: 'getConversionStatus', jobId }
@@ -215,7 +329,25 @@ export const apiClient = {
 	 */
 	getDownloadToken: async (jobId: string) => {
 		try {
+			// Check for CSRF token before making the request
+			const csrfToken = getCsrfTokenFromCookie()
+			if (!csrfToken) {
+				debugError('No CSRF token available for getDownloadToken - initializing session')
+				await apiClient.initSession()
+			}
+
 			const response = await getDownloadToken(jobId)
+
+			// Check for CSRF error
+			if (isCsrfError(response)) {
+				debugError('CSRF error during getDownloadToken - retrying with new session')
+				// Initialize a new session and retry once
+				await apiClient.initSession()
+				// Retry with the new CSRF token
+				const retryResponse = await getDownloadToken(jobId)
+				return standardizeResponse(retryResponse.data)
+			}
+
 			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
@@ -239,8 +371,15 @@ export const apiClient = {
 	 */
 	closeSession: async () => {
 		try {
+			// Check for CSRF token before making the request
+			const csrfToken = getCsrfTokenFromCookie()
+			if (!csrfToken) {
+				debugError('No CSRF token available for closeSession - session may already be closed')
+				return { message: 'Session already closed' }
+			}
+
 			const response = await closeSession()
-			return response.data
+			return standardizeResponse(response.data)
 		} catch (error) {
 			throw handleError(error, {
 				context: { action: 'closeSession' }
@@ -268,3 +407,5 @@ export const apiClient = {
 		}
 	}
 }
+
+export default apiClient

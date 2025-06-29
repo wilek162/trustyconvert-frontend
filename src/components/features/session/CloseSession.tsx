@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { closeSession } from '@/lib/api/apiClient'
-import { clearSession } from '@/lib/stores/session'
 import { toast } from 'sonner'
 
 interface CloseSessionProps {
@@ -28,8 +27,6 @@ function CloseSession({ variant = 'default', className = '' }: CloseSessionProps
 			const response = await closeSession()
 
 			if (response.success) {
-				// Clear local session data
-				clearSession()
 				toast.success('Session closed successfully')
 
 				// Reload page to start fresh after a short delay
@@ -106,4 +103,3 @@ function CloseSession({ variant = 'default', className = '' }: CloseSessionProps
 }
 
 export default CloseSession
-export { CloseSession }
