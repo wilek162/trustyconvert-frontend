@@ -57,3 +57,48 @@ export const onRequest = defineMiddleware(async (context, next) => {
 	// Continue to the next middleware or route handler
 	return next()
 })
+
+// Add a client-side script for language detection in static mode
+export function getLanguageDetectionScript() {
+	return `
+		<script>
+			// Only run in browsers and in static mode
+			if (typeof window !== 'undefined') {
+				// Check if we're on the root page
+				const pathname = window.location.pathname;
+				if (pathname === '/' || pathname === '') {
+					// Get preferred language from cookie or browser
+					const getCookie = (name) => {
+						const value = "; " + document.cookie;
+						const parts = value.split("; " + name + "=");
+						if (parts.length === 2) return parts.pop().split(';').shift();
+						return null;
+					};
+					
+					// Check for stored language preference
+					const storedLang = getCookie('preferred_language');
+					if (storedLang) {
+						// Redirect to stored language
+						window.location.href = '/' + storedLang;
+					} else {
+						// Detect browser language
+						const browserLang = navigator.language.split('-')[0];
+						const supportedLanguages = ${JSON.stringify(
+							Object.values(DEFAULT_LANGUAGE.supportedLanguages || []).map((l) => l.code)
+						)};
+						
+						// If browser language is supported and not the default, redirect
+						if (browserLang !== '${DEFAULT_LANGUAGE.code}' && supportedLanguages.includes(browserLang)) {
+							// Set cookie for future visits
+							document.cookie = 'preferred_language=' + browserLang + 
+								';path=/;max-age=' + (60 * 60 * 24 * 365);
+							
+							// Redirect to language-specific URL
+							window.location.href = '/' + browserLang;
+						}
+					}
+				}
+			}
+		</script>
+	`
+}

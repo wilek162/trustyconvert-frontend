@@ -2,21 +2,20 @@
  * Application Providers Component
  *
  * Wraps the application with all necessary providers for error handling,
- * toast notifications, and other global functionality.
+ * toast notifications, session management, and other global functionality.
  */
 
 import * as React from 'react'
 import type { ReactNode } from 'react'
 import { ErrorBoundary } from '@/components/common'
-import { ToastProvider, QueryProvider, ToastListener } from '@/components/providers'
+import { ToastProvider, ToastListener } from '@/components/providers'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'sonner'
 import { LanguageProvider } from './LanguageProvider'
-
-// Import API initialization module
-// This will initialize the API session when the module is imported
-import '@/lib/api/initializeApi'
+import { SessionProvider } from './SessionProvider'
+import { initializeApi } from '@/lib/api/initializeApi'
+import { debugLog } from '@/lib/utils/debug'
 
 export interface AppProvidersProps {
 	/**
@@ -42,16 +41,30 @@ export function AppProviders({ children, enableDevtools = false }: AppProvidersP
 			})
 	)
 
+	// Initialize API when the component mounts
+	React.useEffect(() => {
+		debugLog('AppProviders mounted, initializing API')
+
+		// Initialize the API but don't wait for it to complete
+		// The SessionProvider will handle initialization status and errors
+		initializeApi().catch((error) => {
+			console.error('Failed to initialize API:', error)
+			// We don't rethrow the error here as SessionProvider will handle it
+		})
+	}, [])
+
 	return (
 		<ErrorBoundary>
 			<QueryClientProvider client={queryClient}>
 				<LanguageProvider>
 					<ToastProvider>
-						<ToastListener />
-						{children}
+						<SessionProvider>
+							<ToastListener />
+							{children}
+						</SessionProvider>
 					</ToastProvider>
 				</LanguageProvider>
-				{import.meta.env.DEV && <ReactQueryDevtools />}
+				{import.meta.env.DEV && enableDevtools && <ReactQueryDevtools />}
 			</QueryClientProvider>
 		</ErrorBoundary>
 	)

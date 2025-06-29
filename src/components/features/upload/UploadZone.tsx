@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { toast } from 'sonner'
 
@@ -102,23 +102,21 @@ export function UploadZone({
 		[maxFileSize, filteredFormats, onFileRejected, onFileAccepted]
 	)
 
-	// Configure dropzone - only on client side
-	const dropzoneProps = isClient
-		? useDropzone({
-				onDrop,
-				accept: filteredFormats,
-				maxFiles: 1,
-				maxSize: maxFileSize,
-				multiple: false
-			})
-		: {
-				getRootProps: () => ({}),
-				getInputProps: () => ({}),
-				isDragActive: false,
-				isDragReject: false
-			}
+	// Always initialize the dropzone hook, but only use its functionality on the client side
+	// This ensures hooks are always called in the same order
+	const dropzoneConfig = useMemo(() => {
+		return {
+			onDrop: isClient ? onDrop : () => {},
+			accept: filteredFormats,
+			maxFiles: 1,
+			maxSize: maxFileSize,
+			multiple: false,
+			disabled: !isClient
+		}
+	}, [isClient, onDrop, filteredFormats, maxFileSize])
 
-	const { getRootProps, getInputProps, isDragActive, isDragReject } = dropzoneProps
+	// Always call useDropzone, but with conditional config
+	const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone(dropzoneConfig)
 
 	// Get format-specific message
 	const getFormatMessage = () => {

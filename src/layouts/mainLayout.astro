@@ -14,6 +14,7 @@ import { getAlternateLanguages } from '@/lib/i18n/middleware'
 import LanguageSelector from '@/components/common/LanguageSelector.astro'
 import NavLink from '@/components/common/NavLink.astro'
 import { t } from '@/lib/i18n/translations'
+import { getLanguageDetectionScript } from '@/middleware'
 // import { OfflineBanner } from '@/components/ui/offlineBanner'
 
 // Define a type for structured data to avoid using 'any'
@@ -44,6 +45,9 @@ interface Props {
 // Compute the app version for cache busting
 const appVersion = import.meta.env.PUBLIC_APP_VERSION || '0.0.1'
 
+// Check if we're in static mode
+const isStaticMode = import.meta.env.OUTPUT === 'static'
+
 // Initialize the application
 initializeApp()
 
@@ -63,6 +67,9 @@ const {
 
 // Initialize browser features
 initializeBrowser()
+
+// Get the language detection script for static mode
+const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 ---
 
 <!doctype html>
@@ -136,6 +143,9 @@ initializeBrowser()
 
 		<!-- Preload critical assets -->
 		<link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+		
+		<!-- Client-side language detection for static mode -->
+		{isStaticMode && <Fragment set:html={languageDetectionScript} />}
 	</head>
 	<body class="min-h-screen bg-background font-sans antialiased">
 		<!-- Offline status banner -->

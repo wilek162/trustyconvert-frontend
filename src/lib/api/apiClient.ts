@@ -6,6 +6,12 @@
  */
 
 import { getCSRFToken, setCSRFToken } from '@/lib/stores/session'
+import {
+	getCsrfHeaders,
+	validateCsrfToken,
+	handleCsrfError,
+	getCsrfTokenFromHeaders
+} from '@/lib/utils/csrfUtils'
 import type {
 	ApiResponse,
 	SessionInitResponse,
@@ -19,12 +25,12 @@ import type {
 import { NetworkError, SessionError, ValidationError, handleError } from '@/lib/utils/errorHandling'
 import { apiConfig } from './config'
 import { withRetry, RETRY_STRATEGIES, isRetryableError } from '@/lib/utils/retry'
+import { debugLog, debugError } from '@/lib/utils/debug'
+import { sessionManager } from './sessionManager'
 
 // Configuration
 const API_BASE_URL = apiConfig.baseUrl
 const DEFAULT_TIMEOUT = apiConfig.timeout
-
-// We no longer need the module-level flag as we're using the session store
 
 /**
  * API request options with timeout and retry settings
@@ -32,6 +38,7 @@ const DEFAULT_TIMEOUT = apiConfig.timeout
 interface ApiRequestOptions extends RequestInit {
 	timeout?: number
 	skipAuthCheck?: boolean
+	skipCsrfCheck?: boolean
 }
 
 /**
@@ -72,14 +79,32 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 			signal: controller.signal
 		}
 
-		// In development, we need to ignore SSL certificate errors for self-signed certs
+		// In development, we need to handle CORS and SSL issues
 		if (isDev && typeof window !== 'undefined') {
-			// For browser environments, we rely on the NODE_TLS_REJECT_UNAUTHORIZED env var
-			// The browser will show a warning but allow the connection if user accepts
-			console.warn('Development mode: Using self-signed certificate')
+			// For browser environments in development mode
+			debugLog('Development mode: Using self-signed certificate and handling CORS')
+
+			// Add mode: 'cors' to explicitly enable CORS
+			fetchOpts.mode = 'cors'
+
+			// Always include credentials for CORS requests
+			fetchOpts.credentials = 'include'
+
+			// Ensure headers are properly set
+			const headers = new Headers(fetchOpts.headers || {})
+			headers.set('Origin', window.location.origin)
+			fetchOpts.headers = headers
 		}
 
 		const response = await fetch(url, fetchOpts)
+
+		// Check for CSRF token in response headers
+		const csrfToken = getCsrfTokenFromHeaders(response.headers)
+		if (csrfToken) {
+			debugLog('Found CSRF token in response headers, updating store')
+			setCSRFToken(csrfToken)
+		}
+
 		return response
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
@@ -91,10 +116,26 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 
 		// Handle certificate errors more gracefully
 		if (error instanceof Error && error.message.includes('certificate')) {
-			console.error('Certificate error:', error)
+			debugError('Certificate error:', error)
 			throw new NetworkError({
 				message: 'SSL Certificate validation failed',
 				userMessage: 'Connection security error. Please check your SSL configuration.',
+				originalError: error
+			})
+		}
+
+		// Handle CORS errors more gracefully
+		if (
+			error instanceof Error &&
+			(error.message.includes('CORS') ||
+				error.message.includes('cross-origin') ||
+				error.message.includes('Cross-Origin'))
+		) {
+			debugError('CORS error:', error)
+			throw new NetworkError({
+				message: 'CORS policy violation: Cross-origin request blocked',
+				userMessage:
+					'There was a problem connecting to the server. Please check your network settings.',
 				originalError: error
 			})
 		}
@@ -119,10 +160,34 @@ async function processApiResponse<T>(
 	// Handle HTTP errors
 	if (!response.ok) {
 		if (response.status === 401 || response.status === 403) {
+			// Check if this is a CSRF error
+			const isCSRFError = response.headers.get('X-CSRF-Error') === 'true'
+
+			debugError('Authentication error', {
+				endpoint,
+				status: response.status,
+				isCSRFError
+			})
+
+			// Attempt to refresh the session automatically
+			// Don't await to prevent blocking the error response
+			sessionManager.reset(true).catch((e) => {
+				debugError('Failed to reset session after auth error', e)
+			})
+
+			if (isCSRFError) {
+				debugError('CSRF token validation failed', { endpoint, status: response.status })
+				// Handle CSRF error but don't await it to prevent potential deadlocks
+				// This is safe because handleCsrfError has its own error handling
+				handleCsrfError().catch((e) => {
+					debugError('Error while handling CSRF error', e)
+				})
+			}
+
 			throw new SessionError({
 				message: `Authentication error: ${response.status} ${response.statusText}`,
 				userMessage: 'Your session has expired. Please refresh the page.',
-				context: { endpoint, statusCode: response.status }
+				context: { endpoint, statusCode: response.status, isCSRFError }
 			})
 		}
 
@@ -169,6 +234,21 @@ async function processApiResponse<T>(
 			}
 
 			if (errorData.session_expired || errorData.csrf_error) {
+				// Attempt to refresh the session automatically
+				// Don't await to prevent blocking the error response
+				sessionManager.reset(true).catch((e) => {
+					debugError('Failed to reset session after session expired error', e)
+				})
+
+				// Handle CSRF errors
+				if (errorData.csrf_error) {
+					debugError('API reported CSRF error', { endpoint })
+					// Handle CSRF error but don't await it to prevent potential deadlocks
+					handleCsrfError().catch((e) => {
+						debugError('Error while handling CSRF error', e)
+					})
+				}
+
 				throw new SessionError({
 					message: `Session error: ${errorMessage}`,
 					userMessage: errorMessage,
@@ -190,10 +270,10 @@ async function processApiResponse<T>(
 			throw error
 		}
 
-		// Handle JSON parsing errors
+		// Wrap other errors
 		throw new NetworkError({
-			message: 'Failed to parse API response',
-			userMessage: 'Received invalid response from server.',
+			message: `Failed to parse API response: ${String(error)}`,
+			userMessage: 'There was a problem processing the server response.',
 			originalError: error instanceof Error ? error : undefined,
 			context: { endpoint }
 		})
@@ -201,67 +281,96 @@ async function processApiResponse<T>(
 }
 
 /**
- * Base fetch wrapper that handles API responses and CSRF tokens
+ * Make an API request with proper error handling
  *
- * @param endpoint - API endpoint path
+ * @param endpoint - API endpoint
  * @param options - Request options
- * @returns Processed API response
+ * @returns Typed API response
  */
-async function apiFetch<T>(
+async function makeRequest<T>(
 	endpoint: string,
 	options: ApiRequestOptions = {}
 ): Promise<ApiResponse<T>> {
-	// Build full URL
-	const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`
+	const url = `${API_BASE_URL}${endpoint}`
 
-	// Include credentials for all requests to handle cookies properly
-	const fetchOptions: ApiRequestOptions = {
-		...options,
-		credentials: 'include' // Always include credentials for cookies
+	// Add CSRF token header if not explicitly skipped
+	if (!options.skipCsrfCheck) {
+		const headers = new Headers(options.headers || {})
+		const csrfHeaders = getCsrfHeaders()
+
+		// Add CSRF headers if available
+		Object.entries(csrfHeaders).forEach(([key, value]) => {
+			headers.set(key, value)
+		})
+
+		options.headers = headers
 	}
 
-	// Add CSRF token to headers for state-changing requests if not session init
-	if (
-		!endpoint.includes('/session/init') &&
-		['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method || 'GET')
-	) {
-		const csrfToken = getCSRFToken()
-		if (csrfToken && !options.skipAuthCheck) {
-			const headers = new Headers(options.headers || {})
-			headers.set(apiConfig.csrfTokenHeader, csrfToken)
-			fetchOptions.headers = headers
+	// Always include credentials for cookies
+	options.credentials = 'include'
+
+	debugLog(`API Request: ${options.method || 'GET'} ${endpoint}`)
+	const response = await fetchWithTimeout(url, options)
+
+	// Extract and store CSRF token from response headers if present
+	const csrfToken = getCsrfTokenFromHeaders(response.headers)
+	if (csrfToken) {
+		debugLog('Found CSRF token in response headers, updating store')
+		setCSRFToken(csrfToken)
+	}
+
+	return processApiResponse<T>(response, endpoint)
+}
+
+/**
+ * Make an API request with retry logic
+ *
+ * @param endpoint - API endpoint
+ * @param options - Request options
+ * @returns Typed API response
+ */
+export async function apiFetch<T>(
+	endpoint: string,
+	options: ApiRequestOptions = {}
+): Promise<ApiResponse<T>> {
+	// Ensure we have a valid session before making requests
+	// Skip this check for session initialization to prevent loops
+	if (!options.skipAuthCheck && endpoint !== apiConfig.endpoints.sessionInit) {
+		const token = getCSRFToken()
+		if (!token) {
+			debugLog('No CSRF token available, initializing session before request')
+			// Import and call sessionManager dynamically to prevent circular dependencies
+			const { sessionManager } = await import('./sessionManager')
+			await sessionManager.initialize()
 		}
 	}
 
-	// Execute fetch with retry using our centralized retry utility
-	const makeRequest = async () => {
-		const response = await fetchWithTimeout(url, fetchOptions)
-		return processApiResponse<T>(response, endpoint)
-	}
-
-	// Use the retry utility with API request strategy
-	return withRetry(makeRequest, {
+	// Use retry logic for all API requests
+	return withRetry(() => makeRequest<T>(endpoint, options), {
 		...RETRY_STRATEGIES.API_REQUEST,
-		isRetryable: (error) => {
-			// Don't retry session errors or validation errors
-			if (error instanceof SessionError || error instanceof ValidationError) {
-				return false
+		isRetryable: (error: Error) => {
+			// Don't retry session errors (401/403) unless it's a CSRF error
+			if (error instanceof SessionError) {
+				// Only retry if it's a CSRF error
+				const isCSRFError = error.context?.isCSRFError === true
+				return isCSRFError
 			}
 
-			// For session initialization, use fewer retries
-			if (endpoint.includes('/session/init')) {
-				// Only retry network errors for session init
-				return (
-					error instanceof NetworkError &&
-					!error.message.includes('timeout') &&
-					!error.message.includes('certificate')
-				)
-			}
-
+			// Use default retry condition for other errors
 			return isRetryableError(error)
 		},
-		onRetry: (error, attempt) => {
-			console.warn(`Retrying API request to ${endpoint} (attempt ${attempt}):`, error.message)
+		onRetry: async (error: Error, attempt: number) => {
+			debugLog(`Retrying API request to ${endpoint} (attempt ${attempt})`, {
+				error: error.message
+			})
+
+			// If it's a session error, try to refresh the session before retry
+			if (error instanceof SessionError) {
+				debugLog('Session error detected, refreshing session before retry')
+				// Import and call sessionManager dynamically to prevent circular dependencies
+				const { sessionManager } = await import('./sessionManager')
+				await sessionManager.reset(true)
+			}
 		}
 	})
 }
@@ -269,6 +378,7 @@ async function apiFetch<T>(
 // Module-level variables to track initialization attempts
 let isInitializingSession = false
 let lastInitResponse: ApiResponse<SessionInitResponse> | null = null
+let initializationTimeout: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Initialize a session with the API
@@ -311,16 +421,34 @@ export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
 	// Set initializing flag
 	isInitializingSession = true
 
+	// Clear any existing timeout
+	if (initializationTimeout) {
+		clearTimeout(initializationTimeout)
+	}
+
+	// Set a timeout to reset the flag in case of errors
+	initializationTimeout = setTimeout(() => {
+		if (isInitializingSession) {
+			debugError('Session initialization timeout exceeded, resetting flag')
+			isInitializingSession = false
+		}
+	}, 10000) // 10 second timeout
+
 	try {
 		const response = await apiFetch<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
 			method: 'GET',
 			skipAuthCheck: true // Skip CSRF check for session init
 		})
 
-		// Store CSRF token if returned directly in the response
-		if (response.data && response.data.csrf_token) {
+		// Store CSRF token if returned directly in the response data
+		if (response.success && response.data && response.data.csrf_token) {
+			debugLog('Received CSRF token directly in API response data', {
+				sessionId: response.data.id,
+				hasToken: !!response.data.csrf_token
+			})
 			setCSRFToken(response.data.csrf_token, response.data.id, response.data.expires_at)
 		}
+		// If no token in response data, we'll rely on the cookie that should have been set
 
 		// Store the response for future duplicate calls
 		lastInitResponse = response
@@ -332,6 +460,12 @@ export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
 	} finally {
 		// Reset initializing flag
 		isInitializingSession = false
+
+		// Clear the timeout
+		if (initializationTimeout) {
+			clearTimeout(initializationTimeout)
+			initializationTimeout = null
+		}
 	}
 }
 
@@ -486,3 +620,17 @@ export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse
 export function getDownloadUrl(token: string): string {
 	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodeURIComponent(token)}`
 }
+
+// Export the API client as a single object
+export const apiClient = {
+	initSession,
+	uploadFile,
+	convertFile,
+	getJobStatus,
+	getDownloadToken,
+	closeSession,
+	getSupportedFormats,
+	getDownloadUrl
+}
+
+export default apiClient

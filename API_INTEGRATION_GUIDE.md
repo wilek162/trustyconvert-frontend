@@ -186,6 +186,218 @@ This document explains how the frontend should interact with the TrustyConvert b
 
 ---
 
+## React Hooks & SSR/CSR Hydration Best Practices
+
+When integrating API functionality with React components in an Astro project, special care must be taken to handle React hooks correctly, especially with components that need to work with both server-side rendering (SSR) and client-side rendering (CSR).
+
+### Rules for React Hooks in API Integration
+
+1. **Never conditionally call hooks:** React hooks must be called in the same order on every render. This is especially important when handling client-side only functionality.
+
+   ```jsx
+   // ❌ INCORRECT: Conditional hook call
+   const dropzoneProps = isClient
+     ? useDropzone({ /* config */ })
+     : { /* fallback values */ };
+
+   // ✅ CORRECT: Always call the hook with conditional config
+   const dropzoneConfig = useMemo(() => ({
+     onDrop: isClient ? handleDrop : () => {},
+     // other config...
+     disabled: !isClient
+   }), [isClient, handleDrop]);
+   
+   const dropzoneProps = useDropzone(dropzoneConfig);
+   ```
+
+2. **Handle hydration mismatches:** For components that use browser APIs (like file upload), render a simplified version during SSR and hydrate on the client.
+
+3. **Use `useEffect` for client-side initialization:** Set up API connections and event listeners only after the component has mounted.
+
+4. **Use `useMemo` for conditional configurations:** Instead of conditionally calling hooks, always call them but conditionally configure their behavior.
+
+5. **Use feature detection:** Check for browser capabilities before using them.
+
+   ```jsx
+   const [isClient, setIsClient] = useState(false);
+   
+   useEffect(() => {
+     setIsClient(true);
+   }, []);
+   ```
+
+### Example: File Upload Component Integration
+
+```jsx
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { apiClient } from '@/lib/api/client';
+
+function FileUploadComponent() {
+  // Track client-side rendering
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+    
+    // Initialize API session
+    apiClient.initSession().catch(err => {
+      console.error('Failed to initialize session:', err);
+    });
+    
+    // Clean up session on unmount
+    return () => {
+      apiClient.closeSession().catch(err => {
+        console.error('Failed to close session:', err);
+      });
+    };
+  }, []);
+  
+  // Always define callbacks even if they won't be used during SSR
+  const handleDrop = useCallback((files) => {
+    if (!isClient) return;
+    // Handle file upload with API
+  }, [isClient]);
+  
+  // Always call hooks, but with conditional config
+  const dropzoneConfig = useMemo(() => ({
+    onDrop: handleDrop,
+    disabled: !isClient,
+    // other config
+  }), [handleDrop, isClient]);
+  
+  const { getRootProps, getInputProps } = useDropzone(dropzoneConfig);
+  
+  // Render appropriate UI based on client/server
+  if (!isClient) {
+    return <div>Loading file uploader...</div>;
+  }
+  
+  return (
+    <div {...getRootProps()}>
+      <input {...getInputProps()} />
+      <p>Drag & drop files here</p>
+    </div>
+  );
+}
+```
+
+By following these best practices, you'll avoid common issues like React hook rule violations and hydration mismatches when integrating with the API.
+
+---
+
+## Static Site Deployment on Cloudflare Pages
+
+TrustyConvert frontend is designed to work as a static site deployed on Cloudflare Pages. This section covers specific considerations for static deployment.
+
+### Static vs. SSR Mode in Astro
+
+When deploying to Cloudflare Pages, we recommend using Astro's **static mode** (`output: 'static'` in `astro.config.mjs`) for several reasons:
+
+1. **Better performance:** Static sites on Cloudflare Pages benefit from global CDN distribution and edge caching.
+2. **Simpler deployment:** No need for server runtime configuration.
+3. **Lower costs:** Static sites typically have lower hosting costs than SSR applications.
+
+```js
+// astro.config.mjs
+export default defineConfig({
+  output: 'static', // Recommended for Cloudflare Pages deployment
+  // other config...
+});
+```
+
+### Handling API Requests in Static Mode
+
+Since static sites don't have server-side capabilities, all API interactions must happen client-side:
+
+1. **Client-side API initialization:** Always initialize API sessions after the component has mounted.
+
+   ```jsx
+   useEffect(() => {
+     // Only run on the client
+     apiClient.initSession();
+   }, []);
+   ```
+
+2. **Avoid `Astro.request.headers`:** As seen in console warnings, `Astro.request.headers` is not available in static mode. Instead:
+
+   ```jsx
+   // ❌ INCORRECT: Using server-side features in static mode
+   export const prerender = false; // Don't use this in static mode
+   const userLang = Astro.request.headers.get('accept-language');
+   
+   // ✅ CORRECT: Use client-side detection
+   <script>
+     // Run in the browser
+     const userLang = navigator.language;
+     document.documentElement.lang = userLang;
+   </script>
+   ```
+
+3. **Use client-side routing:** For dynamic routes, implement client-side routing or generate static paths at build time.
+
+### Cloudflare Pages Configuration
+
+For optimal deployment on Cloudflare Pages:
+
+1. **Build command:** Set the build command to `npm run build` or `pnpm build`.
+2. **Output directory:** Set to `dist` (Astro's default output directory).
+3. **Environment variables:** Configure your API endpoint in Cloudflare Pages environment variables.
+   ```
+   PUBLIC_API_URL=https://api.trustyconvert.com/api
+   PUBLIC_FRONTEND_DOMAIN=https://trustyconvert.com
+   ```
+
+4. **Custom domains:** Configure your custom domain in the Cloudflare Pages dashboard.
+
+### API CORS Configuration
+
+When hosting on Cloudflare Pages, ensure your API CORS configuration includes your Cloudflare Pages domains:
+
+- Production domain: `https://your-site.pages.dev`
+- Custom domain: `https://your-custom-domain.com`
+- Preview branches: `https://*.your-site.pages.dev`
+
+### Handling Preview Deployments
+
+Cloudflare Pages automatically creates preview deployments for branches and PRs. Configure your API to accept these origins:
+
+```js
+// Backend CORS configuration
+const allowedOrigins = [
+  'https://trustyconvert.com',
+  'https://www.trustyconvert.com',
+  'https://trustyconvert.pages.dev',
+  'https://*.trustyconvert.pages.dev' // For preview deployments
+];
+```
+
+### Addressing Astro Static Mode Warnings
+
+If you see warnings like:
+
+```
+[WARN] `Astro.request.headers` was used when rendering the route `src/pages/index.astro'`.
+```
+
+You have two options:
+
+1. **Preferred for Cloudflare Pages:** Keep static mode and remove server-side code:
+   - Replace server-side header detection with client-side alternatives
+   - Use client-side initialization for features that need request data
+
+2. **Alternative (not recommended for Cloudflare Pages):** Switch to SSR mode:
+   ```js
+   // astro.config.mjs
+   export default defineConfig({
+     output: 'server',
+     adapter: cloudflare(), // Requires @astrojs/cloudflare adapter
+   });
+   ```
+   Note: This requires additional configuration and may not be optimal for performance.
+
+---
+
 ## Example Flow (Pseudocode)
 ```js
 // 1. Initialize session

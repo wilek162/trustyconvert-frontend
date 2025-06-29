@@ -164,24 +164,21 @@ export const apiClient = {
 			const jobId = uuidv4()
 
 			// Step 1: Upload the file
-			const uploadResponse = await uploadFile(file, jobId)
+			const uploadResp = await uploadFile(file, jobId)
 
-			if (!uploadResponse.success) {
-				throw new Error('Upload failed: ' + (uploadResponse.data.message || 'Unknown error'))
-			}
+			// Prefer the job_id returned by the backend (some backends may ignore client-supplied UUIDs)
+			const serverJobId = (uploadResp as any).job_id ?? jobId
 
-			// Step 2: Start conversion
-			const convertResponse = await convertFile(jobId, targetFormat, sourceFormat)
+			// Step 2: Start conversion (always reference the serverJobId)
+			const convertResp = await convertFile(serverJobId, targetFormat, sourceFormat)
 
-			if (!convertResponse.success) {
-				throw new Error('Conversion failed: ' + (convertResponse.data.message || 'Unknown error'))
-			}
-
-			return standardizeResponse({
-				job_id: jobId,
-				task_id: jobId, // For backward compatibility
-				status: convertResponse.data.status
+			const normalized = standardizeResponse({
+				job_id: (convertResp as any).job_id ?? serverJobId,
+				task_id: (convertResp as any).task_id ?? serverJobId,
+				status: (convertResp as any).status
 			})
+
+			return normalized
 		} catch (error) {
 			throw handleError(error, {
 				context: {

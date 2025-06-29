@@ -3,6 +3,8 @@ import { useDropzone } from 'react-dropzone'
 import { v4 as uuidv4 } from 'uuid'
 import { getCSRFToken } from '@/lib/stores/session'
 import { uploadFile } from '@/lib/api/apiClient'
+import { apiConfig } from '@/lib/api/config'
+import { sessionManager } from '@/lib/api/sessionManager'
 import { addJob, updateJobStatus, updateJobProgress } from '@/lib/stores/upload'
 import type { FileUploadData, JobStatus } from '@/lib/stores/upload'
 
@@ -127,12 +129,24 @@ export function FileUploadZone({
 
 	// Handle file upload with progress tracking
 	const handleUpload = async (file: File, jobId: string) => {
-		// Check if session is initialized
-		const csrfToken = getCSRFToken()
+		// Ensure we have a valid session and CSRF token
+		let csrfToken = getCSRFToken()
 		if (!csrfToken) {
-			setError('Session not initialized. Please refresh the page.')
-			await updateJobStatus(jobId, 'failed', { errorMessage: 'Session not initialized' })
-			return
+			try {
+				// Attempt to initialize session (or wait if already initializing)
+				await sessionManager.initialize()
+			} catch (initError) {
+				console.error('Failed to initialize session before upload', initError)
+			}
+
+			// Re-check token after initialization attempt
+			csrfToken = getCSRFToken()
+
+			if (!csrfToken) {
+				setError('Session could not be initialized. Please refresh the page and try again.')
+				await updateJobStatus(jobId, 'failed', { errorMessage: 'Session not initialized' })
+				return
+			}
 		}
 
 		try {
@@ -172,8 +186,10 @@ export function FileUploadZone({
 			})
 
 			// Configure request
-			xhr.open('POST', '/api/upload', true)
-			xhr.setRequestHeader('X-CSRF-Token', csrfToken)
+			// Use centralized API config for the upload URL
+            const uploadUrl = `${apiConfig.baseUrl}${apiConfig.endpoints.upload}`
+            xhr.open('POST', uploadUrl, true)
+			xhr.setRequestHeader(apiConfig.csrfTokenHeader, csrfToken)
 			xhr.withCredentials = true
 			xhr.send(formData)
 

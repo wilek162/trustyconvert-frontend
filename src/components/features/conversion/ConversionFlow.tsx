@@ -347,11 +347,11 @@ export function ConversionFlow({
 		}
 	}, [downloadUrl])
 
-	// Close session when component unmounts
+	// Close session when component unmounts (after successful download)
 	useEffect(() => {
 		return () => {
-			// Only close session if we're done with conversion
-			if (currentStep === 'download' || currentStep === 'select') {
+			// Close session only if the conversion flow reached the download step
+			if (currentStep === 'download') {
 				apiClient.closeSession().catch(console.error)
 			}
 		}

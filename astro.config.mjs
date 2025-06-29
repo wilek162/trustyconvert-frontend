@@ -15,7 +15,10 @@ export default defineConfig({
     enabled: true,
   },
   // Configure build output
-  output: 'static', // Use 'static' for Cloudflare Pages
+  // Using 'static' for Cloudflare Pages deployment (preferred over 'server' mode)
+  // Note: This means Astro.request.headers is not available during build
+  // Client-side code should handle all API interactions and header detection
+  output: 'static',
   compressHTML: true, // Compress HTML output
   // Configure integrations
   integrations: [
@@ -101,17 +104,30 @@ export default defineConfig({
             // Set up SSL handling
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Disable certificate validation
 
+            // Log proxy events for debugging
             proxy.on('error', (err, _req, _res) => {
               console.log('proxy error', err);
             });
             proxy.on('proxyReq', (proxyReq, req, _res) => {
               console.log('Sending Request to the Target:', req.method, req.url);
+              // Add CORS headers to outgoing requests
+              proxyReq.setHeader('Origin', 'https://localhost:4322');
             });
             proxy.on('proxyRes', (proxyRes, req, _res) => {
               console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+              // Log CORS headers for debugging
+              const corsHeader = proxyRes.headers['access-control-allow-origin'];
+              if (corsHeader) {
+                console.log('CORS header received:', corsHeader);
+              }
             });
           }
         }
+      },
+      cors: {
+        origin: 'https://localhost:4322',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        credentials: true
       },
       https: {
         key: process.env.SSL_KEY_FILE,

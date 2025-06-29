@@ -11,6 +11,11 @@ import { debugLog, debugError } from '@/lib/utils/debug'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
 
+// Statuses that indicate an ongoing conversion on the server side. Keep in sync with the backend documentation.
+const IN_PROGRESS_STATUSES = ['pending', 'uploading', 'queued', 'processing'] as const satisfies ReadonlyArray<ConversionStatus>
+// A Set for efficient status lookup without TypeScript narrow-union issues
+const IN_PROGRESS_STATUS_SET: ReadonlySet<ConversionStatus> = new Set(IN_PROGRESS_STATUSES as readonly ConversionStatus[])
+
 // Debug logging
 const debug = {
 	log: (message: string, data?: any) => {
@@ -66,7 +71,8 @@ export function useFileConversion() {
 				taskId,
 				status
 			})
-			if (isPosting || (taskId && status !== 'idle' && status !== 'failed')) {
+			// Block duplicate requests only if a conversion is actively in progress
+            if (isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
 				debugLog('[conversion.mutationFn] Early exit: already posting or task in progress', {
 					isPosting,
 					taskId,
@@ -127,7 +133,7 @@ export function useFileConversion() {
 
 	const startConversion = useCallback(() => {
 		debugLog('[startConversion] called', { file, format, isPosting, taskId, status })
-		if (!file || !format || isPosting || (taskId && status !== 'idle' && status !== 'failed')) {
+		        if (!file || !format || isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
 			const error = new Error('File and format are required or conversion already in progress')
 			debugError('[startConversion] Invalid state for conversion', {
 				file,
@@ -182,7 +188,16 @@ export function useFileConversion() {
 	}
 }
 
-type ConversionStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed'
+// Union of all possible statuses we might receive from the API.
+// Keep this in sync with API_INTEGRATION_GUIDE.md
+export type ConversionStatus =
+	| 'idle'
+	| 'pending'
+	| 'uploading'
+	| 'queued'
+	| 'processing'
+	| 'completed'
+	| 'failed'
 
 /**
  * Hook for managing the entire conversion flow
