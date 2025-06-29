@@ -2,17 +2,22 @@
 
 # Clean up cache
 echo "Cleaning up cache and node_modules/.vite..."
-rm -rf .astro node_modules/.vite
+rm -rf node_modules/.vite
+rm -rf .astro
 echo "Clearing browser cache might help - remember to do this manually"
 
-# Set up SSL certificate handling for development
-echo "Setting up SSL certificate handling for development..."
-export NODE_TLS_REJECT_UNAUTHORIZED=0
-
-# Set environment variables for development
-export PUBLIC_API_URL=https://api.trustyconvert.com/api
-export PUBLIC_ENVIRONMENT=development
-
-# Restart the dev server
-echo "Restarting dev server with clean cache..."
-npm run dev 
+# Check if we should use SSL
+if [ "$1" == "--no-ssl" ]; then
+  echo "Starting dev server without SSL..."
+  npm run dev -- --port 4322 --host
+else
+  echo "Setting up SSL certificate handling for development..."
+  echo "Restarting dev server with clean cache..."
+  npm run dev
+  
+  # If the server fails to start, suggest running without SSL
+  if [ $? -ne 0 ]; then
+    echo "Failed to start with SSL. Try running with --no-ssl flag:"
+    echo "./restart-dev.sh --no-ssl"
+  fi
+fi 

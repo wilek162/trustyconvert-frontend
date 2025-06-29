@@ -1,8 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 
-import { apiClient, APIRequestError } from '@/lib/api/client'
-import type { TaskStatus } from '@/lib/api/types'
+import { apiClient } from '@/lib/api/client'
 import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
 import { useToast } from '@/lib/hooks/useToast'
 import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
@@ -12,9 +11,16 @@ import { debugLog, debugError } from '@/lib/utils/debug'
 const POLLING_INTERVAL = 2000 // 2 seconds
 
 // Statuses that indicate an ongoing conversion on the server side. Keep in sync with the backend documentation.
-const IN_PROGRESS_STATUSES = ['pending', 'uploading', 'queued', 'processing'] as const satisfies ReadonlyArray<ConversionStatus>
+const IN_PROGRESS_STATUSES = [
+	'pending',
+	'uploading',
+	'queued',
+	'processing'
+] as const satisfies ReadonlyArray<ConversionStatus>
 // A Set for efficient status lookup without TypeScript narrow-union issues
-const IN_PROGRESS_STATUS_SET: ReadonlySet<ConversionStatus> = new Set(IN_PROGRESS_STATUSES as readonly ConversionStatus[])
+const IN_PROGRESS_STATUS_SET: ReadonlySet<ConversionStatus> = new Set(
+	IN_PROGRESS_STATUSES as readonly ConversionStatus[]
+)
 
 // Debug logging
 const debug = {
@@ -72,7 +78,7 @@ export function useFileConversion() {
 				status
 			})
 			// Block duplicate requests only if a conversion is actively in progress
-            if (isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
+			if (isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
 				debugLog('[conversion.mutationFn] Early exit: already posting or task in progress', {
 					isPosting,
 					taskId,
@@ -85,26 +91,31 @@ export function useFileConversion() {
 				file: file.name,
 				format: targetFormat
 			})
-			
+
 			// Use the centralized retry utility with API request strategy
-			return withRetry(async () => {
-				try {
-					const response = await apiClient.startConversion(file, targetFormat)
-					debugLog('[conversion.mutationFn] Conversion response', response)
-					if (!response?.task_id) {
-						throw new Error('No task ID returned from server')
+			return withRetry(
+				async () => {
+					try {
+						const response = await apiClient.startConversion(file, targetFormat)
+						debugLog('[conversion.mutationFn] Conversion response', response)
+						if (!response?.task_id) {
+							throw new Error('No task ID returned from server')
+						}
+						return response
+					} catch (err) {
+						debugError('[conversion.mutationFn] Error during conversion', err)
+						throw err
 					}
-					return response
-				} catch (err) {
-					debugError('[conversion.mutationFn] Error during conversion', err)
-					throw err
+				},
+				{
+					...RETRY_STRATEGIES.API_REQUEST,
+					onRetry: (error, attempt) => {
+						debugLog(`[conversion.mutationFn] Retrying conversion (attempt ${attempt})`, {
+							error: error.message
+						})
+					}
 				}
-			}, {
-				...RETRY_STRATEGIES.API_REQUEST,
-				onRetry: (error, attempt) => {
-					debugLog(`[conversion.mutationFn] Retrying conversion (attempt ${attempt})`, { error: error.message })
-				}
-			})
+			)
 		},
 		onSuccess: (data) => {
 			debugLog('[conversion.onSuccess] called', data)
@@ -133,7 +144,7 @@ export function useFileConversion() {
 
 	const startConversion = useCallback(() => {
 		debugLog('[startConversion] called', { file, format, isPosting, taskId, status })
-		        if (!file || !format || isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
+		if (!file || !format || isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
 			const error = new Error('File and format are required or conversion already in progress')
 			debugError('[startConversion] Invalid state for conversion', {
 				file,

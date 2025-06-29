@@ -7,7 +7,7 @@
 
 import { z } from 'zod'
 import {
-	initSession,
+	initSession as apiInitSession,
 	uploadFile,
 	convertFile,
 	getJobStatus,
@@ -22,8 +22,10 @@ import { v4 as uuidv4 } from 'uuid'
 import { apiConfig } from './config'
 import type { DownloadOptions } from './types'
 import { handleError, NetworkError, SessionError } from '@/lib/utils/errorHandling'
-import { setCsrfTokenCookie, getCsrfTokenFromCookie } from '@/lib/utils/csrfUtils'
+import { getCsrfTokenFromCookie } from '@/lib/utils/csrfUtils'
 import { debugLog, debugError } from '@/lib/utils/debug'
+import sessionManager from '@/lib/services/sessionManager'
+import { withRetry, RETRY_STRATEGIES, isRetryableError } from '@/lib/utils/retry'
 
 /**
  * Custom error class for API request errors
@@ -106,14 +108,6 @@ function isCsrfError(response: ApiResponse<any>): boolean {
 	)
 }
 
-// Add type for error responses
-interface ApiErrorResponse {
-	success: false
-	error?: string
-	message?: string
-	correlation_id?: string
-}
-
 /**
  * API Client for interacting with the backend
  */
@@ -124,21 +118,11 @@ export const apiClient = {
 	 */
 	initSession: async () => {
 		try {
-			const response = await initSession()
+			// Use the centralized session manager to initialize the session
+			await sessionManager.debouncedInitSession()
 
-			// Extract CSRF token from response body and set it in a cookie
-			if (response.success && response.data?.csrf_token) {
-				debugLog('Received CSRF token from session init')
-				setCsrfTokenCookie(response.data.csrf_token)
-
-				// Add a small delay to ensure cookie is properly set
-				// This helps avoid race conditions with subsequent requests
-				await new Promise((resolve) => setTimeout(resolve, 50))
-			} else {
-				debugLog('No CSRF token in session init response', response)
-			}
-
-			return standardizeResponse(response.data)
+			// Return a standardized empty response since the session manager handles everything
+			return {}
 		} catch (error) {
 			throw handleError(error, {
 				context: { action: 'initSession' }
@@ -154,21 +138,37 @@ export const apiClient = {
 	 */
 	uploadFile: async (file: File, jobId?: string) => {
 		try {
-			// Check for CSRF token before making the request
-			const csrfToken = getCsrfTokenFromCookie()
-			if (!csrfToken) {
-				debugError('No CSRF token available for upload request - initializing session')
-				await apiClient.initSession()
+			// First synchronize any existing token from cookie to memory
+			sessionManager.synchronizeTokenFromCookie()
+
+			// Ensure we have a valid session before uploading
+			if (!sessionManager.hasCsrfToken()) {
+				debugLog('No valid CSRF token found before upload, ensuring session')
+				await sessionManager.ensureSession()
 			}
 
 			const fileJobId = jobId || uuidv4()
-			const response = await uploadFile(file, fileJobId)
+
+			// Use retry logic for upload
+			const response = await withRetry(() => uploadFile(file, fileJobId), {
+				...RETRY_STRATEGIES.API_REQUEST,
+				onRetry: (error, attempt) => {
+					debugLog(`Retrying file upload (attempt ${attempt}) for job ${fileJobId}`)
+				},
+				isRetryable: (error) => {
+					// Don't retry if it's a file validation error
+					if (error.message?.includes('validation') || error.message?.includes('invalid file')) {
+						return false
+					}
+					return isRetryableError(error)
+				}
+			})
 
 			// Check for CSRF error
 			if (isCsrfError(response)) {
-				debugError('CSRF error during upload - retrying with new session')
-				// Initialize a new session and retry once
-				await apiClient.initSession()
+				debugError('CSRF error during upload - refreshing session and retrying')
+				// Reset the session and retry once
+				await sessionManager.resetSession()
 				// Retry the upload with the new CSRF token
 				const retryResponse = await uploadFile(file, fileJobId)
 				return standardizeResponse(retryResponse.data)
@@ -191,20 +191,28 @@ export const apiClient = {
 	 */
 	convertFile: async (jobId: string, targetFormat: string, sourceFormat?: string) => {
 		try {
-			// Check for CSRF token before making the request
-			const csrfToken = getCsrfTokenFromCookie()
-			if (!csrfToken) {
-				debugError('No CSRF token available for convert request - initializing session')
-				await apiClient.initSession()
+			// First synchronize any existing token from cookie to memory
+			sessionManager.synchronizeTokenFromCookie()
+
+			// Ensure we have a valid session before converting
+			if (!sessionManager.hasCsrfToken()) {
+				debugLog('No valid CSRF token found before conversion, ensuring session')
+				await sessionManager.ensureSession()
 			}
 
-			const response = await convertFile(jobId, targetFormat, sourceFormat)
+			// Use retry logic for conversion
+			const response = await withRetry(() => convertFile(jobId, targetFormat, sourceFormat), {
+				...RETRY_STRATEGIES.API_REQUEST,
+				onRetry: (error, attempt) => {
+					debugLog(`Retrying conversion (attempt ${attempt}) for job ${jobId}`)
+				}
+			})
 
 			// Check for CSRF error
 			if (isCsrfError(response)) {
-				debugError('CSRF error during convert - retrying with new session')
-				// Initialize a new session and retry once
-				await apiClient.initSession()
+				debugError('CSRF error during convert - refreshing session and retrying')
+				// Reset the session and retry once
+				await sessionManager.resetSession()
 				// Retry the conversion with the new CSRF token
 				const retryResponse = await convertFile(jobId, targetFormat, sourceFormat)
 				return standardizeResponse(retryResponse.data)
@@ -219,102 +227,48 @@ export const apiClient = {
 	},
 
 	/**
-	 * Convenience method to upload and convert in one step
-	 * @param file File to upload and convert
-	 * @param targetFormat Target format for conversion
-	 * @param sourceFormat Optional source format (usually auto-detected)
-	 * @returns Job ID and initial status
-	 */
-	startConversion: async (file: File, targetFormat: string, sourceFormat?: string) => {
-		try {
-			// Check for CSRF token before making the request
-			const csrfToken = getCsrfTokenFromCookie()
-			if (!csrfToken) {
-				debugError('No CSRF token available for startConversion - initializing session')
-				await apiClient.initSession()
-			}
-
-			// Generate a job ID
-			const jobId = uuidv4()
-
-			// Step 1: Upload the file
-			const uploadResp = await uploadFile(file, jobId)
-
-			// Check for CSRF error in upload
-			if (isCsrfError(uploadResp)) {
-				debugError('CSRF error during upload in startConversion - retrying with new session')
-				// Initialize a new session and retry
-				await apiClient.initSession()
-				// Retry the upload with the new CSRF token
-				const retryUploadResp = await uploadFile(file, jobId)
-				if (!retryUploadResp.success) {
-					throw new APIRequestError(
-						retryUploadResp.data?.message || 'Upload failed after retry',
-						403,
-						retryUploadResp.data?.error || 'upload_failed'
-					)
-				}
-			}
-
-			// Prefer the job_id returned by the backend (some backends may ignore client-supplied UUIDs)
-			const serverJobId = (uploadResp.data as any).job_id ?? jobId
-
-			// Step 2: Start conversion (always reference the serverJobId)
-			const convertResp = await convertFile(serverJobId, targetFormat, sourceFormat)
-
-			// Check for CSRF error in convert
-			if (isCsrfError(convertResp)) {
-				debugError('CSRF error during convert in startConversion - retrying with new session')
-				// Initialize a new session and retry
-				await apiClient.initSession()
-				// Retry the conversion with the new CSRF token
-				const retryConvertResp = await convertFile(serverJobId, targetFormat, sourceFormat)
-				if (!retryConvertResp.success) {
-					throw new APIRequestError(
-						retryConvertResp.data?.message || 'Conversion failed after retry',
-						403,
-						retryConvertResp.data?.error || 'conversion_failed'
-					)
-				}
-
-				const normalized = standardizeResponse({
-					job_id: (retryConvertResp.data as any).job_id ?? serverJobId,
-					task_id: (retryConvertResp.data as any).task_id ?? serverJobId,
-					status: (retryConvertResp.data as any).status
-				})
-
-				return normalized
-			}
-
-			const normalized = standardizeResponse({
-				job_id: (convertResp.data as any).job_id ?? serverJobId,
-				task_id: (convertResp.data as any).task_id ?? serverJobId,
-				status: (convertResp.data as any).status
-			})
-
-			return normalized
-		} catch (error) {
-			throw handleError(error, {
-				context: {
-					action: 'startConversion',
-					fileName: file.name,
-					fileSize: file.size,
-					targetFormat,
-					sourceFormat
-				}
-			})
-		}
-	},
-
-	/**
 	 * Get the status of a conversion job
-	 * @param jobId Job ID to check
-	 * @returns Job status
+	 * @param jobId Job ID to check status for
+	 * @returns Job status response
 	 */
 	getConversionStatus: async (jobId: string) => {
 		try {
-			const response = await getJobStatus(jobId)
-			return standardizeResponse(response.data)
+			// Use retry logic for status checks
+			const response = await withRetry(() => getJobStatus(jobId), {
+				...RETRY_STRATEGIES.POLLING,
+				maxRetries: 2,
+				onRetry: (error, attempt) => {
+					debugLog(`Retrying status check (attempt ${attempt}) for job ${jobId}`)
+				}
+			})
+
+			// Check for CSRF error (unlikely for GET request, but just in case)
+			if (isCsrfError(response)) {
+				debugError('CSRF error during status check - refreshing session and retrying')
+				// Reset the session and retry once
+				await sessionManager.resetSession()
+				// Retry the status check with the new CSRF token
+				const retryResponse = await getJobStatus(jobId)
+				return standardizeResponse(retryResponse.data)
+			}
+
+			if (!response.success) {
+				throw new APIRequestError(
+					response.data?.message || 'Failed to get job status',
+					response.data?.status || 500,
+					response.data?.error || 'status_check_failed'
+				)
+			}
+
+			// Parse and validate the response
+			try {
+				const parsedResponse = ConversionStatusResponseSchema.parse(response.data)
+				return standardizeResponse(parsedResponse)
+			} catch (parseError) {
+				debugError('Failed to parse job status response:', parseError)
+				// Return the raw response if parsing fails
+				return standardizeResponse(response.data)
+			}
 		} catch (error) {
 			throw handleError(error, {
 				context: { action: 'getConversionStatus', jobId }
@@ -329,23 +283,36 @@ export const apiClient = {
 	 */
 	getDownloadToken: async (jobId: string) => {
 		try {
-			// Check for CSRF token before making the request
-			const csrfToken = getCsrfTokenFromCookie()
-			if (!csrfToken) {
-				debugError('No CSRF token available for getDownloadToken - initializing session')
-				await apiClient.initSession()
+			// Ensure we have a valid session before requesting download token
+			if (!sessionManager.hasCsrfToken()) {
+				debugLog('No valid CSRF token found before download token request, ensuring session')
+				await sessionManager.ensureSession()
 			}
 
-			const response = await getDownloadToken(jobId)
+			// Use retry logic for download token
+			const response = await withRetry(() => getDownloadToken(jobId), {
+				...RETRY_STRATEGIES.API_REQUEST,
+				onRetry: (error, attempt) => {
+					debugLog(`Retrying download token request (attempt ${attempt}) for job ${jobId}`)
+				}
+			})
 
 			// Check for CSRF error
 			if (isCsrfError(response)) {
-				debugError('CSRF error during getDownloadToken - retrying with new session')
-				// Initialize a new session and retry once
-				await apiClient.initSession()
-				// Retry with the new CSRF token
+				debugError('CSRF error during download token request - refreshing session and retrying')
+				// Reset the session and retry once
+				await sessionManager.resetSession()
+				// Retry the download token request with the new CSRF token
 				const retryResponse = await getDownloadToken(jobId)
 				return standardizeResponse(retryResponse.data)
+			}
+
+			if (!response.success) {
+				throw new APIRequestError(
+					response.data?.message || 'Failed to get download token',
+					response.data?.status || 500,
+					response.data?.error || 'download_token_failed'
+				)
 			}
 
 			return standardizeResponse(response.data)
@@ -357,54 +324,59 @@ export const apiClient = {
 	},
 
 	/**
-	 * Generate a download URL from a token
-	 * @param token Download token
-	 * @returns Full download URL
-	 */
-	getDownloadUrl: (token: string): string => {
-		return `${apiConfig.baseUrl}${apiConfig.endpoints.download}?token=${token}`
-	},
-
-	/**
 	 * Close the current session
 	 * @returns Session close response
 	 */
 	closeSession: async () => {
 		try {
-			// Check for CSRF token before making the request
-			const csrfToken = getCsrfTokenFromCookie()
-			if (!csrfToken) {
-				debugError('No CSRF token available for closeSession - session may already be closed')
-				return { message: 'Session already closed' }
+			// Ensure we have a valid session before closing
+			if (!sessionManager.hasCsrfToken()) {
+				debugLog('No valid CSRF token found before closing session, nothing to close')
+				return { success: true }
 			}
 
-			const response = await closeSession()
+			// Use retry logic for session close
+			const response = await withRetry(() => closeSession(), {
+				...RETRY_STRATEGIES.API_REQUEST,
+				maxRetries: 1, // Only retry once for session close
+				onRetry: (error, attempt) => {
+					debugLog(`Retrying session close (attempt ${attempt})`)
+				}
+			})
+
+			// Clear session state regardless of response
+			sessionManager.synchronizeTokenFromCookie()
+
 			return standardizeResponse(response.data)
 		} catch (error) {
-			throw handleError(error, {
-				context: { action: 'closeSession' }
-			})
+			// Don't throw for session close errors, just log them
+			debugError('Error closing session:', error)
+			return { success: false, error: 'session_close_failed' }
 		}
 	},
 
 	/**
 	 * Get supported conversion formats
-	 * @returns Array of supported formats
+	 * @returns Supported formats response
 	 */
-	getSupportedFormats: async (): Promise<ConversionFormat[]> => {
+	getSupportedFormats: async () => {
 		try {
 			const response = await getSupportedFormats()
-			if (response.success) {
-				return response.data.formats
-			}
-			return []
+			return standardizeResponse(response.data)
 		} catch (error) {
-			handleError(error, {
-				context: { action: 'getSupportedFormats' },
-				silent: true
+			throw handleError(error, {
+				context: { action: 'getSupportedFormats' }
 			})
-			return []
 		}
+	},
+
+	/**
+	 * Get a download URL from a download token
+	 * @param token Download token
+	 * @returns Download URL
+	 */
+	getDownloadUrl: (token: string): string => {
+		return apiConfig.baseUrl + apiConfig.endpoints.download + '?token=' + encodeURIComponent(token)
 	}
 }
 

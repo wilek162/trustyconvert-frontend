@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
+import { useToast } from '@/lib/hooks/useToast'
+import sessionManager from '@/lib/services/sessionManager'
+import jobPollingService from '@/lib/services/jobPollingService'
 
 import { UploadZone } from '@/components/features/upload'
-import { FormatSelector, ConversionStats } from '@/components/features/conversion'
+import { FormatSelector } from '@/components/features/conversion/FormatSelector'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { SessionManager } from '@/components/features/session'
 
-import { apiClient } from '@/lib/api/client'
-import { useSessionInitializer } from '@/lib/hooks/useSessionInitializer'
+import apiClient from '@/lib/api/client'
 import {
 	addJob,
 	updateJobStatus,
@@ -19,12 +21,10 @@ import {
 } from '@/lib/stores/upload'
 import type { JobStatus as ApiJobStatus } from '@/lib/types/api'
 import { getFileExtension, formatFileSize } from '@/lib/utils/files'
+import { debugLog, debugError } from '@/lib/utils/debug'
 
 // Ensure we're not accessing browser APIs during SSR
 const isBrowser = typeof window !== 'undefined'
-
-// Polling interval for job status
-const STATUS_POLLING_INTERVAL = 2000 // 2 seconds
 
 // Supported conversions map
 const SUPPORTED_FORMATS = {
@@ -38,28 +38,6 @@ interface ConversionFlowProps {
 	initialSourceFormat?: string
 	initialTargetFormat?: string
 	title?: string
-}
-
-// Map API job status to upload store job status
-function mapApiStatusToUploadStatus(
-	apiStatus: ApiJobStatus
-): 'idle' | 'uploading' | 'uploaded' | 'processing' | 'completed' | 'failed' {
-	switch (apiStatus) {
-		case 'pending':
-			return 'uploading'
-		case 'queued':
-			return 'uploaded'
-		case 'processing':
-			return 'processing'
-		case 'completed':
-			return 'completed'
-		case 'failed':
-			return 'failed'
-		case 'uploaded':
-			return 'uploaded'
-		default:
-			return 'idle'
-	}
 }
 
 // Main conversion workflow component
@@ -76,14 +54,10 @@ export function ConversionFlow({
 		setIsClient(true)
 	}, [])
 
-	// Use session initializer hook to ensure we have a valid session
-	// This hook now uses the centralized session manager
-	const {
-		isInitialized,
-		isInitializing,
-		error: sessionError,
-		resetSession
-	} = useSessionInitializer()
+	// Session state
+	const [isInitialized, setIsInitialized] = useState(false)
+	const [isInitializing, setIsInitializing] = useState(false)
+	const [sessionError, setSessionError] = useState<string | null>(null)
 
 	// State for tracking the conversion flow
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -99,7 +73,33 @@ export function ConversionFlow({
 	const [jobId, setJobId] = useState<string>('')
 	const [downloadUrl, setDownloadUrl] = useState<string>('')
 	const [error, setError] = useState<string | null>(null)
-	const [statusPollingInterval, setStatusPollingInterval] = useState<NodeJS.Timeout | null>(null)
+	const [isDownloading, setIsDownloading] = useState(false)
+
+	// Reference to the stop polling function
+	const stopPollingRef = useRef<(() => void) | null>(null)
+
+	// Check session status on mount
+	useEffect(() => {
+		const checkSession = async () => {
+			try {
+				setIsInitializing(true)
+				// Use the debounced init session to prevent multiple calls
+				const success = await sessionManager.debouncedInitSession()
+				setIsInitialized(success)
+
+				if (!success) {
+					setSessionError('Failed to initialize session')
+				}
+			} catch (err) {
+				console.error('Failed to initialize session:', err)
+				setSessionError('Failed to initialize session')
+			} finally {
+				setIsInitializing(false)
+			}
+		}
+
+		checkSession()
+	}, [])
 
 	// Handle session errors
 	useEffect(() => {
@@ -107,6 +107,31 @@ export function ConversionFlow({
 			setError(sessionError)
 		}
 	}, [sessionError])
+
+	// Clean up polling on unmount
+	useEffect(() => {
+		return () => {
+			if (stopPollingRef.current) {
+				stopPollingRef.current()
+				stopPollingRef.current = null
+			}
+		}
+	}, [])
+
+	// Reset session function
+	const resetSession = useCallback(async () => {
+		try {
+			setIsInitializing(true)
+			const success = await sessionManager.resetSession()
+			setIsInitialized(success)
+			return success
+		} catch (err) {
+			console.error('Failed to reset session:', err)
+			return false
+		} finally {
+			setIsInitializing(false)
+		}
+	}, [])
 
 	// Handle restart after error
 	const handleRestart = useCallback(() => {
@@ -125,21 +150,12 @@ export function ConversionFlow({
 		setJobId('')
 		setDownloadUrl('')
 
-		// Clear any polling interval
-		if (statusPollingInterval) {
-			clearInterval(statusPollingInterval)
-			setStatusPollingInterval(null)
+		// Stop polling if active
+		if (stopPollingRef.current) {
+			stopPollingRef.current()
+			stopPollingRef.current = null
 		}
-	}, [resetSession, initialTargetFormat, statusPollingInterval])
-
-	// Clean up polling on unmount
-	useEffect(() => {
-		return () => {
-			if (statusPollingInterval) {
-				clearInterval(statusPollingInterval)
-			}
-		}
-	}, [statusPollingInterval])
+	}, [resetSession, initialTargetFormat])
 
 	// Handle file upload completion
 	const handleFileUploaded = useCallback(
@@ -189,12 +205,12 @@ export function ConversionFlow({
 		setDownloadUrl('')
 		setError(null)
 
-		// Clear any polling interval
-		if (statusPollingInterval) {
-			clearInterval(statusPollingInterval)
-			setStatusPollingInterval(null)
+		// Stop polling if active
+		if (stopPollingRef.current) {
+			stopPollingRef.current()
+			stopPollingRef.current = null
 		}
-	}, [initialTargetFormat, statusPollingInterval])
+	}, [initialTargetFormat])
 
 	// Handle format selection
 	const handleFormatChange = useCallback((format: string) => {
@@ -206,80 +222,44 @@ export function ConversionFlow({
 		setError(errorMessage)
 	}, [])
 
-	// Poll for job status
-	const pollJobStatus = useCallback(
-		async (jobId: string) => {
+	// Handle conversion button click
+	const handleConvert = useCallback(async () => {
+		if (!selectedFile || !targetFormat) return
+
+		// First synchronize any existing token from cookie to memory
+		sessionManager.synchronizeTokenFromCookie()
+
+		// Ensure we have a session before proceeding
+		if (!sessionManager.hasCsrfToken()) {
+			// Use local loading state
+			const wasConverting = isConverting
+			setIsConverting(true)
+
 			try {
-				const statusResponse = await apiClient.getConversionStatus(jobId)
-
-				if (!statusResponse) {
-					throw new Error('Failed to get job status')
+				debugLog('ConversionFlow: No session token found, initializing session')
+				const success = await sessionManager.initSession()
+				if (!success) {
+					toast.error('Unable to establish a secure session. Please refresh the page.')
+					return
 				}
-
-				const { status, progress = 0 } = statusResponse
-				setConversionProgress(progress)
-
-				// Update job status in store - map API status to upload store status
-				await updateJobStatus(jobId, mapApiStatusToUploadStatus(status as ApiJobStatus))
-				await updateJobProgress(jobId, progress)
-
-				if (status === 'completed') {
-					// Get download token
-					const downloadTokenResponse = await apiClient.getDownloadToken(jobId)
-
-					if (downloadTokenResponse && downloadTokenResponse.download_token) {
-						const { download_token } = downloadTokenResponse
-						await setJobDownloadToken(jobId, download_token)
-
-						// Set download URL
-						const downloadUrl = apiClient.getDownloadUrl(download_token)
-						setDownloadUrl(downloadUrl)
-
-						// Update job status and clear polling
-						await updateJobStatus(jobId, 'completed')
-						setIsConverting(false)
-						setCurrentStep('download')
-
-						if (statusPollingInterval) {
-							clearInterval(statusPollingInterval)
-							setStatusPollingInterval(null)
-						}
-
-						toast.success('File converted successfully!')
-					}
-				} else if (status === 'failed') {
-					// Handle failure
-					if (statusPollingInterval) {
-						clearInterval(statusPollingInterval)
-						setStatusPollingInterval(null)
-					}
-
-					setIsConverting(false)
-					setError(statusResponse.error_message || 'Conversion failed')
-					toast.error('Conversion failed. Please try again.')
-				}
+				setIsInitialized(true)
+				// Wait a moment for the session to be fully established
+				await new Promise((resolve) => setTimeout(resolve, 100))
 			} catch (error) {
-				console.error('Error polling job status:', error)
-				setError('Error checking conversion status')
+				console.error('Failed to initialize session:', error)
+				toast.error('Session initialization failed. Please refresh the page.')
+				return
+			} finally {
+				// Restore previous state if we weren't already converting
+				if (!wasConverting) {
+					setIsConverting(false)
+				}
 			}
-		},
-		[statusPollingInterval]
-	)
-
-	// Start upload and conversion process
-	const handleStartConversion = useCallback(async () => {
-		if (!selectedFile || !targetFormat) {
-			toast.error('Please select a file and target format')
-			return
 		}
 
-		if (!isInitialized) {
-			toast.error('Session not initialized. Please try again.')
-			try {
-				await resetSession()
-			} catch (error) {
-				console.error('Failed to reset session:', error)
-			}
+		// Double-check that we have a CSRF token
+		if (!sessionManager.hasCsrfToken()) {
+			toast.error('Unable to secure your session. Please refresh the page.')
 			return
 		}
 
@@ -314,6 +294,7 @@ export function ConversionFlow({
 			}, 200)
 
 			// Upload the file
+			debugLog('Starting file upload')
 			const uploadResponse = await apiClient.uploadFile(selectedFile, newJobId)
 
 			clearInterval(uploadProgressInterval)
@@ -332,9 +313,13 @@ export function ConversionFlow({
 			// Update job status to processing
 			await updateJobStatus(newJobId, 'processing')
 
-			// Start polling for job status
-			const interval = setInterval(() => pollJobStatus(newJobId), STATUS_POLLING_INTERVAL)
-			setStatusPollingInterval(interval)
+			// Stop any existing polling
+			if (stopPollingRef.current) {
+				stopPollingRef.current()
+			}
+
+			// Start polling for job status using the polling service
+			startJobPolling(newJobId)
 		} catch (error) {
 			setIsUploading(false)
 			setIsConverting(false)
@@ -342,24 +327,63 @@ export function ConversionFlow({
 			console.error('Conversion error:', error)
 			toast.error('Conversion failed. Please try again.')
 		}
-	}, [selectedFile, targetFormat, isInitialized, resetSession, pollJobStatus])
+	}, [selectedFile, targetFormat, isConverting])
 
-	// Handle download click
+	// Handle download with debounce
 	const handleDownload = useCallback(() => {
-		if (downloadUrl) {
-			window.location.href = downloadUrl
-		}
-	}, [downloadUrl])
+		if (isDownloading || !downloadUrl) return
 
-	// Close session when component unmounts (after successful download)
-	useEffect(() => {
-		return () => {
-			// Close session only if the conversion flow reached the download step
-			if (currentStep === 'download') {
-				apiClient.closeSession().catch(console.error)
-			}
+		setIsDownloading(true)
+		try {
+			window.location.href = downloadUrl
+		} finally {
+			// Reset download state after a short delay
+			setTimeout(() => {
+				setIsDownloading(false)
+			}, 1000)
 		}
-	}, [currentStep])
+	}, [downloadUrl, isDownloading])
+
+	// Handle job completion
+	const handleJobCompleted = useCallback((downloadToken: string, url: string) => {
+		setDownloadUrl(url)
+		setIsConverting(false)
+		setCurrentStep('download')
+		toast.success('File converted successfully!')
+
+		// Clean up polling
+		if (stopPollingRef.current) {
+			stopPollingRef.current()
+			stopPollingRef.current = null
+		}
+	}, [])
+
+	// Start polling for job status
+	const startJobPolling = useCallback(
+		(newJobId: string) => {
+			// Clean up any existing polling
+			if (stopPollingRef.current) {
+				stopPollingRef.current()
+				stopPollingRef.current = null
+			}
+
+			stopPollingRef.current = jobPollingService.startPolling(newJobId, {
+				onProgress: (progress) => {
+					setConversionProgress(progress)
+				},
+				onStatusChange: (status, progress) => {
+					debugLog(`Job ${newJobId} status updated to ${status} (${progress}%)`)
+				},
+				onCompleted: handleJobCompleted,
+				onFailed: (errorMessage) => {
+					setIsConverting(false)
+					setError(errorMessage || 'Conversion failed')
+					toast.error('Conversion failed. Please try again.')
+				}
+			})
+		},
+		[handleJobCompleted]
+	)
 
 	// If not client-side yet, render a minimal loading state to prevent hydration mismatch
 	if (!isClient) {
@@ -438,89 +462,80 @@ export function ConversionFlow({
 											</div>
 										</div>
 										<Button
-											type="button"
 											variant="ghost"
 											size="sm"
 											onClick={() => setSelectedFile(null)}
-											className="h-8 w-8 rounded-full p-0 text-deepNavy/70 hover:bg-warningRed/10 hover:text-warningRed"
+											className="text-deepNavy/70 hover:text-deepNavy"
 										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												strokeWidth="2"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-											>
-												<line x1="18" y1="6" x2="6" y2="18"></line>
-												<line x1="6" y1="6" x2="18" y2="18"></line>
-											</svg>
-											<span className="sr-only">Remove file</span>
+											Change
 										</Button>
 									</div>
 								</div>
 
-								<FormatSelector
-									availableFormats={availableFormats}
-									selectedFormat={targetFormat}
-									onFormatChange={handleFormatChange}
-								/>
+								<div className="space-y-4">
+									<label className="block text-sm font-medium text-deepNavy">Convert to:</label>
+									<FormatSelector
+										availableFormats={availableFormats}
+										selectedFormat={targetFormat}
+										onFormatChange={handleFormatChange}
+									/>
+								</div>
 							</>
 						)}
 					</div>
 				) : currentStep === 'upload' ? (
-					<div className="space-y-6 py-4">
-						<div className="text-center">
-							<h3 className="mb-2 text-lg font-medium text-deepNavy">Uploading File</h3>
-							<p className="text-sm text-deepNavy/70">{selectedFile?.name}</p>
+					<div className="space-y-6">
+						<div className="flex items-center justify-between">
+							<p className="font-medium text-deepNavy">Uploading file...</p>
+							<span className="text-sm text-deepNavy/70">{uploadProgress}%</span>
 						</div>
 						<Progress value={uploadProgress} className="h-2 w-full" />
-						<p className="text-center text-sm text-deepNavy/70">{uploadProgress}% complete</p>
+						<p className="text-sm text-deepNavy/70">
+							Uploading {selectedFile?.name} ({formatFileSize(selectedFile?.size || 0)})
+						</p>
 					</div>
 				) : currentStep === 'convert' ? (
-					<div className="space-y-6 py-4">
-						<div className="text-center">
-							<h3 className="mb-2 text-lg font-medium text-deepNavy">Converting File</h3>
-							<p className="text-sm text-deepNavy/70">
-								{selectedFile?.name} to {targetFormat.toUpperCase()}
-							</p>
+					<div className="space-y-6">
+						<div className="flex items-center justify-between">
+							<p className="font-medium text-deepNavy">Converting file...</p>
+							<span className="text-sm text-deepNavy/70">{conversionProgress}%</span>
 						</div>
 						<Progress value={conversionProgress} className="h-2 w-full" />
-						<p className="text-center text-sm text-deepNavy/70">{conversionProgress}% complete</p>
+						<p className="text-sm text-deepNavy/70">
+							Converting {selectedFile?.name} to {targetFormat}
+						</p>
 					</div>
 				) : (
-					<div className="space-y-6 py-4">
-						<div className="text-center">
-							<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-trustTeal/20 text-trustTeal">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="32"
-									height="32"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
-									<path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-								</svg>
+					<div className="space-y-6">
+						<div className="rounded-xl border border-trustTeal/30 bg-gradient-to-r from-trustTeal/5 to-white p-4 shadow-sm">
+							<div className="flex items-center justify-between">
+								<div className="flex items-center space-x-3">
+									<div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-green-100 to-green-200 shadow-inner">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="24"
+											height="24"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="2"
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											className="text-green-600"
+										>
+											<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+											<polyline points="22 4 12 14.01 9 11.01" />
+										</svg>
+									</div>
+									<div>
+										<p className="text-base font-medium text-deepNavy">Conversion Complete!</p>
+										<p className="text-sm text-deepNavy/70">
+											{selectedFile?.name} → {targetFormat}
+										</p>
+									</div>
+								</div>
 							</div>
-							<h3 className="mb-1 text-xl font-medium text-deepNavy">Conversion Complete!</h3>
-							<p className="text-sm text-deepNavy/70">
-								Your file has been successfully converted and is ready to download.
-							</p>
 						</div>
-
-						<ConversionStats
-							originalFormat={getFileExtension(selectedFile?.name || '')}
-							targetFormat={targetFormat}
-							fileName={selectedFile?.name || ''}
-							fileSize={selectedFile?.size || 0}
-						/>
 					</div>
 				)}
 			</CardContent>
@@ -528,86 +543,19 @@ export function ConversionFlow({
 			<CardFooter className="flex justify-center border-t border-border/50 bg-gradient-to-b from-lightGray/10 to-lightGray/20 px-8 py-7">
 				{currentStep === 'select' ? (
 					<Button
-						disabled={!selectedFile || !targetFormat || isUploading || isConverting}
-						onClick={handleStartConversion}
+						onClick={handleConvert}
+						disabled={!selectedFile || !targetFormat || isInitializing}
 						className="w-full max-w-xs"
 					>
-						{isUploading || isConverting ? (
-							<>
-								<svg
-									className="mr-2 h-4 w-4 animate-spin"
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-								>
-									<circle
-										className="opacity-25"
-										cx="12"
-										cy="12"
-										r="10"
-										stroke="currentColor"
-										strokeWidth="4"
-									></circle>
-									<path
-										className="opacity-75"
-										fill="currentColor"
-										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-									></path>
-								</svg>
-								Processing...
-							</>
-						) : (
-							<>Convert File</>
-						)}
+						Convert Now
 					</Button>
-				) : currentStep === 'download' ? (
-					<div className="flex w-full max-w-xs flex-col gap-2">
-						<Button onClick={handleDownload} className="w-full">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								className="mr-2"
-							>
-								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-								<polyline points="7 10 12 15 17 10" />
-								<line x1="12" y1="15" x2="12" y2="3" />
-							</svg>
-							Download File
-						</Button>
-						<Button onClick={handleRestart} variant="outline" className="w-full">
-							Convert Another File
-						</Button>
-					</div>
-				) : (
+				) : currentStep === 'upload' || currentStep === 'convert' ? (
 					<Button disabled className="w-full max-w-xs">
-						<svg
-							className="mr-2 h-4 w-4 animate-spin"
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-						>
-							<circle
-								className="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								strokeWidth="4"
-							></circle>
-							<path
-								className="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							></path>
-						</svg>
 						{currentStep === 'upload' ? 'Uploading...' : 'Converting...'}
+					</Button>
+				) : (
+					<Button onClick={handleDownload} disabled={isDownloading} className="w-full max-w-xs">
+						{isDownloading ? 'Opening Download...' : 'Download Converted File'}
 					</Button>
 				)}
 			</CardFooter>

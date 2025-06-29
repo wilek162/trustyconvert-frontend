@@ -5,7 +5,8 @@
  * CSRF protection, and consistent request/response patterns.
  */
 
-import { getCsrfHeaders, getCsrfTokenFromCookie, dispatchCsrfError } from '@/lib/utils/csrfUtils'
+import { getCsrfHeaders, dispatchCsrfError } from '@/lib/utils/csrfUtils'
+import sessionManager from '@/lib/services/sessionManager'
 import type {
 	ApiResponse,
 	ApiErrorInfo,
@@ -198,9 +199,30 @@ async function processApiResponse<T>(
 }
 
 /**
- * Make an API request with proper error handling
+ * Get CSRF headers for requests that require CSRF protection
+ * @returns Object with CSRF headers
+ */
+function getCsrfRequestHeaders(): Record<string, string> {
+	const csrfToken = sessionManager.getCsrfToken()
+	if (!csrfToken) {
+		debugError('No CSRF token available for request headers')
+		return {}
+	}
+
+	// Only include one version of the header - use the capitalized version
+	// as it's more standard, but some servers might expect lowercase
+	const headerName = apiConfig.csrfTokenHeader || 'X-CSRF-Token'
+
+	// Return a single header with the proper name
+	return {
+		[headerName]: csrfToken
+	}
+}
+
+/**
+ * Make an API request with proper error handling and CSRF protection
  *
- * @param endpoint - API endpoint
+ * @param endpoint - API endpoint to call
  * @param options - Request options
  * @returns Typed API response
  */
@@ -208,101 +230,125 @@ async function makeRequest<T>(
 	endpoint: string,
 	options: ApiRequestOptions = {}
 ): Promise<ApiResponse<T>> {
+	const { skipAuthCheck = false, skipCsrfCheck = false, ...fetchOptions } = options
 	const url = `${API_BASE_URL}${endpoint}`
-	const method = options.method || 'GET'
 
-	// Add CSRF token header if not explicitly skipped and not a GET request
-	if (!options.skipCsrfCheck && method !== 'GET') {
-		const headers = new Headers(options.headers || {})
-		const csrfToken = getCsrfTokenFromCookie()
+	try {
+		// Add CSRF headers for non-GET requests if not explicitly skipped
+		if (!skipCsrfCheck && fetchOptions.method && fetchOptions.method !== 'GET') {
+			const csrfHeaders = getCsrfRequestHeaders()
 
-		// Add CSRF token header if available
-		if (csrfToken) {
-			headers.set(apiConfig.csrfTokenHeader, csrfToken)
-			debugLog(`Adding CSRF token to ${method} request for ${endpoint}`)
-		} else {
-			debugError(
-				`No CSRF token available for ${method} ${endpoint} request - this will likely fail`
-			)
+			// Create headers object if it doesn't exist
+			const headers = new Headers(fetchOptions.headers || {})
+
+			// Add CSRF header - ensure we don't add duplicate headers
+			if (csrfHeaders[apiConfig.csrfTokenHeader]) {
+				headers.set(apiConfig.csrfTokenHeader, csrfHeaders[apiConfig.csrfTokenHeader])
+				debugLog(`Added CSRF token to ${fetchOptions.method} request for ${endpoint}`)
+			}
+
+			// Update the fetchOptions with our headers
+			fetchOptions.headers = headers
 		}
 
-		options.headers = headers
+		// Always include credentials for cookies
+		fetchOptions.credentials = 'include'
+
+		// Make the request
+		const response = await fetchWithTimeout(url, fetchOptions)
+		return await processApiResponse<T>(response, endpoint)
+	} catch (error) {
+		// Handle network errors
+		if (error instanceof NetworkError) {
+			throw error
+		}
+
+		// Handle other errors
+		throw new NetworkError({
+			message: error instanceof Error ? error.message : 'Unknown error',
+			context: { endpoint }
+		})
 	}
-
-	// Always include credentials for cookies
-	options.credentials = 'include'
-
-	// For development with self-signed certificates
-	if (apiConfig.isDevelopment && typeof window !== 'undefined') {
-		debugLog('Development mode: Using self-signed certificate and handling CORS')
-	}
-
-	debugLog(`API Request: ${method} ${endpoint}`)
-	const response = await fetchWithTimeout(url, options)
-	return processApiResponse<T>(response, endpoint)
 }
 
 /**
  * Initialize a session with the API
- * This will create a new session and set the necessary cookies
- *
  * @returns Session initialization response
  */
 export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
-	return withRetry(
-		async () => {
-			// Session initialization doesn't need CSRF token
-			return makeRequest<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
-				method: 'GET',
-				skipCsrfCheck: true
-			})
-		},
-		{
-			...RETRY_STRATEGIES.API_REQUEST
+	try {
+		debugLog('API: Initializing session')
+		const response = await makeRequest<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
+			method: 'GET',
+			skipAuthCheck: true,
+			skipCsrfCheck: true
+		})
+
+		// After successful session init, synchronize the token from cookie
+		if (response.success && response.data?.csrf_token) {
+			// We don't need to do anything here as the session manager will handle this
+			debugLog('API: Session initialized with CSRF token:', response.data.csrf_token)
 		}
-	)
+
+		return response
+	} catch (error) {
+		debugError('API: Session initialization failed', error)
+		return {
+			success: false,
+			data: {
+				error: 'NetworkError',
+				message: 'Failed to initialize session'
+			} as any
+		}
+	}
 }
 
 /**
  * Upload a file to the server
- *
- * @param file - File to upload
- * @param jobId - Optional job ID for tracking
+ * @param file File to upload
+ * @param jobId Job ID for tracking
  * @returns Upload response
  */
 export async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>> {
-	return withRetry(
-		async () => {
-			// Create form data with file and job ID
-			const formData = new FormData()
-			formData.append('file', file)
-			if (jobId) {
-				formData.append('job_id', jobId)
+	try {
+		// Ensure we have a CSRF token
+		const csrfToken = sessionManager.getCsrfToken()
+		if (!csrfToken) {
+			debugError('API: No CSRF token available for upload')
+			return {
+				success: false,
+				data: {
+					error: 'CSRFValidationError',
+					message: 'Missing CSRF token for upload'
+				} as any
 			}
-
-			// Get CSRF token
-			const csrfToken = getCsrfTokenFromCookie()
-			if (!csrfToken) {
-				debugError('No CSRF token available for upload request')
-			}
-
-			// Create headers with CSRF token
-			const headers = new Headers()
-			if (csrfToken) {
-				headers.set(apiConfig.csrfTokenHeader, csrfToken)
-				debugLog('Added CSRF token to upload request')
-			}
-
-			return makeRequest<UploadResponse>(apiConfig.endpoints.upload, {
-				method: 'POST',
-				headers,
-				body: formData
-			})
-		},
-		{
-			...RETRY_STRATEGIES.API_REQUEST
 		}
-	)
+
+		// Create form data
+		const formData = new FormData()
+		formData.append('file', file)
+		if (jobId) {
+			formData.append('job_id', jobId)
+		}
+
+		// Make the request
+		debugLog('API: Uploading file', { fileName: file.name, fileSize: file.size, jobId })
+		const response = await makeRequest<UploadResponse>(apiConfig.endpoints.upload, {
+			method: 'POST',
+			body: formData
+		})
+
+		return response
+	} catch (error) {
+		debugError('API: File upload failed', error)
+		return {
+			success: false,
+			data: {
+				error: 'NetworkError',
+				message: 'Failed to upload file'
+			} as any
+		}
+	}
 }
 
 /**

@@ -111,7 +111,8 @@ const DEFAULT_TIMEOUT = parseInt(import.meta.env.API_TIMEOUT || '30000', 10)
 const DEFAULT_RETRY_ATTEMPTS = RETRY_STRATEGIES.API_REQUEST.maxRetries
 
 // CSRF token header name - check for environment variable or use default
-const CSRF_TOKEN_HEADER = import.meta.env.CSRF_HEADER || 'X-CSRF-Token'
+// The API documentation specifies 'X-CSRF-Token' as the header name
+const CSRF_TOKEN_HEADER = import.meta.env.CSRF_HEADER || 'x-csrf-token'
 
 // Get the frontend and API domains for CORS settings
 const frontendDomain = getFrontendDomain()

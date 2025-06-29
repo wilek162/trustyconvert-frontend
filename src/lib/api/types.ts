@@ -204,7 +204,7 @@ export type ApiResponse<T> = {
 export type ConversionResponse = {
 	task_id: string
 	file_id: string
-	status: TaskStatus['status']
+	status: JobStatus
 }
 
 export interface APIErrorResponse {
@@ -223,5 +223,4 @@ export interface APIResponse<T> {
 }
 
 export type UploadProgressCallback = (progress: number) => void
-export type TaskStatusCallback = (status: TaskStatus) => void
 export type ErrorCallback = (error: Error) => void

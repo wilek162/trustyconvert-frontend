@@ -18,14 +18,39 @@ const CSRF_COOKIE_NAME = import.meta.env.CSRF_COOKIE_NAME || 'csrftoken'
 export function getCsrfTokenFromCookie(): string | null {
 	if (typeof document === 'undefined') return null
 
+	// First try the standard cookie parsing approach
 	const cookies = document.cookie.split(';')
 	for (const cookie of cookies) {
 		const [name, value] = cookie.trim().split('=')
-		if (name === CSRF_COOKIE_NAME) {
-			return decodeURIComponent(value)
+		if (name === CSRF_COOKIE_NAME && value) {
+			try {
+				// The token might be URL encoded or contain special characters
+				const decodedValue = decodeURIComponent(value)
+				return decodedValue
+			} catch (e) {
+				debugError('Failed to decode CSRF token from cookie', e)
+				return value // Return the raw value if decoding fails
+			}
 		}
 	}
 
+	// If not found with the standard approach, try a more direct approach
+	// Some browsers might handle cookie parsing differently
+	const cookieValue = document.cookie.replace(
+		new RegExp(`(?:(?:^|.*;\\s*)${CSRF_COOKIE_NAME}\\s*\\=\\s*([^;]*).*$)|^.*$`),
+		'$1'
+	)
+
+	if (cookieValue) {
+		try {
+			const decodedValue = decodeURIComponent(cookieValue)
+			return decodedValue
+		} catch (e) {
+			return cookieValue
+		}
+	}
+
+	debugLog('No CSRF token found in cookies')
 	return null
 }
 
@@ -40,6 +65,8 @@ export function getCsrfTokenFromCookie(): string | null {
 export function setCsrfTokenCookie(token: string): void {
 	if (typeof document === 'undefined') return
 
+	debugLog('Setting CSRF token in cookie:', token)
+
 	// Calculate expiration (24 hours from now)
 	const expires = new Date()
 	expires.setHours(expires.getHours() + 24)
@@ -48,7 +75,10 @@ export function setCsrfTokenCookie(token: string): void {
 	// In production, we always use Secure and SameSite=None
 	// In development with HTTP, we can't use SameSite=None without Secure
 	const isSecure = window.location.protocol === 'https:'
-	let cookieString = `${CSRF_COOKIE_NAME}=${encodeURIComponent(token)};path=/;expires=${expires.toUTCString()}`
+
+	// Try multiple approaches to ensure the cookie is set correctly
+	// First, try the most compatible approach
+	let cookieString = `${CSRF_COOKIE_NAME}=${token};path=/;expires=${expires.toUTCString()}`
 
 	// Add Secure attribute if using HTTPS
 	if (isSecure) {
@@ -63,7 +93,32 @@ export function setCsrfTokenCookie(token: string): void {
 
 	// Set the cookie
 	document.cookie = cookieString
-	debugLog('CSRF token set in cookie')
+
+	// Also try a simpler approach as some browsers have issues with complex cookie strings
+	setTimeout(() => {
+		// Check if the cookie was set correctly
+		const storedToken = getCsrfTokenFromCookie()
+		if (storedToken !== token) {
+			debugError('CSRF token was not set correctly in cookie, trying alternative approach', {
+				expected: token,
+				actual: storedToken
+			})
+
+			// Try a simpler approach
+			document.cookie = `${CSRF_COOKIE_NAME}=${token};path=/;max-age=86400`
+
+			// Try a third approach with SameSite=None if secure
+			if (isSecure) {
+				setTimeout(() => {
+					const secondCheck = getCsrfTokenFromCookie()
+					if (secondCheck !== token) {
+						debugError('Second attempt failed, trying with explicit SameSite=None')
+						document.cookie = `${CSRF_COOKIE_NAME}=${token};path=/;max-age=86400;SameSite=None;Secure`
+					}
+				}, 50)
+			}
+		}
+	}, 50)
 }
 
 /**
@@ -85,8 +140,11 @@ export function getCsrfHeaders(): HeadersInit {
 		return {}
 	}
 
+	// Include both capitalized and lowercase versions for compatibility
 	return {
-		[apiConfig.csrfTokenHeader]: token
+		[apiConfig.csrfTokenHeader]: token,
+		'X-CSRF-Token': token,
+		'x-csrf-token': token
 	}
 }
 

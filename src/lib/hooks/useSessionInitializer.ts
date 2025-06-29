@@ -1,49 +1,39 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { hasCsrfToken } from '@/lib/stores/session'
-import { debugLog } from '@/lib/utils/debug'
-import { apiClient } from '@/lib/api/client'
+import { useEffect, useState, useCallback } from 'react'
+import { debugLog, debugError } from '@/lib/utils/debug'
+import sessionManager from '@/lib/services/sessionManager'
 
 /**
  * A hook that provides access to session state and initialization
- * This is a simplified version that checks for the presence of a CSRF token
+ * This is a simplified version that uses the centralized session manager
  * and provides methods to initialize or reset the session.
  *
  * @returns {Object} Session state including CSRF token status and methods
  */
 export function useSessionInitializer() {
-	const [hasToken, setHasToken] = useState<boolean>(hasCsrfToken())
+	const [hasToken, setHasToken] = useState<boolean>(sessionManager.hasCsrfToken())
 	const [isInitializing, setIsInitializing] = useState<boolean>(false)
 	const [error, setError] = useState<string | null>(null)
 
-	// Use a ref to track initialization attempts to avoid redundant API calls
-	const initializationAttemptRef = useRef<number>(0)
-	const lastCheckTimeRef = useRef<number>(Date.now())
-
-	// Check for CSRF token with throttling to avoid excessive checks
+	// Check for CSRF token
 	const checkToken = useCallback(() => {
-		// Only check if it's been at least 5 seconds since the last check
-		const now = Date.now()
-		if (now - lastCheckTimeRef.current < 5000) {
-			return
-		}
+		const tokenExists = sessionManager.hasCsrfToken()
 
-		lastCheckTimeRef.current = now
-		const tokenExists = hasCsrfToken()
-
-		// Only update state if the token status has changed
+		// Update state if the token status has changed
 		if (tokenExists !== hasToken) {
 			setHasToken(tokenExists)
 			debugLog(`CSRF token check: ${tokenExists ? 'found' : 'not found'}`)
 		}
+
+		return tokenExists
 	}, [hasToken])
 
-	// Check for CSRF token on mount
+	// Check for CSRF token on mount and periodically
 	useEffect(() => {
 		// Check immediately
 		checkToken()
 
-		// Set up interval to periodically check, but less frequently
-		const intervalId = setInterval(checkToken, 60000) // Check every minute
+		// Set up interval to periodically check
+		const intervalId = setInterval(checkToken, 30000) // Check every 30 seconds
 
 		return () => {
 			clearInterval(intervalId)
@@ -52,50 +42,67 @@ export function useSessionInitializer() {
 
 	// Initialize session
 	const initSession = useCallback(async () => {
-		// Avoid multiple simultaneous initialization attempts
-		if (isInitializing) return false
-
-		// Limit initialization attempts to avoid API hammering
-		if (initializationAttemptRef.current >= 3) {
-			debugLog('Maximum session initialization attempts reached')
-			return false
-		}
-
 		try {
 			setIsInitializing(true)
 			setError(null)
 
-			initializationAttemptRef.current += 1
-			await apiClient.initSession()
+			debugLog('Initializing session via hook')
+
+			// Use the centralized session manager
+			const success = await sessionManager.initSession()
 
 			// Check if token was set after initialization
-			const tokenExists = hasCsrfToken()
-			setHasToken(tokenExists)
+			const tokenExists = checkToken()
 
-			if (!tokenExists) {
+			if (!success || !tokenExists) {
+				debugError('Failed to initialize session: CSRF token not found after initialization')
 				setError('Failed to initialize session: CSRF token not found')
 				return false
 			}
 
-			// Reset attempt counter on success
-			initializationAttemptRef.current = 0
+			debugLog('Session initialized successfully via hook')
 			return true
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-			debugLog('Failed to initialize session:', error)
+			debugError('Failed to initialize session:', error)
 			setError(`Failed to initialize session: ${errorMessage}`)
 			return false
 		} finally {
 			setIsInitializing(false)
 		}
-	}, [isInitializing])
+	}, [checkToken])
 
 	// Reset session (initialize a new one)
 	const resetSession = useCallback(async () => {
-		// Reset attempt counter when explicitly requesting a reset
-		initializationAttemptRef.current = 0
-		return initSession()
-	}, [initSession])
+		try {
+			setIsInitializing(true)
+			setError(null)
+
+			debugLog('Resetting session via hook')
+
+			// Use the centralized session manager
+			const success = await sessionManager.resetSession()
+
+			// Check if token was set after reset
+			const tokenExists = checkToken()
+
+			if (!success || !tokenExists) {
+				debugError('Failed to reset session: CSRF token not found after reset')
+				setError('Failed to reset session: CSRF token not found')
+				return false
+			}
+
+			debugLog('Session reset successfully via hook')
+			return true
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+			debugError('Failed to reset session:', error)
+			setError(`Failed to reset session: ${errorMessage}`)
+			return false
+		} finally {
+			setIsInitializing(false)
+		}
+	}, [checkToken])
 
 	return {
 		isInitialized: hasToken,
@@ -103,7 +110,8 @@ export function useSessionInitializer() {
 		error,
 		hasCsrfToken: hasToken,
 		initSession,
-		resetSession
+		resetSession,
+		checkToken
 	}
 }
 
