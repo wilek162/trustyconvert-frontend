@@ -1,4 +1,30 @@
 /**
+ * @deprecated This file is deprecated. Please use '@/lib/utils/retry.ts' instead.
+ * This file will be removed in a future release.
+ */
+
+import {
+	withRetry as utilsWithRetry,
+	createRetryable as utilsCreateRetryable,
+	isRetryableError as utilsIsRetryableError,
+	type RetryConfig,
+	DEFAULT_RETRY_CONFIG,
+	RETRY_STRATEGIES,
+	calculateBackoff
+} from '@/lib/utils/retry'
+
+// Re-export everything from the new location
+export {
+	withRetry,
+	createRetryable,
+	isRetryableError,
+	type RetryConfig,
+	DEFAULT_RETRY_CONFIG,
+	RETRY_STRATEGIES,
+	calculateBackoff
+}
+
+/**
  * Advanced Retry Utility
  *
  * Provides retry functionality with exponential backoff for async operations,
@@ -78,100 +104,30 @@ function calculateDelay(attempt: number, options: Required<RetryOptions>): numbe
  */
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-/**
- * Execute an async function with retry capability
- *
- * @param fn - Async function to execute with retry
- * @param options - Retry configuration options
- * @returns Promise with the function result
- * @throws Last error encountered after all retries are exhausted
- */
-export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
-	// Merge provided options with defaults
-	const config = { ...DEFAULT_OPTIONS, ...options } as Required<RetryOptions>
-
-	let lastError: unknown
-
-	// Try initial attempt plus retries
-	for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
-		try {
-			// Execute the function
-			return await fn()
-		} catch (error) {
-			lastError = error
-
-			// Check if we should retry
-			const isLastAttempt = attempt === config.maxRetries
-			const shouldRetry = !isLastAttempt && config.retryCondition(error, attempt)
-
-			if (!shouldRetry) {
-				if (isLastAttempt) {
-					config.onExhausted(error, attempt + 1)
-				}
-				throw error
-			}
-
-			// Calculate delay for next attempt
-			const delay = calculateDelay(attempt, config)
-
-			// Call onRetry callback
-			config.onRetry(error, attempt + 1, delay)
-
-			// Wait before next attempt
-			await sleep(delay)
-		}
-	}
-
-	// This should never happen due to the loop structure,
-	// but TypeScript requires a return value
-	throw lastError
+// Export the functions with deprecation warnings
+export async function withRetry<T>(
+	fn: () => Promise<T>,
+	options?: Partial<RetryConfig>
+): Promise<T> {
+	console.warn(
+		'Warning: Using deprecated retry.ts module. Please import from @/lib/utils/retry instead.'
+	)
+	return utilsWithRetry(fn, options)
 }
 
-/**
- * Create a retryable version of an async function
- *
- * @param fn - Original async function
- * @param options - Retry configuration options
- * @returns Wrapped function with retry capability
- */
 export function createRetryable<T extends (...args: any[]) => Promise<any>>(
 	fn: T,
-	options?: RetryOptions
+	options?: Partial<RetryConfig>
 ): (...args: Parameters<T>) => Promise<ReturnType<T>> {
-	return async (...args: Parameters<T>): Promise<ReturnType<T>> => {
-		return withRetry(() => fn(...args), options)
-	}
+	console.warn(
+		'Warning: Using deprecated retry.ts module. Please import from @/lib/utils/retry instead.'
+	)
+	return utilsCreateRetryable(fn, options)
 }
 
-/**
- * Check if an error is retryable based on common patterns
- *
- * @param error - Error to check
- * @returns Whether the error should trigger a retry
- */
 export function isRetryableError(error: unknown): boolean {
-	// Network errors are typically retryable
-	if (error instanceof Error) {
-		// Check for network-related errors
-		if (
-			error.name === 'NetworkError' ||
-			error.name === 'AbortError' ||
-			error.name === 'TimeoutError' ||
-			error.message.includes('network') ||
-			error.message.includes('timeout') ||
-			error.message.includes('connection')
-		) {
-			return true
-		}
-	}
-
-	// Check for HTTP status codes that are typically retryable
-	if (error && typeof error === 'object' && 'status' in error) {
-		const status = (error as { status: number }).status
-
-		// 408 Request Timeout, 429 Too Many Requests, 5xx Server Errors
-		return status === 408 || status === 429 || (status >= 500 && status < 600)
-	}
-
-	return false
+	console.warn(
+		'Warning: Using deprecated retry.ts module. Please import from @/lib/utils/retry instead.'
+	)
+	return utilsIsRetryableError(error)
 }

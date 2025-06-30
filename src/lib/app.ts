@@ -7,7 +7,7 @@
 
 import { initializeMonitoring } from '@/lib/monitoring/init'
 import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
-import { apiClient } from '@/lib/api/client'
+import { client } from '@/lib/api/client'
 import { debugLog } from '@/lib/utils/debug' // Offline detection is temporarily disabled
 import { hasCsrfToken } from '@/lib/stores/session'
 // import { initOfflineDetection } from '@/lib/utils/offlineDetection'
@@ -45,7 +45,7 @@ export async function initializeBrowser(): Promise<void> {
 		try {
 			isInitializing = true
 			debugLog('Initializing session during browser startup')
-			await apiClient.initSession()
+			await client.initSession()
 			isInitializing = false
 		} catch (error) {
 			debugLog('Failed to initialize session during startup:', error)

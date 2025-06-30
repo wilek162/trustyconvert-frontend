@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 
-import { apiClient } from '@/lib/api/client'
+import { client } from '@/lib/api/client'
 import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
 import { useToast } from '@/lib/hooks/useToast'
 import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
@@ -64,7 +64,7 @@ export function useFileConversion() {
 		error: statusError,
 		cancel: cancelConversion
 	} = useConversionStatus({
-		taskId,
+		jobId: taskId,
 		onError: (err) => setError(new Error(err))
 	})
 
@@ -96,7 +96,7 @@ export function useFileConversion() {
 			return withRetry(
 				async () => {
 					try {
-						const response = await apiClient.startConversion(file, targetFormat)
+						const response = await client.startConversion(file, targetFormat)
 						debugLog('[conversion.mutationFn] Conversion response', response)
 						if (!response?.task_id) {
 							throw new Error('No task ID returned from server')
@@ -230,7 +230,7 @@ export function useConversionFlow() {
 
 	const taskId = fileConversion.conversion.data?.task_id ?? null
 	const { status, progress, downloadUrl } = useConversionStatus({
-		taskId
+		jobId: taskId
 	})
 
 	// Memoize the formats data to prevent unnecessary re-renders

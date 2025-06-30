@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { getDownloadUrl } from '@/lib/api/apiClient'
 import { getJob } from '@/lib/stores/upload'
 import type { FileUploadData } from '@/lib/stores/upload'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { Loader2, DownloadCloud, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
+import downloadService, { downloadFile, getExistingToken } from '@/lib/services/downloadService'
+import client from '@/lib/api/client'
 
 interface DownloadManagerProps {
 	jobId: string
@@ -30,16 +31,7 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 			if (initialToken) {
 				debugLog('Using initial token from props:', initialToken)
 				setDownloadToken(initialToken)
-				setDownloadUrl(getDownloadUrl(initialToken))
-				return
-			}
-
-			// Check for existing token in job store or fetch a new one
-			const existingToken = downloadService.getExistingToken(jobId)
-			if (existingToken) {
-				debugLog('Using token from job store:', existingToken)
-				setDownloadToken(existingToken)
-				setDownloadUrl(getDownloadUrl(existingToken))
+				setDownloadUrl(client.getDownloadUrl(initialToken))
 				return
 			}
 
@@ -96,8 +88,7 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 		setIsDownloading(true)
 
 		try {
-			// Use download service to handle the download
-			const result = await downloadService.downloadFile({
+			const result = await downloadFile({
 				jobId,
 				autoDownload: true,
 				onSuccess: () => {

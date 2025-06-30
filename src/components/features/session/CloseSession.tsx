@@ -1,13 +1,14 @@
 import React, { useState } from 'react'
-import { closeSession } from '@/lib/api/apiClient'
-import { toast } from 'sonner'
+import client from '@/lib/api/client'
+import { showSuccess, showError, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
 
 interface CloseSessionProps {
 	variant?: 'default' | 'minimal' | 'text'
 	className?: string
+	onSessionClosed?: () => void
 }
 
-function CloseSession({ variant = 'default', className = '' }: CloseSessionProps) {
+function CloseSession({ variant = 'default', className = '', onSessionClosed }: CloseSessionProps) {
 	const [isClosing, setIsClosing] = useState(false)
 
 	const handleCloseSession = async () => {
@@ -24,10 +25,15 @@ function CloseSession({ variant = 'default', className = '' }: CloseSessionProps
 			setIsClosing(true)
 
 			// Call API to close session
-			const response = await closeSession()
+			const response = await client.closeSession()
 
 			if (response.success) {
-				toast.success('Session closed successfully')
+				showSuccess(MESSAGE_TEMPLATES.session.created)
+
+				// Call the onSessionClosed callback if provided
+				if (onSessionClosed) {
+					onSessionClosed()
+				}
 
 				// Reload page to start fresh after a short delay
 				setTimeout(() => {
@@ -38,7 +44,7 @@ function CloseSession({ variant = 'default', className = '' }: CloseSessionProps
 			}
 		} catch (error) {
 			console.error('Session close error:', error)
-			toast.error('Failed to close session. Please try again.')
+			showError(MESSAGE_TEMPLATES.generic.error)
 		} finally {
 			setIsClosing(false)
 		}

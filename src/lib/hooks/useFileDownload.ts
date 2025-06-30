@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { apiClient } from '@/lib/api/client'
+import { client } from '@/lib/api/client'
 import type { DownloadProgress } from '@/lib/types/conversion'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { handleError } from '@/lib/utils/errorHandling'
@@ -42,7 +42,7 @@ export function useFileDownload({ onComplete, onError, onProgress }: UseFileDown
 				setState((prev) => ({ ...prev, isDownloading: true, error: null }))
 
 				// Step 1: Request a download token
-				const response = await apiClient.getDownloadToken(jobId)
+				const response = await client.getDownloadToken(jobId)
 
 				// Extract the token from the response (handling different formats)
 				const downloadToken =
@@ -59,7 +59,7 @@ export function useFileDownload({ onComplete, onError, onProgress }: UseFileDown
 				debugLog('Successfully extracted download token:', downloadToken)
 
 				// Step 2: Generate the download URL
-				const downloadUrl = apiClient.getDownloadUrl(downloadToken)
+				const downloadUrl = client.getDownloadUrl(downloadToken)
 				debugLog('Generated download URL', { downloadUrl })
 
 				// Step 3: Use the recommended approach - browser redirection

@@ -146,8 +146,5 @@ export const apiConfig = {
  * @param token - Download token
  * @returns Download URL
  */
-export function getDownloadUrl(token: string): string {
-	return `${API_URL}${apiEndpoints.download}?token=${encodeURIComponent(token)}`
-}
 
 export default apiConfig

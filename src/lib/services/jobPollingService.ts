@@ -7,7 +7,7 @@
  */
 
 import { debugLog, debugError } from '@/lib/utils/debug'
-import apiClient from '@/lib/api/client'
+import client from '@/lib/api/client'
 import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
 import { updateJobStatus, updateJobProgress, setJobDownloadToken } from '@/lib/stores/upload'
 import type { JobStatus as ApiJobStatus } from '@/lib/types/api'
@@ -116,7 +116,7 @@ export function startPolling(
 
 		try {
 			// Get job status with retry
-			const statusResponse = await withRetry(() => apiClient.getConversionStatus(jobId), {
+			const statusResponse = await withRetry(() => client.getConversionStatus(jobId), {
 				...RETRY_STRATEGIES.POLLING,
 				maxRetries: 2,
 				onRetry: (error, attempt) => {
@@ -159,7 +159,7 @@ export function startPolling(
 					clearInterval(job.intervalId)
 
 					// Get download token
-					const downloadTokenResponse = await apiClient.getDownloadToken(jobId)
+					const downloadTokenResponse = await client.getDownloadToken(jobId)
 					debugLog('Download token response:', downloadTokenResponse)
 
 					// Handle different response formats
@@ -187,7 +187,7 @@ export function startPolling(
 						await setJobDownloadToken(jobId, downloadToken)
 
 						// Get download URL
-						const downloadUrl = apiClient.getDownloadUrl(downloadToken)
+						const downloadUrl = client.getDownloadUrl(downloadToken)
 						debugLog('Generated download URL:', downloadUrl)
 
 						// Call completion callback
@@ -284,7 +284,7 @@ export function startPolling(
 			const job = activePollingJobs.get(jobId)
 			if (!job || job.isCompleting) return
 
-			const statusResponse = await apiClient.getConversionStatus(jobId)
+			const statusResponse = await client.getConversionStatus(jobId)
 			if (statusResponse && statusResponse.status === 'completed') {
 				debugLog(`Immediate check found job ${jobId} already completed`)
 				// Trigger the poll function again to handle completion

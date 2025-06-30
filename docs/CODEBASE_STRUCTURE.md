@@ -1,161 +1,182 @@
 # TrustyConvert Frontend Codebase Structure
 
-This document outlines the structure and organization of the TrustyConvert frontend codebase. It provides guidelines for maintaining and extending the application in accordance with clean code principles.
+This document outlines the architecture, structure, and guidelines for the TrustyConvert frontend application, a static Astro site with React components for client-side interactivity.
+
+## Project Overview
+
+TrustyConvert is a file conversion service that allows users to convert files between different formats. The frontend is built using:
+
+- **Astro**: For static site generation and page routing
+- **React**: For client-side interactive components
+- **TypeScript**: For type safety across the codebase
+- **Tailwind CSS**: For styling
+- **Nanostores**: For state management
 
 ## Directory Structure
 
-The codebase is organized according to feature and responsibility:
-
 ```
-src/
-├── components/        # React components
-│   ├── common/        # Reusable UI components
-│   ├── features/      # Feature-specific components
-│   ├── layouts/       # Layout components
-│   └── providers/     # React context providers
-├── lib/               # Core application logic
-│   ├── api/           # API client and types
-│   ├── monitoring/    # Error tracking and performance monitoring
-│   ├── stores/        # State management
-│   ├── types/         # TypeScript type definitions
-│   └── utils/         # Utility functions
-├── mocks/             # Mock API for development
-├── pages/             # Astro pages
-├── layouts/           # Astro layouts
-└── styles/            # Global styles and Tailwind configuration
-```
-
-## Core Principles
-
-### 1. Single Responsibility
-
-Each file should have a clear, single responsibility. Avoid creating large files that handle multiple concerns. For example:
-
-- API clients should only handle API communication
-- Components should focus on rendering and user interaction
-- Utility functions should be grouped by domain
-
-### 2. Proper Error Handling
-
-All async operations should use proper error handling, utilizing our centralized error utilities:
-
-```typescript
-import { handleError } from '@/lib/utils'
-
-try {
-	const data = await fetchData()
-	return data
-} catch (error) {
-	handleError(error, { context: { action: 'fetchData' } })
-	throw error
-}
+trustyconvert-frontend/
+├── src/                    # Source code
+│   ├── components/         # UI components
+│   │   ├── common/         # Shared components
+│   │   ├── features/       # Feature-specific components
+│   │   ├── layout/         # Layout components
+│   │   ├── providers/      # Context providers
+│   │   ├── seo/            # SEO-related components
+│   │   └── ui/             # UI library components
+│   ├── content/            # Content collections (blog posts, etc.)
+│   ├── layouts/            # Page layouts
+│   ├── lib/                # Core functionality
+│   │   ├── api/            # API client and related utilities
+│   │   ├── config/         # Configuration
+│   │   ├── errors/         # Error handling
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── i18n/           # Internationalization
+│   │   ├── monitoring/     # Error tracking and monitoring
+│   │   ├── services/       # Service modules
+│   │   ├── stores/         # State management
+│   │   ├── types/          # TypeScript types
+│   │   └── utils/          # Utility functions
+│   ├── middleware/         # Astro middleware
+│   ├── pages/              # Page routes
+│   └── styles/             # Global styles
+├── public/                 # Static assets
+├── docs/                   # Documentation
+└── certs/                  # SSL certificates for local development
 ```
 
-### 3. Type Safety
+## Core Modules
 
-Always define proper TypeScript interfaces for:
+### API Client (`src/lib/api/`)
 
-- Component props
-- API responses
-- State objects
-- Function parameters and return types
+The API client is responsible for communication with the backend API. It provides:
 
-### 4. Documentation
+- Type-safe API endpoints
+- Error handling and retry logic
+- CSRF protection
+- Session management
 
-All modules, functions, and complex logic should include JSDoc comments that explain:
+Key files:
+- `_apiClient.ts`: Core API client implementation (not to be used directly)
+- `client.ts`: Public API client interface
+- `config.ts`: API configuration
+- `types.ts`: API-related types
 
-- What the code does
-- Parameters and return values
-- Important implementation details
-- Any potential side effects
+### State Management (`src/lib/stores/`)
 
-### 5. Testability
+State is managed using Nanostores, providing:
 
-Code should be written with testability in mind:
+- Reactive state management
+- Persistent storage with IndexedDB
+- Type-safe state access
 
-- Avoid tight coupling between components
-- Use dependency injection where appropriate
-- Keep functions pure when possible
-- Separate business logic from UI
+Key stores:
+- `upload.ts`: Manages file upload state
+- `conversion.ts`: Manages conversion state
+- `session.ts`: Manages session state
 
-## Key Modules
+### Services (`src/lib/services/`)
 
-### API Client (`src/lib/api/apiClient.ts`)
+Services encapsulate business logic:
 
-The API client provides a centralized interface for all backend communication. It handles:
+- `downloadService.ts`: Handles file downloads
+- `jobPollingService.ts`: Polls for job status updates
+- `sessionManager.ts`: Manages user sessions
 
-- Authentication and CSRF tokens
-- Request retries and timeouts
-- Error categorization and handling
-- Response parsing and typing
+### Components
 
-### Monitoring (`src/lib/monitoring/`)
+Components are organized by their purpose:
 
-The monitoring system provides error tracking and performance monitoring:
+- **Common Components**: Reusable components used across the application
+- **Feature Components**: Components specific to a feature (e.g., conversion, upload)
+- **UI Components**: Base UI components (buttons, inputs, etc.)
+- **Layout Components**: Page layout components
+- **Provider Components**: Context providers for React
 
-- Centralized error reporting via `reportError`
-- Performance metrics collection via `measurePerformance`
-- Abstraction layer for different environments (dev/prod)
+## Key Patterns and Guidelines
 
-### Error Handling (`src/lib/utils/errorHandling.ts`)
+### API Communication
 
-Provides utilities for consistent error handling:
+1. Always use the `client.ts` API client for backend communication, never the `_apiClient.ts` directly
+2. Handle errors appropriately using the error utilities in `lib/errors/`
+3. Use retry logic for network operations that might fail
 
-- Error classes for different error types
-- Centralized error handling with proper logging
-- User-friendly error messages
+### State Management
 
-### Mock API (`src/mocks/`)
+1. Use Nanostores for state that needs to be shared across components
+2. Keep state normalized and minimal
+3. Use IndexedDB for persistent storage of important data
 
-Implements a mock API server for development:
+### Component Design
 
-- Simulates all backend endpoints
-- Provides realistic response patterns including errors
-- Manages mock data for testing scenarios
-
-## Best Practices
-
-### Adding New Features
-
-1. Define the feature requirements and API contract
-2. Create necessary type definitions
-3. Implement the core logic in appropriate lib modules
-4. Create UI components
-5. Add tests
-6. Update documentation
+1. Prefer small, focused components with clear responsibilities
+2. Use TypeScript interfaces for component props
+3. Keep UI logic separate from business logic
+4. Use client:* directives appropriately in Astro templates
 
 ### Error Handling
 
-All asynchronous operations should handle errors properly:
+1. Use structured error types from `lib/errors/`
+2. Log errors to the error tracking system
+3. Provide user-friendly error messages
+4. Implement retry logic for transient errors
 
-1. Use try/catch blocks around async code
-2. Use the `handleError` utility for consistent error reporting
-3. Provide user-friendly fallbacks in the UI
-4. Use typed error classes for different error categories
+### Internationalization
 
-### Performance Considerations
+1. Use the i18n utilities for all user-facing text
+2. Support language switching via the URL parameter
+3. Ensure all text is translatable
 
-1. Minimize bundle size by avoiding large dependencies
-2. Use lazy loading for non-critical components
-3. Optimize API calls (caching, deduplication)
-4. Monitor performance metrics in production
+### Performance
 
-### Security Considerations
+1. Minimize client-side JavaScript
+2. Use appropriate Astro partial hydration strategies
+3. Optimize images and assets
+4. Implement lazy loading where appropriate
 
-1. Always validate user input
-2. Use CSRF protection for all API calls
-3. Never store sensitive information in localStorage
-4. Follow secure coding practices
+## Build and Development
 
-## Development Workflow
+- Development: `pnpm dev`
+- Build: `pnpm build`
+- Preview: `pnpm preview`
 
-1. Run the development server with `pnpm dev`
-2. Use MSW for API mocking during development
-3. Lint code with `pnpm lint`
-4. Format code with `pnpm format`
-5. Typecheck with `pnpm typecheck`
-6. Build with `pnpm build`
+## Common Issues and Solutions
 
-## Conclusion
+### CSRF Token Issues
 
-By following these guidelines, we ensure that the TrustyConvert codebase remains clean, maintainable, and scalable. Each part of the application should have a clear responsibility and be easy to understand and modify.
+If you encounter CSRF validation errors:
+1. Check that the session is properly initialized
+2. Ensure CSRF tokens are being sent with requests
+3. Verify that cookies are being properly stored
+
+### API Connection Issues
+
+If API requests are failing:
+1. Check the API URL configuration
+2. Verify CORS settings
+3. Check SSL certificate configuration for local development
+
+## Adding New Features
+
+When adding new features:
+
+1. Create components in the appropriate directory
+2. Add any necessary API endpoints to the client
+3. Create or update state stores as needed
+4. Add appropriate error handling
+5. Update documentation
+
+## Testing
+
+- Unit tests: Use Vitest for component and utility testing
+- Component tests: Use Storybook for visual testing
+- End-to-end tests: Use Playwright for full workflow testing
+
+## Deployment
+
+The application is built as a static site and can be deployed to any static hosting service. The build process:
+
+1. Generates static HTML pages
+2. Bundles JavaScript for client-side interactivity
+3. Optimizes assets
+4. Generates a sitemap

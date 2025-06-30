@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'sonner'
 import { LanguageProvider } from './LanguageProvider'
-import { SessionProvider } from './SessionProvider'
+import { SessionContextProvider } from '@/lib/providers/SessionContext'
 import { debugLog } from '@/lib/utils/debug'
 
 export interface AppProvidersProps {
@@ -50,10 +50,10 @@ export function AppProviders({ children, enableDevtools = false }: AppProvidersP
 			<QueryClientProvider client={queryClient}>
 				<LanguageProvider>
 					<ToastProvider>
-						<SessionProvider>
+						<SessionContextProvider>
 							<ToastListener />
 							{children}
-						</SessionProvider>
+						</SessionContextProvider>
 					</ToastProvider>
 				</LanguageProvider>
 				{import.meta.env.DEV && enableDevtools && <ReactQueryDevtools />}

@@ -1,5 +1,5 @@
 import { useQuery, Query } from '@tanstack/react-query'
-import { apiClient } from '@/lib/api/client'
+import { client } from '@/lib/api/client'
 import type { ConversionStatusResponse } from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { handleError } from '@/lib/utils/errorHandling'
@@ -7,7 +7,7 @@ import { handleError } from '@/lib/utils/errorHandling'
 const POLLING_INTERVAL = 2000 // 2 seconds
 
 interface UseConversionStatusOptions {
-	taskId: string | null
+	jobId: string | null
 	onError?: (error: string) => void
 	pollingInterval?: number
 	maxRetries?: number
@@ -22,19 +22,19 @@ type ConversionStatus = 'idle' | 'pending' | 'processing' | 'completed' | 'faile
  * @returns Status information and control functions
  */
 export function useConversionStatus({
-	taskId,
+	jobId: jobId,
 	onError,
 	pollingInterval = POLLING_INTERVAL,
 	maxRetries = 2
 }: UseConversionStatusOptions) {
 	const query = useQuery<ConversionStatusResponse, Error>({
-		queryKey: ['conversion-status', taskId],
+		queryKey: ['conversion-status', jobId],
 		queryFn: async () => {
-			if (!taskId) throw new Error('No task ID provided')
-			debugLog('[useConversionStatus] Checking status', { taskId })
+			if (!jobId) throw new Error('No task ID provided')
+			debugLog('[useConversionStatus] Checking status', { jobId: jobId })
 			try {
-				// taskId is used as jobId for API calls
-				const status = await apiClient.getConversionStatus(taskId)
+				// jobId is used as jobId for API calls
+				const status = await client.getConversionStatus(jobId)
 
 				// The apiClient.getConversionStatus now standardizes the response
 				// so we don't need to manually handle field aliases anymore
@@ -44,13 +44,13 @@ export function useConversionStatus({
 			} catch (error) {
 				debugError('[useConversionStatus] Status check failed', error)
 				const errorMessage = handleError(error, {
-					context: { component: 'useConversionStatus', taskId }
+					context: { component: 'useConversionStatus', jobId: jobId }
 				})
 				if (onError) onError(errorMessage)
 				throw error
 			}
 		},
-		enabled: !!taskId,
+		enabled: !!jobId,
 		refetchInterval: (q: Query<ConversionStatusResponse, Error>) => {
 			const data = q.state.data
 			const error = q.state.error

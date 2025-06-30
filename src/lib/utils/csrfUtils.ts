@@ -1,8 +1,7 @@
 /**
  * CSRF Token Utilities
  *
- * Provides utilities for working with CSRF tokens, implementing the Double Submit Cookie pattern
- * for CSRF protection as described in the API documentation.
+ * Provides utilities for working with CSRF tokens.
  */
 
 import { debugLog, debugError } from '@/lib/utils/debug'
@@ -12,7 +11,7 @@ import { apiConfig } from '@/lib/api/config'
 const CSRF_COOKIE_NAME = import.meta.env.CSRF_COOKIE_NAME || 'csrftoken'
 
 /**
- * Get the CSRF token from cookies
+ * Get the CSRF token from cookies (only used for initial load)
  * @returns The CSRF token or null if not found
  */
 export function getCsrfTokenFromCookie(): string | null {
@@ -55,96 +54,21 @@ export function getCsrfTokenFromCookie(): string | null {
 }
 
 /**
- * Set the CSRF token in a cookie
- * This implements the "double cookie" method for CSRF protection
- * The server sets an HttpOnly cookie with the session, and we set a JavaScript-accessible
- * cookie with the CSRF token from the response body
- *
- * @param token The CSRF token to set
- */
-export function setCsrfTokenCookie(token: string): void {
-	if (typeof document === 'undefined') return
-
-	debugLog('Setting CSRF token in cookie:', token)
-
-	// Calculate expiration (24 hours from now)
-	const expires = new Date()
-	expires.setHours(expires.getHours() + 24)
-
-	// Set cookie attributes based on environment
-	// In production, we always use Secure and SameSite=None
-	// In development with HTTP, we can't use SameSite=None without Secure
-	const isSecure = window.location.protocol === 'https:'
-
-	// Try multiple approaches to ensure the cookie is set correctly
-	// First, try the most compatible approach
-	let cookieString = `${CSRF_COOKIE_NAME}=${token};path=/;expires=${expires.toUTCString()}`
-
-	// Add Secure attribute if using HTTPS
-	if (isSecure) {
-		cookieString += ';Secure'
-
-		// SameSite=None requires Secure attribute
-		cookieString += ';SameSite=None'
-	} else {
-		// For local development with HTTP
-		cookieString += ';SameSite=Lax'
-	}
-
-	// Set the cookie
-	document.cookie = cookieString
-
-	// Also try a simpler approach as some browsers have issues with complex cookie strings
-	setTimeout(() => {
-		// Check if the cookie was set correctly
-		const storedToken = getCsrfTokenFromCookie()
-		if (storedToken !== token) {
-			debugError('CSRF token was not set correctly in cookie, trying alternative approach', {
-				expected: token,
-				actual: storedToken
-			})
-
-			// Try a simpler approach
-			document.cookie = `${CSRF_COOKIE_NAME}=${token};path=/;max-age=86400`
-
-			// Try a third approach with SameSite=None if secure
-			if (isSecure) {
-				setTimeout(() => {
-					const secondCheck = getCsrfTokenFromCookie()
-					if (secondCheck !== token) {
-						debugError('Second attempt failed, trying with explicit SameSite=None')
-						document.cookie = `${CSRF_COOKIE_NAME}=${token};path=/;max-age=86400;SameSite=None;Secure`
-					}
-				}, 50)
-			}
-		}
-	}, 50)
-}
-
-/**
- * Check if a CSRF token exists in cookies
- * @returns True if a CSRF token exists in cookies
- */
-export function hasCsrfToken(): boolean {
-	return getCsrfTokenFromCookie() !== null
-}
-
-/**
  * Get CSRF headers for API requests
+ * @param token CSRF token to use
  * @returns Headers object with CSRF token
  */
-export function getCsrfHeaders(): HeadersInit {
-	const token = getCsrfTokenFromCookie()
+export function getCsrfHeaders(token: string): HeadersInit {
 	if (!token) {
 		debugError('Attempting to get CSRF headers with no token')
 		return {}
 	}
 
-	// Include both capitalized and lowercase versions for compatibility
+	// Use the configured header name from apiConfig
+	const headerName = apiConfig.csrfTokenHeader || 'X-CSRF-Token'
+
 	return {
-		[apiConfig.csrfTokenHeader]: token,
-		'X-CSRF-Token': token,
-		'x-csrf-token': token
+		[headerName]: token
 	}
 }
 

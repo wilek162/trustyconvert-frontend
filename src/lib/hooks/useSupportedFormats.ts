@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/lib/api/client'
+import { client } from '@/lib/api/client'
 import type { ConversionFormat } from '@/lib/api/types'
 
 /**
@@ -65,7 +65,7 @@ export function useSupportedFormats() {
 		queryKey: FORMATS_QUERY_KEY,
 		queryFn: async () => {
 			debug.log('Fetching supported formats')
-			const response = await apiClient.getSupportedFormats()
+			const response = await client.getSupportedFormats()
 			debug.log('Formats fetched', { count: response.length })
 			return response
 		},

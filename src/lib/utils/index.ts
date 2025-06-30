@@ -7,6 +7,12 @@
 // Re-export error handling utilities
 export * from './errorHandling'
 
+// Re-export retry utilities
+export * from './retry'
+
+// Re-export debug utilities
+export * from './debug'
+
 // Re-export all utils for easier imports
 export * from './files'
 

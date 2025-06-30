@@ -37,7 +37,7 @@ export interface SessionInitResponse {
 /**
  * Job status values
  */
-export type JobStatus = 'pending' | 'uploaded' | 'queued' | 'processing' | 'completed' | 'failed'
+export type JobStatus = 'idle' | 'uploaded' | 'processing' | 'completed' | 'failed'
 
 /**
  * File upload response

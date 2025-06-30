@@ -1,11 +1,12 @@
 /**
- * API client for TrustyConvert backend
+ * CORE API client for TrustyConvert backend
  *
  * Provides type-safe API endpoints with centralized error handling,
  * CSRF protection, and consistent request/response patterns.
+ * Never use this file directly, use the client.ts file instead or sessionManger.ts for session management.
  */
 
-import { getCsrfHeaders, dispatchCsrfError } from '@/lib/utils/csrfUtils'
+import { dispatchCsrfError } from '@/lib/utils/csrfUtils'
 import sessionManager from '@/lib/services/sessionManager'
 import type {
 	ApiResponse,
@@ -18,10 +19,17 @@ import type {
 	SessionCloseResponse,
 	FormatsResponse
 } from '@/lib/types/api'
-import { NetworkError, SessionError, ValidationError, handleError } from '@/lib/utils/errorHandling'
+import {
+	NetworkError,
+	SessionError,
+	ValidationError,
+	handleError,
+	getErrorMessageTemplate
+} from '@/lib/utils/errorHandling'
 import { apiConfig } from './config'
 import { withRetry, RETRY_STRATEGIES, isRetryableError } from '@/lib/utils/retry'
 import { debugLog, debugError } from '@/lib/utils/debug'
+import { formatMessage } from '@/lib/utils/messageUtils'
 
 // Configuration
 const API_BASE_URL = apiConfig.baseUrl
@@ -72,7 +80,7 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 			fetchOpts.credentials = 'include'
 
 			// Ensure headers are properly set
-			const headers = new Headers(fetchOpts.headers || {})
+			const headers = new Headers(fetchOptions.headers || {})
 			headers.set('Origin', window.location.origin)
 			fetchOpts.headers = headers
 		}
@@ -81,10 +89,7 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 		return response
 	} catch (error) {
 		if (error instanceof DOMException && error.name === 'AbortError') {
-			throw new NetworkError({
-				message: 'Request timed out',
-				context: { url, timeout }
-			})
+			throw new NetworkError('Request timed out', { url, timeout })
 		}
 		throw error
 	} finally {
@@ -144,10 +149,7 @@ async function processApiResponse<T>(
 	// Check for session errors
 	if (response.status === 401) {
 		debugError('Session validation failed', { endpoint, status: response.status })
-		throw new SessionError({
-			message: 'Session validation failed',
-			context: { endpoint, status: response.status }
-		})
+		throw new SessionError('Session validation failed', { endpoint, status: response.status })
 	}
 
 	// Handle successful responses
@@ -156,6 +158,13 @@ async function processApiResponse<T>(
 			const contentType = response.headers.get('content-type')
 			if (contentType && contentType.includes('application/json')) {
 				const jsonResponse = await response.json()
+
+				// Check if response contains a new CSRF token and update it in the store
+				if (jsonResponse.data && jsonResponse.data.csrf_token) {
+					debugLog('Received new CSRF token from server response')
+					sessionManager.updateCsrfTokenFromServer(jsonResponse.data.csrf_token)
+				}
+
 				return jsonResponse as ApiResponse<T>
 			} else {
 				// For non-JSON responses, return a generic success response
@@ -167,10 +176,7 @@ async function processApiResponse<T>(
 			}
 		} catch (error) {
 			debugError('Failed to parse API response', { endpoint, error })
-			throw new NetworkError({
-				message: 'Failed to parse API response',
-				context: { endpoint, status: response.status }
-			})
+			throw new NetworkError('Failed to parse API response', { endpoint, status: response.status })
 		}
 	}
 
@@ -182,40 +188,16 @@ async function processApiResponse<T>(
 			return errorResponse as ApiResponse<T>
 		} else {
 			const errorText = await response.text()
-			throw new NetworkError({
-				message: `API Error: ${errorText}`,
-				context: { endpoint, status: response.status }
-			})
+			throw new NetworkError(`API Error: ${errorText}`, { endpoint, status: response.status })
 		}
 	} catch (error) {
 		if (error instanceof NetworkError) {
 			throw error
 		}
-		throw new NetworkError({
-			message: 'Failed to parse API error response',
-			context: { endpoint, status: response.status }
+		throw new NetworkError('Failed to parse API error response', {
+			endpoint,
+			status: response.status
 		})
-	}
-}
-
-/**
- * Get CSRF headers for requests that require CSRF protection
- * @returns Object with CSRF headers
- */
-function getCsrfRequestHeaders(): Record<string, string> {
-	const csrfToken = sessionManager.getCsrfToken()
-	if (!csrfToken) {
-		debugError('No CSRF token available for request headers')
-		return {}
-	}
-
-	// Only include one version of the header - use the capitalized version
-	// as it's more standard, but some servers might expect lowercase
-	const headerName = apiConfig.csrfTokenHeader || 'X-CSRF-Token'
-
-	// Return a single header with the proper name
-	return {
-		[headerName]: csrfToken
 	}
 }
 
@@ -236,15 +218,22 @@ async function makeRequest<T>(
 	try {
 		// Add CSRF headers for non-GET requests if not explicitly skipped
 		if (!skipCsrfCheck && fetchOptions.method && fetchOptions.method !== 'GET') {
-			const csrfHeaders = getCsrfRequestHeaders()
+			// First try to synchronize token from cookie to memory
+			sessionManager.synchronizeTokenFromCookie()
+
+			const csrfHeaders = sessionManager.getCsrfHeaders()
 
 			// Create headers object if it doesn't exist
 			const headers = new Headers(fetchOptions.headers || {})
 
-			// Add CSRF header - ensure we don't add duplicate headers
-			if (csrfHeaders[apiConfig.csrfTokenHeader]) {
-				headers.set(apiConfig.csrfTokenHeader, csrfHeaders[apiConfig.csrfTokenHeader])
+			// Add CSRF header if available
+			if (Object.keys(csrfHeaders).length > 0) {
+				for (const [key, value] of Object.entries(csrfHeaders)) {
+					headers.set(key, value)
+				}
 				debugLog(`Added CSRF token to ${fetchOptions.method} request for ${endpoint}`)
+			} else {
+				debugLog(`No CSRF token available for ${fetchOptions.method} request to ${endpoint}`)
 			}
 
 			// Update the fetchOptions with our headers
@@ -264,42 +253,69 @@ async function makeRequest<T>(
 		}
 
 		// Handle other errors
-		throw new NetworkError({
-			message: error instanceof Error ? error.message : 'Unknown error',
-			context: { endpoint }
-		})
+		throw new NetworkError('Unknown error during API request', { endpoint })
 	}
 }
 
 /**
- * Initialize a session with the API
- * @returns Session initialization response
+ * Initialize a session with the backend
+ *
+ * @returns Session initialization response or null on error
  */
-export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
+async function initSession(): Promise<SessionInitResponse | null> {
+	debugLog('API: Initializing session')
+
 	try {
-		debugLog('API: Initializing session')
+		// Make the session initialization request
 		const response = await makeRequest<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
 			method: 'GET',
-			skipAuthCheck: true,
-			skipCsrfCheck: true
+			skipCsrfCheck: true // Skip CSRF check for initial session creation
 		})
 
-		// After successful session init, synchronize the token from cookie
-		if (response.success && response.data?.csrf_token) {
-			// We don't need to do anything here as the session manager will handle this
-			debugLog('API: Session initialized with CSRF token:', response.data.csrf_token)
+		// Check if the response was successful
+		if (!response.success) {
+			debugError('Session initialization failed', {
+				error: response.data?.error || 'Unknown error',
+				message: response.data?.message || response.data?.error_message || 'No message provided',
+				correlationId: response.correlation_id || 'no-correlation-id'
+			})
+			return null
 		}
 
-		return response
+		// Return the session data
+		return response.data
 	} catch (error) {
-		debugError('API: Session initialization failed', error)
-		return {
-			success: false,
-			data: {
-				error: 'NetworkError',
-				message: 'Failed to initialize session'
-			} as any
+		// Log detailed error information in development mode
+		if (import.meta.env.DEV) {
+			console.group('Session Initialization API Error')
+			console.error('Error details:', error)
+
+			// Try to get more information about the error
+			if (error instanceof NetworkError) {
+				console.log('Network error context:', error.context)
+			}
+
+			// Check if the API is reachable
+			try {
+				const healthCheck = await fetch(`${API_BASE_URL}/health`, {
+					method: 'GET',
+					mode: 'cors',
+					credentials: 'include'
+				})
+				console.log(
+					'API health check status:',
+					healthCheck.status,
+					healthCheck.ok ? 'OK' : 'Failed'
+				)
+			} catch (healthError) {
+				console.error('API health check failed:', healthError)
+			}
+
+			console.groupEnd()
 		}
+
+		debugError('Failed to initialize session', error)
+		return null
 	}
 }
 
@@ -309,21 +325,8 @@ export async function initSession(): Promise<ApiResponse<SessionInitResponse>> {
  * @param jobId Job ID for tracking
  * @returns Upload response
  */
-export async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>> {
+async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>> {
 	try {
-		// Ensure we have a CSRF token
-		const csrfToken = sessionManager.getCsrfToken()
-		if (!csrfToken) {
-			debugError('API: No CSRF token available for upload')
-			return {
-				success: false,
-				data: {
-					error: 'CSRFValidationError',
-					message: 'Missing CSRF token for upload'
-				} as any
-			}
-		}
-
 		// Create form data
 		const formData = new FormData()
 		formData.append('file', file)
@@ -341,11 +344,24 @@ export async function uploadFile(file: File, jobId?: string): Promise<ApiRespons
 		return response
 	} catch (error) {
 		debugError('API: File upload failed', error)
+
+		// Use centralized error handling
+		handleError(error, {
+			context: {
+				component: 'apiClient',
+				action: 'uploadFile',
+				fileName: file.name,
+				fileSize: file.size,
+				jobId
+			},
+			showToast: true
+		})
+
 		return {
 			success: false,
 			data: {
 				error: 'NetworkError',
-				message: 'Failed to upload file'
+				message: getErrorMessageTemplate(error)
 			} as any
 		}
 	}
@@ -359,32 +375,60 @@ export async function uploadFile(file: File, jobId?: string): Promise<ApiRespons
  * @param sourceFormat - Optional source format (auto-detected if not provided)
  * @returns Conversion response
  */
-export async function convertFile(
+async function convertFile(
 	jobId: string,
 	targetFormat: string,
 	sourceFormat?: string
 ): Promise<ApiResponse<ConvertResponse>> {
-	return withRetry(
-		async () => {
-			// Create request body
-			const body = {
-				job_id: jobId,
-				target_format: targetFormat,
-				source_format: sourceFormat
-			}
+	const retryConfig = {
+		...RETRY_STRATEGIES.API_REQUEST
+	}
 
-			return makeRequest<ConvertResponse>(apiConfig.endpoints.convert, {
+	return withRetry(async () => {
+		// Create request body
+		const body = {
+			job_id: jobId,
+			target_format: targetFormat,
+			source_format: sourceFormat
+		}
+
+		try {
+			return await makeRequest<ConvertResponse>(apiConfig.endpoints.convert, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify(body)
 			})
-		},
-		{
-			...RETRY_STRATEGIES.API_REQUEST
+		} catch (error) {
+			// Handle error before retrying
+			debugError('API: Convert file failed', { error, jobId, targetFormat })
+
+			// Let the retry mechanism handle it
+			throw error
 		}
-	)
+	}, retryConfig).catch((error) => {
+		// Final error handling after all retries
+		handleError(error, {
+			context: {
+				component: 'apiClient',
+				action: 'convertFile',
+				jobId,
+				targetFormat,
+				sourceFormat
+			},
+			showToast: true
+		})
+
+		// Return error response
+		return {
+			success: false,
+			data: {
+				error: error instanceof Error ? error.name : 'ConversionError',
+				message: getErrorMessageTemplate(error)
+			} as any
+		}
+	})
 }
 
 /**
@@ -393,7 +437,7 @@ export async function convertFile(
  * @param jobId - Job ID to check
  * @returns Job status response
  */
-export async function getJobStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>> {
+async function getJobStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>> {
 	return withRetry(
 		async () => {
 			// Add job ID as query parameter
@@ -414,7 +458,7 @@ export async function getJobStatus(jobId: string): Promise<ApiResponse<JobStatus
  * @param jobId - Job ID to get download token for
  * @returns Download token response
  */
-export async function getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>> {
+async function getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>> {
 	return withRetry(
 		async () => {
 			// Create request body
@@ -441,7 +485,7 @@ export async function getDownloadToken(jobId: string): Promise<ApiResponse<Downl
  *
  * @returns Session close response
  */
-export async function closeSession(): Promise<ApiResponse<SessionCloseResponse>> {
+async function closeSession(): Promise<ApiResponse<SessionCloseResponse>> {
 	return withRetry(
 		async () => {
 			return makeRequest<SessionCloseResponse>(apiConfig.endpoints.sessionClose, {
@@ -459,7 +503,7 @@ export async function closeSession(): Promise<ApiResponse<SessionCloseResponse>>
  *
  * @returns Formats response
  */
-export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse>> {
+async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse>> {
 	return withRetry(
 		async () => {
 			return makeRequest<FormatsResponse>(apiConfig.endpoints.formats, {
@@ -480,14 +524,14 @@ export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse
  * @param token - Download token
  * @returns Download URL
  */
-export function getDownloadUrl(token: string): string {
+function getDownloadUrl(token: string): string {
 	// Ensure the token is properly encoded
 	const encodedToken = encodeURIComponent(token)
 	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodedToken}`
 }
 
 // Export the API client as a single object
-export const apiClient = {
+export const _apiClient = {
 	initSession,
 	uploadFile,
 	convertFile,
@@ -497,5 +541,3 @@ export const apiClient = {
 	getSupportedFormats,
 	getDownloadUrl
 }
-
-export default apiClient

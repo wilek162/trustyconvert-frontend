@@ -1,273 +1,305 @@
 /**
- * Centralized Session Manager Service
+ * Session Manager Service
  *
- * This service handles all session initialization and CSRF token management.
- * It ensures that only one session initialization request is made at a time
- * and provides methods for checking and refreshing CSRF tokens.
+ * Handles session initialization and management, acting as a bridge between
+ * server-managed sessions and client-side state.
  */
 
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { getCsrfTokenFromCookie, setCsrfTokenCookie } from '@/lib/utils/csrfUtils'
-import { initSession as apiInitSession } from '@/lib/api/apiClient'
-import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
+import { csrfToken, sessionInitialized, updateCsrfToken, clearSession } from '@/lib/stores/session'
+import { getCsrfTokenFromCookie, getCsrfHeaders, dispatchCsrfError } from '@/lib/utils/csrfUtils'
+import { apiConfig } from '@/lib/api/config'
+import client from '../api/client'
 
-// Session state
+// Global session initialization state
 let isInitializing = false
-let lastInitTime = 0
 let initializationPromise: Promise<boolean> | null = null
-let sessionInitialized = false
-let currentCsrfToken: string | null = null
-let initAttempts = 0
-const MAX_INIT_ATTEMPTS = 3
+let lastInitAttempt = 0
+const MIN_INIT_INTERVAL = 2000 // Minimum time between initialization attempts (ms)
 
-// Create a debounced version of the initialization function
-let debounceTimeout: NodeJS.Timeout | null = null
-const DEBOUNCE_DELAY = 300 // ms
+// Track last error for debugging
+let lastInitError: unknown = null
 
 /**
- * Check if a CSRF token exists
- * @returns True if a CSRF token exists
+ * Session Manager Class
+ * Handles all session-related functionality as a singleton
  */
-export function hasCsrfToken(): boolean {
-	const cookieToken = getCsrfTokenFromCookie()
-	return cookieToken !== null && cookieToken === currentCsrfToken
-}
+class SessionManager {
+	/**
+	 * Check if a CSRF token exists in the store or cookie
+	 */
+	hasCsrfToken(): boolean {
+		return csrfToken.get() !== null || getCsrfTokenFromCookie() !== null
+	}
 
-/**
- * Get the current CSRF token
- * @returns The current CSRF token or null if not found
- */
-export function getCsrfToken(): string | null {
-	// Always return the in-memory token which should be synchronized with the cookie
-	return currentCsrfToken
-}
+	/**
+	 * Get the current CSRF token
+	 * First checks the store, then falls back to cookie if needed
+	 */
+	getCsrfToken(): string | null {
+		// First check the store
+		const storeToken = csrfToken.get()
+		if (storeToken) return storeToken
 
-/**
- * Set the CSRF token both in memory and cookie
- * @param token The CSRF token to set
- * @returns True if token was set successfully
- */
-async function setCsrfToken(token: string): Promise<boolean> {
-	try {
-		debugLog('Setting CSRF token:', token)
-
-		// Store in memory first
-		currentCsrfToken = token
-
-		// Then set in cookie
-		setCsrfTokenCookie(token)
-
-		// Wait a moment for cookie to be set
-		await new Promise((resolve) => setTimeout(resolve, 100))
-
-		// Verify token was set correctly
+		// If not in store, check cookie and update store if found
 		const cookieToken = getCsrfTokenFromCookie()
-		if (cookieToken !== token) {
-			debugError('CSRF token mismatch after setting cookie', {
-				inMemory: token,
-				inCookie: cookieToken
-			})
-
-			// Try alternative approach
-			if (typeof document !== 'undefined') {
-				document.cookie = `csrftoken=${token};path=/;max-age=86400;SameSite=None;Secure`
-
-				// Check again
-				await new Promise((resolve) => setTimeout(resolve, 100))
-				const retryToken = getCsrfTokenFromCookie()
-				if (retryToken !== token) {
-					debugError('CSRF token still mismatched after retry', {
-						inMemory: token,
-						inCookie: retryToken
-					})
-					return false
-				}
-			}
+		if (cookieToken) {
+			// Update the store with the cookie value
+			this.setCsrfToken(cookieToken)
+			return cookieToken
 		}
 
-		debugLog('CSRF token synchronized successfully')
-		return true
-	} catch (error) {
-		debugError('Error setting CSRF token:', error)
-		return false
+		return null
 	}
-}
 
-/**
- * Initialize a session with debouncing to prevent multiple calls
- * @returns A promise that resolves to true if initialization was successful
- */
-export function debouncedInitSession(): Promise<boolean> {
-	// If we already have a valid token, return immediately
-	if (hasCsrfToken() && sessionInitialized) {
+	/**
+	 * Get the CSRF token from cookie directly
+	 * Exposed for debugging purposes
+	 */
+	getCsrfTokenFromCookie(): string | null {
+		return getCsrfTokenFromCookie()
+	}
+
+	/**
+	 * Set the CSRF token in the store
+	 */
+	setCsrfToken(token: string): boolean {
+		if (!token) {
+			debugError('Attempted to set empty CSRF token')
+			return false
+		}
+
+		try {
+			// Update the nanostore with the new token
+			updateCsrfToken(token)
+			sessionInitialized.set(true)
+			debugLog('CSRF token set in store and session marked as initialized')
+			return true
+		} catch (error) {
+			debugError('Error setting CSRF token:', error)
+			return false
+		}
+	}
+
+	/**
+	 * Synchronize token from cookie to store
+	 * Returns true if a token was found and synchronized
+	 */
+	synchronizeTokenFromCookie(): boolean {
+		const cookieToken = getCsrfTokenFromCookie()
+		const storeToken = csrfToken.get()
+
+		if (!cookieToken) {
+			return false
+		}
+
+		// If cookie token exists and differs from store token, update store
+		if (cookieToken !== storeToken) {
+			debugLog('Synchronizing CSRF token from cookie to store')
+			return this.setCsrfToken(cookieToken)
+		}
+
+		// Token exists and is already synchronized
+		return true
+	}
+
+	/**
+	 * Get CSRF headers for API requests
+	 */
+	getCsrfHeaders(): HeadersInit {
+		const token = this.getCsrfToken()
+		return token ? getCsrfHeaders(token) : {}
+	}
+
+	/**
+	 * Reset the session state in the client
+	 * Does not affect server-side session
+	 */
+	resetSession(): Promise<boolean> {
+		debugLog('Resetting client-side session state')
+		clearSession()
+		isInitializing = false
+		initializationPromise = null
+		lastInitAttempt = 0
+		lastInitError = null
 		return Promise.resolve(true)
 	}
 
-	// Return existing promise if initialization is in progress
-	if (initializationPromise && isInitializing) {
-		return initializationPromise
-	}
+	/**
+	 * Initialize a session with the API or refresh CSRF token
+	 * This is the ONLY method that should make API calls to initialize a session
+	 *
+	 * @param forceNew Force a new session even if one exists (use sparingly)
+	 * @returns Promise that resolves to boolean indicating success
+	 */
+	async initSession(forceNew = false): Promise<boolean> {
+		// First try to synchronize from cookie
+		const hasSyncedToken = this.synchronizeTokenFromCookie()
 
-	// Create a new promise for this debounced call
-	return new Promise((resolve) => {
-		// Clear any existing timeout
-		if (debounceTimeout) {
-			clearTimeout(debounceTimeout)
-		}
-
-		// Set a new timeout
-		debounceTimeout = setTimeout(() => {
-			// Start the actual initialization
-			initSession().then(resolve)
-		}, DEBOUNCE_DELAY)
-	})
-}
-
-/**
- * Initialize a session
- * This ensures only one initialization request is made at a time
- * @returns A promise that resolves to true if initialization was successful
- */
-export async function initSession(): Promise<boolean> {
-	// If we already have a valid CSRF token and session is initialized, return true
-	if (hasCsrfToken() && sessionInitialized) {
-		debugLog('Session already initialized with valid CSRF token')
-		return true
-	}
-
-	// If there's already an initialization in progress, return that promise
-	if (initializationPromise && isInitializing) {
-		debugLog('Session initialization already in progress, returning existing promise')
-		return initializationPromise
-	}
-
-	// Throttle initialization to prevent hammering the API
-	const now = Date.now()
-	if (now - lastInitTime < 2000) {
-		// 2 second throttle
-		debugLog('Session initialization throttled')
-		if (hasCsrfToken()) {
+		// If we have a valid token and not forcing new, return immediately
+		if (hasSyncedToken && !forceNew) {
+			sessionInitialized.set(true)
 			return true
 		}
-		await new Promise((resolve) => setTimeout(resolve, 2000))
-	}
 
-	// Start initialization
-	isInitializing = true
-	lastInitTime = Date.now()
-	initAttempts += 1
-	debugLog(`Starting session initialization (attempt ${initAttempts})`)
+		// Debounce initialization attempts
+		const now = Date.now()
+		if (!forceNew && now - lastInitAttempt < MIN_INIT_INTERVAL) {
+			debugLog('Session initialization throttled - recent attempt detected')
 
-	// Create a new promise for this initialization
-	initializationPromise = (async () => {
-		try {
-			// Call the API to initialize the session with retry logic
-			const response = await withRetry(() => apiInitSession(), {
-				...RETRY_STRATEGIES.API_REQUEST,
-				maxRetries: initAttempts >= MAX_INIT_ATTEMPTS ? 0 : 2, // Limit retries based on overall attempts
-				onRetry: (error, attempt) => {
-					debugLog(
-						`Retrying session initialization (attempt ${attempt}) after error: ${error.message}`
-					)
-				}
-			})
+			// If we have an existing initialization in progress, return that
+			if (initializationPromise && isInitializing) {
+				debugLog('Returning existing initialization promise')
+				return initializationPromise
+			}
 
-			// Extract CSRF token from response body
-			if (response.success && response.data?.csrf_token) {
-				debugLog('Received CSRF token from session init:', response.data.csrf_token)
+			// Otherwise, just return the current state
+			return this.hasCsrfToken()
+		}
 
-				// Set the token in both memory and cookie
-				const tokenSet = await setCsrfToken(response.data.csrf_token)
-				if (!tokenSet) {
-					debugError('Failed to set CSRF token')
+		// Return existing promise if initialization is in progress
+		if (initializationPromise && isInitializing) {
+			debugLog('Session initialization already in progress, returning existing promise')
+			return initializationPromise
+		}
+
+		// Start a new initialization
+		debugLog('Starting new session initialization')
+		isInitializing = true
+		lastInitAttempt = now
+
+		// Store the promise in the global variable so other calls can use it
+		initializationPromise = (async () => {
+			try {
+				debugLog('Session Manager: Initializing session with server')
+
+				// Make request to the session init endpoint
+				const responseData = await client.initSession()
+
+				if (!responseData || !responseData.csrf_token) {
+					const error = new Error('No CSRF token received from server')
+					lastInitError = {
+						type: 'MissingToken',
+						message: 'Session initialization failed - no CSRF token received',
+						response: responseData
+					}
+					debugError('Session initialization failed - no CSRF token received', responseData)
 					return false
 				}
 
-				sessionInitialized = true
-				initAttempts = 0 // Reset attempts counter on success
+				// Store the token in our state management
+				const tokenSet = this.setCsrfToken(responseData.csrf_token)
+				if (!tokenSet) {
+					lastInitError = {
+						type: 'TokenStoreFailed',
+						message: 'Failed to set CSRF token in store',
+						token: responseData.csrf_token
+					}
+					debugError('Failed to set CSRF token in store')
+					return false
+				}
+
+				// Clear any previous error
+				lastInitError = null
+				debugLog('Session Manager: Session initialized with CSRF token from server')
 				return true
-			} else {
-				debugError('No CSRF token in session init response', response)
+			} catch (error) {
+				lastInitError = error
+				debugError('Session Manager: Session initialization failed', error)
 				return false
+			} finally {
+				isInitializing = false
+				// Keep the promise for a short while to prevent immediate re-initialization
+				setTimeout(() => {
+					initializationPromise = null
+				}, MIN_INIT_INTERVAL)
 			}
-		} catch (error) {
-			debugError('Failed to initialize session:', error)
-			return false
-		} finally {
-			isInitializing = false
-			initializationPromise = null
+		})()
+
+		return initializationPromise
+	}
+
+	/**
+	 * Ensure a valid session exists, with minimal API calls
+	 * This should be the primary method used by components
+	 */
+	async ensureSession(): Promise<boolean> {
+		// First try to synchronize from cookie
+		if (this.synchronizeTokenFromCookie()) {
+			sessionInitialized.set(true)
+			return true
 		}
-	})()
 
-	return initializationPromise
-}
-
-/**
- * Reset the session by initializing a new one
- * @returns A promise that resolves to true if reset was successful
- */
-export async function resetSession(): Promise<boolean> {
-	debugLog('Resetting session')
-	sessionInitialized = false
-	currentCsrfToken = null
-	return initSession()
-}
-
-/**
- * Ensure a valid session exists before proceeding
- * @returns A promise that resolves to true if a valid session exists
- */
-export async function ensureSession(): Promise<boolean> {
-	// First synchronize any existing token from cookie to memory
-	synchronizeTokenFromCookie()
-
-	// Only initialize a new session if we don't have a valid token
-	if (!hasCsrfToken() || !sessionInitialized) {
-		debugLog('No valid session, initializing')
-		return initSession()
+		// If no token in cookie or store, initialize a new session
+		// This is the last resort when no session exists
+		return this.initSession()
 	}
 
-	debugLog('Valid session already exists')
-	return true
-}
-
-/**
- * Synchronize the CSRF token from cookie to memory
- * This should be called when there might be external changes to the cookie
- * @returns True if synchronization was successful
- */
-export function synchronizeTokenFromCookie(): boolean {
-	const cookieToken = getCsrfTokenFromCookie()
-	if (cookieToken) {
-		currentCsrfToken = cookieToken
-		debugLog('Synchronized CSRF token from cookie:', cookieToken)
-		return true
+	/**
+	 * Handle CSRF validation errors
+	 */
+	handleCsrfError(): void {
+		dispatchCsrfError()
+		// Don't reset the session here, just notify listeners
 	}
-	debugError('Failed to synchronize token: No CSRF token in cookie')
-	return false
-}
 
-/**
- * Get the current session state
- * @returns Object with session state information
- */
-export function getSessionState() {
-	return {
-		isInitialized: sessionInitialized,
-		isInitializing,
-		hasCsrfToken: hasCsrfToken(),
-		initAttempts
+	/**
+	 * Update the CSRF token when received from server
+	 * Call this whenever a new token is received from API responses
+	 */
+	updateCsrfTokenFromServer(token: string): boolean {
+		if (!token) {
+			debugError('Received empty CSRF token from server')
+			return false
+		}
+
+		debugLog('Updating CSRF token from server response')
+		return this.setCsrfToken(token)
+	}
+
+	/**
+	 * Check if a session initialization is currently in progress
+	 */
+	isInitializationInProgress(): boolean {
+		return isInitializing
+	}
+
+	/**
+	 * Get the current session state for debugging
+	 */
+	getSessionState() {
+		return {
+			hasCsrfToken: this.hasCsrfToken(),
+			sessionInitialized: sessionInitialized.get(),
+			isInitializing,
+			lastInitAttempt: new Date(lastInitAttempt).toISOString(),
+			lastInitError,
+			csrfTokenInStore: csrfToken.get() !== null,
+			csrfTokenInCookie: getCsrfTokenFromCookie() !== null
+		}
+	}
+
+	/**
+	 * Get detailed debug information about the session
+	 * Only use this in development mode
+	 */
+	getDebugInfo() {
+		if (import.meta.env.DEV) {
+			return {
+				sessionState: this.getSessionState(),
+				csrfToken: this.getCsrfToken(),
+				cookieToken: getCsrfTokenFromCookie(),
+				lastInitError,
+				apiConfig: {
+					baseUrl: apiConfig.baseUrl,
+					timeout: apiConfig.timeout
+				}
+			}
+		}
+		return { mode: 'production' }
 	}
 }
 
-// Export a default object for convenience
-export default {
-	initSession,
-	debouncedInitSession,
-	resetSession,
-	ensureSession,
-	hasCsrfToken,
-	getCsrfToken,
-	synchronizeTokenFromCookie,
-	getSessionState
-}
+// Create and export a singleton instance
+const sessionManager = new SessionManager()
+export default sessionManager

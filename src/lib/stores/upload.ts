@@ -14,7 +14,6 @@ export interface FileUploadData {
 	uploadProgress: number
 	fileSize: number
 	mimeType: string
-	taskId?: string
 	errorMessage?: string
 	downloadToken?: string
 	completedAt?: string
@@ -315,6 +314,32 @@ export function getConversionQueue(): FileUploadData[] {
 export function getCompletedJobs(): FileUploadData[] {
 	const { files, completedJobs } = uploadStore.get()
 	return completedJobs.map((jobId) => files.get(jobId)!).filter(Boolean)
+}
+
+// Update job with partial data
+export async function updateJob(jobId: string, data: Partial<FileUploadData>): Promise<void> {
+	const currentState = uploadStore.get()
+	const job = currentState.files.get(jobId)
+
+	if (!job) return
+
+	// Update job data
+	const updatedJob: FileUploadData = {
+		...job,
+		...data
+	}
+
+	// Update job in files map
+	currentState.files.set(jobId, updatedJob)
+
+	// Update store
+	uploadStore.set({
+		...currentState,
+		files: new Map(currentState.files)
+	})
+
+	// Save to IndexedDB
+	await saveJobToIndexedDB(updatedJob)
 }
 
 // Initialize IndexedDB when module is imported

@@ -1,10 +1,13 @@
 import { atom } from 'nanostores'
-import { JobStatus } from '@/lib/types/api'
+import type { ConversionStatus } from '@/lib/types/conversion'
+import { createDerivedStore } from './storeUtils'
 
-// Conversion state store
+/**
+ * Conversion state interface
+ */
 export interface ConversionState {
-	taskId: string | null
-	status: JobStatus
+	jobId: string | null
+	status: ConversionStatus
 	progress: number
 	error?: string
 	filename?: string
@@ -18,7 +21,7 @@ export interface ConversionState {
 
 // Initial conversion state
 const initialConversionState: ConversionState = {
-	taskId: null,
+	jobId: null,
 	status: 'idle',
 	progress: 0,
 	isPolling: false
@@ -27,12 +30,28 @@ const initialConversionState: ConversionState = {
 // Conversion state store
 export const conversionStore = atom<ConversionState>(initialConversionState)
 
+// Derived stores for common queries
+export const isConversionActive = createDerivedStore(
+	conversionStore,
+	(state) => state.status === 'processing' || state.status === 'uploading'
+)
+
+export const isConversionComplete = createDerivedStore(
+	conversionStore,
+	(state) => state.status === 'completed'
+)
+
+export const isConversionFailed = createDerivedStore(
+	conversionStore,
+	(state) => state.status === 'failed'
+)
+
 /**
  * Update conversion status with partial data
  * @param status New status
  * @param data Additional data to update
  */
-export function updateConversionStatus(status: JobStatus, data: Partial<ConversionState>) {
+export function updateConversionStatus(status: ConversionStatus, data: Partial<ConversionState>) {
 	conversionStore.set({
 		...conversionStore.get(),
 		status,
@@ -59,7 +78,9 @@ export function setConversionError(error: string) {
 	conversionStore.set({
 		...conversionStore.get(),
 		status: 'failed',
-		error
+		error,
+		isPolling: false,
+		endTime: new Date().toISOString()
 	})
 }
 
@@ -89,7 +110,7 @@ export function startConversion(
 ) {
 	conversionStore.set({
 		...conversionStore.get(),
-		taskId,
+		jobId: taskId,
 		filename,
 		targetFormat,
 		status: 'processing',
@@ -98,7 +119,8 @@ export function startConversion(
 		fileSize,
 		error: undefined,
 		resultUrl: undefined,
-		endTime: undefined
+		endTime: undefined,
+		isPolling: true
 	})
 }
 
@@ -130,4 +152,21 @@ export function resetConversion() {
  */
 export function getConversionState(): ConversionState {
 	return conversionStore.get()
+}
+
+/**
+ * Calculate conversion duration in seconds
+ * @returns Duration in seconds or undefined if conversion is not complete
+ */
+export function getConversionDuration(): number | undefined {
+	const state = conversionStore.get()
+
+	if (!state.startTime || !state.endTime) {
+		return undefined
+	}
+
+	const start = new Date(state.startTime).getTime()
+	const end = new Date(state.endTime).getTime()
+
+	return (end - start) / 1000
 }

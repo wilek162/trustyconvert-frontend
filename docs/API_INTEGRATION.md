@@ -137,4 +137,472 @@ function DownloadPage({ jobId }) {
 4. Implement offline support with upload queue.
 5. Add analytics tracking for conversion metrics.
 6. Implement download resumability for large files.
-7. Add support for direct sharing of converted files. 
+7. Add support for direct sharing of converted files.
+
+# API Integration Guidelines
+
+This document outlines the guidelines and best practices for integrating with the TrustyConvert backend API.
+
+## API Client Architecture
+
+The API client is structured in layers to provide a clean, maintainable, and secure interface for communicating with the backend:
+
+### 1. Core API Client (`src/lib/api/_apiClient.ts`)
+
+This is the low-level client that handles direct communication with the API. It should **never be imported directly** by components or other modules outside the API layer.
+
+Key responsibilities:
+- Making HTTP requests with proper error handling
+- Handling CSRF token management
+- Processing API responses
+- Implementing retry logic
+- Handling timeouts
+
+### 2. Public API Client (`src/lib/api/client.ts`)
+
+This is the public interface that should be used by all components and services. It provides:
+
+- Type-safe methods for each API endpoint
+- Higher-level error handling
+- Response standardization
+- Logging and monitoring integration
+
+### 3. Configuration (`src/lib/api/config.ts`)
+
+Contains all API-related configuration:
+
+- API URLs for different environments
+- Timeout settings
+- Retry strategies
+- CORS configuration
+- Endpoint paths
+
+## API Request Flow
+
+```
+Component/Service → client.ts → _apiClient.ts → Backend API
+                        ↓
+                Error Handling
+                        ↓
+                  Retry Logic
+```
+
+## Using the API Client
+
+### Basic Usage
+
+```typescript
+import client from '@/lib/api/client';
+
+// Example: Upload a file
+try {
+  const response = await client.uploadFile(file);
+  // Handle successful response
+} catch (error) {
+  // Handle error
+}
+
+// Example: Convert a file
+try {
+  const response = await client.convertFile(jobId, 'pdf', 'docx');
+  // Handle successful response
+} catch (error) {
+  // Handle error
+}
+```
+
+### With React Hooks
+
+```typescript
+import { useApi } from '@/lib/hooks/useApi';
+import client from '@/lib/api/client';
+
+function MyComponent() {
+  const { data, isLoading, error, execute } = useApi(
+    (file) => client.uploadFile(file),
+    { executeOnMount: false }
+  );
+
+  const handleUpload = async (file) => {
+    await execute(file);
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorDisplay error={error} />;
+
+  return (
+    <div>
+      <FileUploadButton onUpload={handleUpload} />
+      {data && <SuccessMessage />}
+    </div>
+  );
+}
+```
+
+## Error Handling
+
+The API client uses a structured approach to error handling:
+
+### Error Types
+
+```typescript
+// From src/lib/utils/errorHandling.ts
+export class NetworkError extends Error {
+  type = 'network';
+  userMessage = 'Network error. Please check your connection and try again.';
+  // ...
+}
+
+export class ValidationError extends Error {
+  type = 'validation';
+  userMessage = 'The provided data is invalid. Please check your input and try again.';
+  // ...
+}
+
+export class SessionError extends Error {
+  type = 'session';
+  userMessage = 'Your session has expired. Please refresh the page and try again.';
+  // ...
+}
+```
+
+### Handling Errors
+
+```typescript
+import { handleError } from '@/lib/utils/errorHandling';
+
+try {
+  const response = await client.uploadFile(file);
+  return response;
+} catch (error) {
+  // handleError logs the error and returns a structured error object
+  throw handleError(error, {
+    context: { action: 'uploadFile', fileName: file.name }
+  });
+}
+```
+
+### Displaying Errors to Users
+
+```typescript
+import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
+
+function MyComponent() {
+  const { handleError, errorMessage } = useErrorHandler();
+
+  const handleUpload = async (file) => {
+    try {
+      await client.uploadFile(file);
+    } catch (error) {
+      handleError(error);
+    }
+  };
+
+  return (
+    <div>
+      {errorMessage && <ErrorAlert message={errorMessage} />}
+      <FileUploadButton onUpload={handleUpload} />
+    </div>
+  );
+}
+```
+
+## Retry Logic
+
+The API client includes built-in retry logic for handling transient errors:
+
+```typescript
+// From src/lib/utils/retry.ts
+export const RETRY_STRATEGIES = {
+  API_REQUEST: {
+    maxRetries: 3,
+    initialDelay: 500,
+    backoffFactor: 2,
+    jitter: true
+  },
+  POLLING: {
+    maxRetries: 5,
+    initialDelay: 1000,
+    backoffFactor: 1.5,
+    jitter: true
+  }
+};
+
+// Usage in API client
+const response = await withRetry(
+  () => _apiClient.uploadFile(file),
+  {
+    ...RETRY_STRATEGIES.API_REQUEST,
+    onRetry: (error, attempt) => {
+      debugLog(`Retrying upload (attempt ${attempt})`);
+    }
+  }
+);
+```
+
+## Session Management
+
+The API client integrates with the session manager to handle authentication and CSRF protection:
+
+```typescript
+// From src/lib/services/sessionManager.ts
+const sessionManager = {
+  initSession: async (force = false) => {
+    if (hasCsrfToken() && !force) return true;
+    
+    try {
+      const response = await _apiClient.initSession();
+      if (response?.success && response?.data?.csrf_token) {
+        setCsrfToken(response.data.csrf_token);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      debugError('Failed to initialize session', error);
+      return false;
+    }
+  },
+  
+  getCsrfHeaders: () => {
+    const token = getCsrfToken();
+    if (!token) return {};
+    
+    return {
+      [apiConfig.csrfTokenHeader]: token
+    };
+  },
+  
+  // Other methods...
+};
+```
+
+## API Endpoints
+
+The API provides the following endpoints:
+
+| Endpoint | Description | Client Method |
+|----------|-------------|--------------|
+| `/session/init` | Initialize a new session | `client.initSession()` |
+| `/session/close` | Close an existing session | `client.closeSession()` |
+| `/upload` | Upload a file | `client.uploadFile(file)` |
+| `/convert` | Convert a file | `client.convertFile(jobId, targetFormat)` |
+| `/job_status` | Get job status | `client.getConversionStatus(jobId)` |
+| `/download_token` | Get download token | `client.getDownloadToken(jobId)` |
+| `/download` | Download a file | `client.getDownloadUrl(token)` |
+| `/convert/formats` | Get supported formats | `client.getSupportedFormats()` |
+
+## Best Practices
+
+### 1. Always Check for Session Before API Calls
+
+```typescript
+// Ensure we have a valid session before uploading
+if (!sessionManager.hasCsrfToken()) {
+  await sessionManager.initSession();
+}
+
+const response = await _apiClient.uploadFile(file);
+```
+
+### 2. Handle CSRF Errors
+
+```typescript
+// Check for CSRF error
+if (isCsrfError(response)) {
+  // Reset the session and retry once
+  await sessionManager.resetSession();
+  await sessionManager.initSession(true);
+  const retryResponse = await _apiClient.uploadFile(file);
+  return standardizeResponse(retryResponse.data);
+}
+```
+
+### 3. Use Type-Safe Responses
+
+```typescript
+// Define response types
+export interface UploadResponse {
+  job_id: string;
+  original_filename: string;
+  file_size: number;
+  mime_type: string;
+  status: string;
+}
+
+// Use typed responses
+const response = await client.uploadFile(file);
+const jobId = response.job_id; // Type-safe access
+```
+
+### 4. Implement Polling for Long-Running Operations
+
+```typescript
+import { useJobPolling } from '@/lib/hooks/useJobPolling';
+
+function ConversionStatus({ jobId }) {
+  const { status, progress, error } = useJobPolling(jobId);
+  
+  if (status === 'completed') {
+    return <DownloadButton jobId={jobId} />;
+  }
+  
+  return <ProgressBar value={progress} />;
+}
+```
+
+### 5. Handle Network Conditions
+
+```typescript
+import { useOnlineStatus } from '@/lib/hooks/useOnlineStatus';
+
+function UploadButton({ onUpload }) {
+  const isOnline = useOnlineStatus();
+  
+  return (
+    <Button 
+      onClick={onUpload} 
+      disabled={!isOnline}
+    >
+      {isOnline ? 'Upload File' : 'Offline - Cannot Upload'}
+    </Button>
+  );
+}
+```
+
+## Security Considerations
+
+### 1. CSRF Protection
+
+All non-GET requests must include a CSRF token in the headers:
+
+```typescript
+const headers = new Headers(fetchOptions.headers || {});
+const csrfHeaders = sessionManager.getCsrfHeaders();
+
+for (const [key, value] of Object.entries(csrfHeaders)) {
+  headers.set(key, value);
+}
+
+fetchOptions.headers = headers;
+```
+
+### 2. Secure Cookies
+
+The API uses secure, HTTP-only cookies for session management. Always include credentials in requests:
+
+```typescript
+fetchOptions.credentials = 'include';
+```
+
+### 3. Content Security Policy
+
+Ensure API calls comply with the application's Content Security Policy:
+
+```typescript
+// In your CSP configuration
+const cspConfig = {
+  'connect-src': ["'self'", apiConfig.apiDomain]
+};
+```
+
+### 4. Input Validation
+
+Always validate user input before sending to the API:
+
+```typescript
+function validateFileSize(file: File, maxSize: number): boolean {
+  return file.size <= maxSize;
+}
+
+function validateFileType(file: File, allowedTypes: string[]): boolean {
+  return allowedTypes.includes(file.type);
+}
+
+// Usage
+if (!validateFileSize(file, MAX_FILE_SIZE) || !validateFileType(file, ALLOWED_TYPES)) {
+  throw new ValidationError({
+    message: 'Invalid file',
+    context: { fileName: file.name, fileSize: file.size, fileType: file.type }
+  });
+}
+```
+
+## Debugging
+
+The API client includes built-in debugging utilities:
+
+```typescript
+import { debugLog, debugError } from '@/lib/utils/debug';
+
+// Log debug information
+debugLog('Uploading file', { fileName: file.name, fileSize: file.size });
+
+// Log errors
+debugError('Upload failed', error);
+```
+
+To enable debug logging in development:
+
+```typescript
+// In your browser console
+localStorage.setItem('debug', 'true');
+```
+
+## Testing API Integration
+
+### 1. Mock API Responses
+
+```typescript
+// In your test file
+import { vi } from 'vitest';
+import client from '@/lib/api/client';
+
+vi.mock('@/lib/api/client', () => ({
+  uploadFile: vi.fn().mockResolvedValue({
+    job_id: 'mock-job-id',
+    status: 'uploaded'
+  })
+}));
+
+test('handles successful upload', async () => {
+  // Test component that uses the API
+});
+```
+
+### 2. Test Error Handling
+
+```typescript
+test('handles upload error', async () => {
+  // Mock an error response
+  client.uploadFile.mockRejectedValueOnce(new Error('Upload failed'));
+  
+  // Test component handles the error correctly
+});
+```
+
+### 3. Integration Tests
+
+For full integration tests, you can use MSW (Mock Service Worker) to intercept actual API calls:
+
+```typescript
+import { setupServer } from 'msw/node';
+import { rest } from 'msw';
+
+const server = setupServer(
+  rest.post(`${apiConfig.baseUrl}/upload`, (req, res, ctx) => {
+    return res(
+      ctx.json({
+        success: true,
+        data: {
+          job_id: 'test-job-id',
+          status: 'uploaded'
+        }
+      })
+    );
+  })
+);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+``` 

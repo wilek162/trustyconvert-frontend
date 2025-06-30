@@ -3,8 +3,7 @@ import MainLayout from '@/layouts/MainLayout.astro'
 import { ConversionFlow } from '@/components/features/conversion'
 import { SupportedFormats } from '@/components/SupportedFormats'
 import { FAQ } from '@/components/FAQ'
-import { getSupportedFormats } from '@/lib/api/apiClient'
-
+import client from '@/lib/api/client'
 // Define types for the format data
 type FormatInfo = {
 	id: string
@@ -31,8 +30,8 @@ export async function getStaticPaths() {
 		formats = []
 	} else {
 		try {
-			const response = await getSupportedFormats()
-			if (response.success && response.data.formats) {
+			const response = await client.getSupportedFormats()
+			if (response.success && response.data?.formats) {
 				formats = response.data.formats
 			}
 		} catch (error) {
