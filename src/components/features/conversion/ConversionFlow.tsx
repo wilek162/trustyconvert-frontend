@@ -335,7 +335,23 @@ export function ConversionFlow({
 
 		setIsDownloading(true)
 		try {
-			window.location.href = downloadUrl
+			debugLog('Manual download initiated with URL:', downloadUrl)
+
+			// Use the recommended approach - browser redirection
+			// This is the approach recommended in frontend_download.md
+			const a = document.createElement('a')
+			a.href = downloadUrl
+			a.download = '' // Let the server set the filename
+			document.body.appendChild(a)
+			a.click()
+			document.body.removeChild(a)
+
+			debugLog('Manual download link clicked')
+
+			// Show toast notification
+			toast.success('Your download has started!', {
+				description: "If your download doesn't start automatically, please try again."
+			})
 		} finally {
 			// Reset download state after a short delay
 			setTimeout(() => {
@@ -345,17 +361,59 @@ export function ConversionFlow({
 	}, [downloadUrl, isDownloading])
 
 	// Handle job completion
-	const handleJobCompleted = useCallback((downloadToken: string, url: string) => {
+	const handleJobCompleted = useCallback(
+		(downloadToken: string, url: string) => {
+			debugLog('handleJobCompleted called', { downloadToken, url })
+
+			// Update state to reflect completion
+			setDownloadUrl(url)
+			setIsConverting(false)
+			setCurrentStep('download')
+
+			// Show success toast
+			toast.success('File converted successfully!')
+			debugLog('State updated: isConverting=false, currentStep=download')
+
+			// Clean up polling
+			if (stopPollingRef.current) {
+				stopPollingRef.current()
+				stopPollingRef.current = null
+				debugLog('Polling stopped')
+			}
+
+			// Force a state update to ensure React re-renders
+			setTimeout(() => {
+				// Double-check that we're in the correct state
+				if (currentStep !== 'download') {
+					debugLog('Forcing state update to download step')
+					setCurrentStep('download')
+				}
+			}, 100)
+
+			// Show notification instead of auto-downloading
+			// This prevents using the token twice (once automatically, once manually)
+			setTimeout(() => {
+				debugLog('Conversion complete, download URL ready:', url)
+				try {
+					// Show toast notification
+					toast.success('Your file is ready for download!', {
+						description: 'Click the Download button to get your file.'
+					})
+				} catch (error) {
+					debugError('Error showing download notification:', error)
+				}
+			}, 500) // Small delay to ensure UI updates first
+		},
+		[currentStep]
+	)
+
+	// Force update the UI state when job is completed
+	const forceUpdateToDownloadState = useCallback((token: string, url: string) => {
+		debugLog('Forcing update to download state', { token, url })
 		setDownloadUrl(url)
 		setIsConverting(false)
 		setCurrentStep('download')
-		toast.success('File converted successfully!')
-
-		// Clean up polling
-		if (stopPollingRef.current) {
-			stopPollingRef.current()
-			stopPollingRef.current = null
-		}
+		setConversionProgress(100)
 	}, [])
 
 	// Start polling for job status
@@ -373,8 +431,19 @@ export function ConversionFlow({
 				},
 				onStatusChange: (status, progress) => {
 					debugLog(`Job ${newJobId} status updated to ${status} (${progress}%)`)
+					// If status is completed, force update the UI
+					if (status === 'completed') {
+						debugLog('Status update indicates job is completed')
+						// We'll get the download URL from the completion callback
+					}
 				},
-				onCompleted: handleJobCompleted,
+				onCompleted: (downloadToken, downloadUrl) => {
+					debugLog('onCompleted callback triggered', { downloadToken, downloadUrl })
+					// First force update the UI state
+					forceUpdateToDownloadState(downloadToken, downloadUrl)
+					// Then call the regular completion handler
+					handleJobCompleted(downloadToken, downloadUrl)
+				},
 				onFailed: (errorMessage) => {
 					setIsConverting(false)
 					setError(errorMessage || 'Conversion failed')
@@ -382,8 +451,82 @@ export function ConversionFlow({
 				}
 			})
 		},
-		[handleJobCompleted]
+		[handleJobCompleted, forceUpdateToDownloadState]
 	)
+
+	// Monitor for completed conversion status and ensure we transition to download state
+	useEffect(() => {
+		// If we have a download URL but are still in convert step, transition to download step
+		if (downloadUrl && currentStep === 'convert' && !isConverting) {
+			debugLog(
+				'State inconsistency detected: have download URL but still in convert step. Fixing...'
+			)
+			setCurrentStep('download')
+		}
+	}, [downloadUrl, currentStep, isConverting])
+
+	// Additional check to force transition to download state if job is completed
+	useEffect(() => {
+		// If we're still in the converting state but have a jobId, check if it's actually completed
+		if (currentStep === 'convert' && isConverting && jobId) {
+			const checkJobStatus = async () => {
+				try {
+					const statusResponse = await apiClient.getConversionStatus(jobId)
+					debugLog('Forced status check:', statusResponse)
+
+					if (statusResponse && statusResponse.status === 'completed') {
+						debugLog('Force check found job is completed, transitioning to download state')
+
+						// If there's a download token in the response, use it
+						if (statusResponse.download_token || statusResponse.downloadToken) {
+							const token = statusResponse.download_token || statusResponse.downloadToken
+							const url = apiClient.getDownloadUrl(token)
+
+							// Force update state
+							setDownloadUrl(url)
+							setIsConverting(false)
+							setCurrentStep('download')
+							setConversionProgress(100)
+
+							// Show success toast
+							toast.success('File converted successfully!')
+						} else {
+							// Request a download token
+							try {
+								const tokenResponse = await apiClient.getDownloadToken(jobId)
+								const token =
+									tokenResponse.download_token ||
+									tokenResponse.downloadToken ||
+									tokenResponse.data?.download_token ||
+									tokenResponse.data?.downloadToken
+
+								if (token) {
+									const url = apiClient.getDownloadUrl(token)
+
+									// Force update state
+									setDownloadUrl(url)
+									setIsConverting(false)
+									setCurrentStep('download')
+									setConversionProgress(100)
+
+									// Show success toast
+									toast.success('File converted successfully!')
+								}
+							} catch (error) {
+								debugError('Error getting download token in force check:', error)
+							}
+						}
+					}
+				} catch (error) {
+					debugError('Error in forced status check:', error)
+				}
+			}
+
+			// Run the check once after a short delay
+			const timeoutId = setTimeout(checkJobStatus, 1000)
+			return () => clearTimeout(timeoutId)
+		}
+	}, [currentStep, isConverting, jobId])
 
 	// If not client-side yet, render a minimal loading state to prevent hydration mismatch
 	if (!isClient) {
@@ -504,8 +647,17 @@ export function ConversionFlow({
 						<p className="text-sm text-deepNavy/70">
 							Converting {selectedFile?.name} to {targetFormat}
 						</p>
+						{/* Add debug information in development mode */}
+						{import.meta.env.DEV && (
+							<div className="mt-4 rounded border border-yellow-200 bg-yellow-50 p-2 text-xs">
+								<p>
+									Debug: isConverting={isConverting ? 'true' : 'false'}, currentStep={currentStep}
+								</p>
+								<p>downloadUrl={downloadUrl ? 'set' : 'not set'}</p>
+							</div>
+						)}
 					</div>
-				) : (
+				) : currentStep === 'download' ? (
 					<div className="space-y-6">
 						<div className="rounded-xl border border-trustTeal/30 bg-gradient-to-r from-trustTeal/5 to-white p-4 shadow-sm">
 							<div className="flex items-center justify-between">
@@ -536,6 +688,24 @@ export function ConversionFlow({
 								</div>
 							</div>
 						</div>
+						{/* Add debug information in development mode */}
+						{import.meta.env.DEV && (
+							<div className="mt-4 rounded border border-green-200 bg-green-50 p-2 text-xs">
+								<p>
+									Debug: isConverting={isConverting ? 'true' : 'false'}, currentStep={currentStep}
+								</p>
+								<p>downloadUrl={downloadUrl ? downloadUrl.substring(0, 50) + '...' : 'not set'}</p>
+							</div>
+						)}
+					</div>
+				) : (
+					<div className="space-y-6">
+						<div className="rounded-lg border border-warningRed/20 bg-warningRed/10 p-5 text-center">
+							<p className="mb-4 text-warningRed">Unknown conversion state: {currentStep}</p>
+							<Button onClick={handleRestart} variant="outline">
+								Start Over
+							</Button>
+						</div>
 					</div>
 				)}
 			</CardContent>
@@ -555,7 +725,14 @@ export function ConversionFlow({
 					</Button>
 				) : (
 					<Button onClick={handleDownload} disabled={isDownloading} className="w-full max-w-xs">
-						{isDownloading ? 'Opening Download...' : 'Download Converted File'}
+						{isDownloading ? (
+							<>
+								<div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+								Starting Download...
+							</>
+						) : (
+							'Download Converted File'
+						)}
 					</Button>
 				)}
 			</CardFooter>

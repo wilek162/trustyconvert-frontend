@@ -152,6 +152,7 @@ export function startPolling(
 			if (status === 'completed') {
 				// Set completing flag to prevent multiple token requests
 				job.isCompleting = true
+				debugLog(`Job ${jobId} is completed. Requesting download token...`)
 
 				try {
 					// Stop polling immediately
@@ -159,22 +160,65 @@ export function startPolling(
 
 					// Get download token
 					const downloadTokenResponse = await apiClient.getDownloadToken(jobId)
+					debugLog('Download token response:', downloadTokenResponse)
 
-					if (downloadTokenResponse && downloadTokenResponse.download_token) {
-						const { download_token } = downloadTokenResponse
-						await setJobDownloadToken(jobId, download_token)
+					// Handle different response formats
+					let downloadToken = null
+
+					if (downloadTokenResponse && typeof downloadTokenResponse === 'object') {
+						// Try all possible paths to find the download token
+						downloadToken =
+							downloadTokenResponse.download_token ||
+							downloadTokenResponse.downloadToken || // Add camelCase property
+							(downloadTokenResponse.data && downloadTokenResponse.data.download_token) ||
+							(downloadTokenResponse.data && downloadTokenResponse.data.downloadToken) || // Add nested camelCase
+							(downloadTokenResponse.success &&
+								downloadTokenResponse.data &&
+								downloadTokenResponse.data.download_token) ||
+							(downloadTokenResponse.success &&
+								downloadTokenResponse.data &&
+								downloadTokenResponse.data.downloadToken) // Add nested camelCase
+
+						debugLog('Extracted download token:', downloadToken)
+					}
+
+					if (downloadToken) {
+						debugLog('Successfully obtained download token:', downloadToken)
+						await setJobDownloadToken(jobId, downloadToken)
 
 						// Get download URL
-						const downloadUrl = apiClient.getDownloadUrl(download_token)
+						const downloadUrl = apiClient.getDownloadUrl(downloadToken)
+						debugLog('Generated download URL:', downloadUrl)
 
 						// Call completion callback
 						if (job.callbacks.onCompleted) {
-							job.callbacks.onCompleted(download_token, downloadUrl)
+							try {
+								job.callbacks.onCompleted(downloadToken, downloadUrl)
+								debugLog(`Completion callback executed for job ${jobId}`)
+							} catch (callbackError) {
+								debugError(`Error in completion callback for job ${jobId}:`, callbackError)
+							}
+						} else {
+							debugLog(`No completion callback defined for job ${jobId}`)
 						}
+					} else {
+						debugError(
+							`Failed to obtain download token for job ${jobId}. Response:`,
+							downloadTokenResponse
+						)
+						if (job.callbacks.onFailed) {
+							job.callbacks.onFailed('Failed to obtain download token')
+						}
+					}
+				} catch (error) {
+					debugError(`Error handling completion for job ${jobId}:`, error)
+					if (job.callbacks.onFailed) {
+						job.callbacks.onFailed('Error preparing download')
 					}
 				} finally {
 					// Always clean up the job
 					activePollingJobs.delete(jobId)
+					debugLog(`Job ${jobId} polling cleaned up`)
 				}
 			}
 			// Handle job failure
@@ -232,6 +276,24 @@ export function startPolling(
 
 	// Execute immediately for first status check
 	pollFunction()
+
+	// Also perform an immediate check for completed status
+	// This helps catch cases where the job completed between polling intervals
+	setTimeout(async () => {
+		try {
+			const job = activePollingJobs.get(jobId)
+			if (!job || job.isCompleting) return
+
+			const statusResponse = await apiClient.getConversionStatus(jobId)
+			if (statusResponse && statusResponse.status === 'completed') {
+				debugLog(`Immediate check found job ${jobId} already completed`)
+				// Trigger the poll function again to handle completion
+				pollFunction()
+			}
+		} catch (error) {
+			debugError(`Error in immediate status check for job ${jobId}:`, error)
+		}
+	}, 100)
 
 	// Return a function to stop polling
 	return () => stopPolling(jobId)

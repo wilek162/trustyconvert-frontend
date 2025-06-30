@@ -35,29 +35,36 @@ export function DownloadContent({ taskId, onError, onComplete }: DownloadContent
 		cancel: cancelConversion
 	} = useConversionStatus({
 		taskId,
-		onComplete: () => {
-			toast.success('Conversion completed!')
-			if (onComplete) onComplete()
-		},
 		onError: (error) => {
 			toast.error('Conversion failed: ' + error)
 			if (onError) onError(error)
-		},
-		onProgress: (progress) => {
-			toast.loading(`Converting... ${progress}%`, { id: 'conversion-progress' })
 		}
 	})
+
+	// Show toast when conversion completes
+	useEffect(() => {
+		if (status === 'completed') {
+			toast.success('Conversion completed!')
+			if (onComplete) onComplete()
+		}
+	}, [status, onComplete])
+
+	// Show progress toast
+	useEffect(() => {
+		if (status === 'processing' && progress > 0) {
+			toast.loading(`Converting... ${progress}%`, { id: 'conversion-progress' })
+		}
+	}, [status, progress])
 
 	// Use file download hook
 	const {
 		isDownloading,
-		progress: downloadProgress,
 		error: downloadError,
 		download,
 		cancel: cancelDownload
 	} = useFileDownload({
 		onComplete: () => {
-			toast.success('Download completed!')
+			toast.success('Download started! Check your downloads folder.')
 			if (onComplete) onComplete()
 		},
 		onError: (error) => {
@@ -68,11 +75,7 @@ export function DownloadContent({ taskId, onError, onComplete }: DownloadContent
 
 	// Handle download
 	const handleDownload = () => {
-		if (!fileName) {
-			toast.error('File name not available')
-			return
-		}
-		download(taskId, fileName)
+		download(taskId)
 	}
 
 	// Handle retry
@@ -175,29 +178,11 @@ export function DownloadContent({ taskId, onError, onComplete }: DownloadContent
 								) : (
 									<Download className="h-4 w-4" />
 								)}
-								{isDownloading ? 'Downloading...' : 'Download'}
+								{isDownloading ? 'Starting download...' : 'Download'}
 							</Button>
 						</div>
 
-						{downloadProgress && (
-							<div className="space-y-2">
-								<div className="flex justify-between text-sm">
-									<span>Download Progress</span>
-									<span>
-										{formatFileSize(downloadProgress.loaded)} /{' '}
-										{formatFileSize(downloadProgress.total)}
-									</span>
-								</div>
-								<Progress value={(downloadProgress.loaded / downloadProgress.total) * 100} />
-								<div className="flex items-center justify-between text-sm text-muted-foreground">
-									<span className="flex items-center gap-1">
-										<Clock className="h-4 w-4" />
-										{formatDuration(downloadProgress.estimatedTime)} remaining
-									</span>
-									<span>{formatFileSize(downloadProgress.speed)}/s</span>
-								</div>
-							</div>
-						)}
+						{/* Download progress is no longer tracked since we're using the browser's native download */}
 					</div>
 				)}
 			</CardContent>

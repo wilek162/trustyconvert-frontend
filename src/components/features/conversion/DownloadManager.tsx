@@ -44,10 +44,21 @@ function DownloadManager({ jobId, onDownloadComplete, onError }: DownloadManager
 			setIsLoading(true)
 			setError(null)
 
+			console.log('Requesting download token for job:', jobId)
 			const response = await getDownloadToken(jobId)
+			console.log('Download token response:', response)
 
-			if (response.success && response.data.download_token) {
-				const token = response.data.download_token
+			// Handle different response formats
+			const downloadToken =
+				(response.success && response.data?.download_token) ||
+				(response.success && response.data?.downloadToken) ||
+				response.download_token ||
+				response.downloadToken ||
+				(response.data && response.data.download_token) ||
+				(response.data && response.data.downloadToken)
+
+			if (downloadToken) {
+				const token = downloadToken
 
 				// Save token to job store
 				await setJobDownloadToken(jobId, token)

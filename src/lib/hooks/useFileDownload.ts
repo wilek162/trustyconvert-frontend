@@ -1,8 +1,9 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { apiClient } from '@/lib/api/client'
 import type { DownloadProgress } from '@/lib/types/conversion'
-import { debugLog } from '@/lib/utils/debug'
+import { debugLog, debugError } from '@/lib/utils/debug'
 import { handleError } from '@/lib/utils/errorHandling'
+import sessionManager from '@/lib/services/sessionManager'
 
 interface UseFileDownloadOptions {
 	onComplete?: () => void
@@ -23,75 +24,81 @@ const initialState: DownloadState = {
 }
 
 /**
- * Hook for efficient file downloads with progress tracking
+ * Hook for efficient file downloads using the token-based approach
+ *
+ * This hook implements the recommended download flow from the API integration guide:
+ * 1. Request a download token from the API
+ * 2. Redirect the browser to the download URL with the token
+ * 3. Let the server handle streaming directly to the browser
  */
 export function useFileDownload({ onComplete, onError, onProgress }: UseFileDownloadOptions = {}) {
 	const [state, setState] = useState<DownloadState>(initialState)
-	const abortControllerRef = useRef<AbortController | null>(null)
 
-	// Cleanup function
-	const cleanup = useCallback(() => {
-		if (abortControllerRef.current) {
-			abortControllerRef.current.abort()
-			abortControllerRef.current = null
-		}
-		setState(initialState)
-	}, [])
-
-	// Download file
+	// Download file using the token-based approach
 	const download = useCallback(
-		async (taskId: string, fileName: string) => {
+		async (jobId: string, fileName?: string) => {
 			try {
-				debugLog('Starting download', { taskId, fileName })
+				debugLog('Starting download process for job', { jobId })
 				setState((prev) => ({ ...prev, isDownloading: true, error: null }))
 
-				// Create new AbortController for this request
-				cleanup()
-				abortControllerRef.current = new AbortController()
+				// Step 1: Request a download token
+				const response = await apiClient.getDownloadToken(jobId)
 
-				// Download the file
-				const blob = await apiClient.downloadConvertedFile(taskId, {
-					onProgress: (progress: DownloadProgress) => {
-						setState((prev) => ({ ...prev, progress }))
-						if (onProgress) onProgress(progress)
-					},
-					signal: abortControllerRef.current.signal
-				})
+				// Extract the token from the response (handling different formats)
+				const downloadToken =
+					response.download_token ||
+					response.downloadToken ||
+					response.data?.download_token ||
+					response.data?.downloadToken
 
-				// Create download link
-				const url = window.URL.createObjectURL(blob)
-				const link = document.createElement('a')
-				link.href = url
-				link.download = fileName
-				document.body.appendChild(link)
-				link.click()
-				window.URL.revokeObjectURL(url)
-				document.body.removeChild(link)
+				if (!downloadToken) {
+					debugLog('Download token response:', response)
+					throw new Error('Failed to get download token from response')
+				}
 
-				debugLog('Download completed', { taskId, fileName })
-				setState((prev) => ({ ...prev, isDownloading: false, progress: null }))
-				if (onComplete) onComplete()
+				debugLog('Successfully extracted download token:', downloadToken)
+
+				// Step 2: Generate the download URL
+				const downloadUrl = apiClient.getDownloadUrl(downloadToken)
+				debugLog('Generated download URL', { downloadUrl })
+
+				// Step 3: Use the recommended approach - browser redirection
+				// This is the approach recommended in frontend_download.md
+				// Option 2: programmatic click (keeps SPA state intact)
+				const a = document.createElement('a')
+				a.href = downloadUrl
+				a.download = '' // Let the server set the filename
+				document.body.appendChild(a)
+				a.click()
+				a.remove()
+
+				debugLog('Download initiated via browser redirection', { downloadUrl })
+				setState((prev) => ({ ...prev, isDownloading: false }))
+
+				// Notify completion after a short delay to allow the download to start
+				setTimeout(() => {
+					if (onComplete) onComplete()
+				}, 1000)
 			} catch (error) {
-				debugLog('Download failed', error)
+				debugError('Download failed', error)
 				const errorMessage = handleError(error, {
-					context: { action: 'downloadFile', taskId, fileName }
+					context: { action: 'downloadFile', jobId }
 				})
 				setState((prev) => ({
 					...prev,
 					isDownloading: false,
-					progress: null,
 					error: errorMessage
 				}))
 				if (onError) onError(errorMessage)
 			}
 		},
-		[cleanup, onComplete, onError, onProgress]
+		[onComplete, onError]
 	)
 
-	// Cancel download
+	// Cancel is now a no-op since we're using browser's native download
 	const cancel = useCallback(() => {
-		cleanup()
-	}, [cleanup])
+		setState(initialState)
+	}, [])
 
 	return {
 		...state,

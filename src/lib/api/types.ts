@@ -5,7 +5,7 @@
  * It ensures consistency across the application.
  */
 
-import type { JobStatus, ConversionFormat } from '@/lib/types'
+import type { JobStatus } from '@/lib/types'
 import type { DownloadProgress } from '@/lib/types/conversion'
 
 /**
@@ -62,7 +62,6 @@ export interface ApiClientInterface {
 	closeSession(): Promise<any>
 	getSupportedFormats(): Promise<ConversionFormat[]>
 	getDownloadUrl(downloadToken: string): string
-	downloadConvertedFile?(jobId: string, options?: DownloadOptions): Promise<Blob>
 }
 
 /**

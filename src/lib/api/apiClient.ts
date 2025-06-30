@@ -481,7 +481,9 @@ export async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse
  * @returns Download URL
  */
 export function getDownloadUrl(token: string): string {
-	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodeURIComponent(token)}`
+	// Ensure the token is properly encoded
+	const encodedToken = encodeURIComponent(token)
+	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodedToken}`
 }
 
 // Export the API client as a single object
