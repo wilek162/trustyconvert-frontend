@@ -63,14 +63,6 @@ export const SECURITY = {
 	CSRF_HEADER: 'X-CSRF-Token',
 	SESSION_COOKIE: 'trusty_session'
 }
-
-// Storage Keys
-export const STORAGE = {
-	JOBS_STORE: 'trustyconvert_jobs',
-	SESSION_STORE: 'trustyconvert_session',
-	PREFERENCES: 'trustyconvert_preferences'
-}
-
 // UI Configuration
 export const UI = {
 	TOAST_DURATION: 5000,
@@ -80,11 +72,4 @@ export const UI = {
 		ERROR_COLOR: 'warningRed',
 		SUCCESS_COLOR: 'successGreen'
 	}
-}
-
-// Feature Flags
-export const FEATURES = {
-	ENABLE_JOB_HISTORY: true,
-	ENABLE_PDF_PREVIEW: true,
-	ENABLE_DARK_MODE: false
 }

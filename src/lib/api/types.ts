@@ -8,14 +8,6 @@
 import type { JobStatus } from '@/lib/types'
 import type { DownloadProgress } from '@/lib/types/conversion'
 
-/**
- * Task status for backward compatibility
- */
-export type TaskStatus = JobStatus
-
-/**
- * Conversion status response
- */
 export interface ConversionStatusResponse {
 	job_id?: string
 	task_id?: string // For backward compatibility
