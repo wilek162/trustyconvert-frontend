@@ -30,6 +30,21 @@ const hasHttps = isLocalDev && sslKey && sslCert;
 console.log('[astro.config] isLocalDev:', isLocalDev);
 console.log('[astro.config] hasHttps:', hasHttps);
 
+let mkcertPlugin = null;
+
+if (isDev && isLocalDev) {
+  try {
+    const mkcert = await import('vite-plugin-mkcert');
+    mkcertPlugin = mkcert.default({ hosts: ['localhost', '127.0.0.1'] });
+  } catch (err) {
+    if (err && typeof err === 'object' && 'message' in err) {
+      console.warn('[astro.config] Skipping dotenv:', (err).message);
+    } else {
+      console.warn('[astro.config] Skipping dotenv:', err);
+    }
+  }
+}
+
 export default defineConfig({
   site: 'https://trustyconvert.com',
   output: 'static',
@@ -60,9 +75,8 @@ export default defineConfig({
 
   vite: {
     plugins: [
-      isDev && isLocalDev ? mkcert({ hosts: ['localhost', '127.0.0.1'] }) : null
-    ].filter(Boolean),
-
+      ...[mkcertPlugin].filter(Boolean),
+    ],
     css: {
       modules: {
         localsConvention: 'camelCaseOnly',
