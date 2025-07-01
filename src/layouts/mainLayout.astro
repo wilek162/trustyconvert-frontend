@@ -92,14 +92,14 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 
 		<!-- Alternate language links -->
 		{
-			alternateLanguages &&
-				alternateLanguages.map((lang: { code: string; name: string; url?: string }) => (
-					<link
-						rel="alternate"
-						hreflang={lang.code}
-						href={lang.url || `${Astro.url.origin}${lang.code !== 'en' ? `/${lang.code}` : ''}`}
-					/>
-				))
+			 alternateLanguages &&
+        		alternateLanguages.map((lang: { code: string; name: string; url?: string }) => (
+            			<link
+                	rel="alternate"
+                	hreflang={lang.code}
+                	href={lang.url || `/${lang.code !== 'en' ? lang.code : ''}`}
+           		/>
+        ))
 		}
 
 		<!-- Open Graph / Facebook -->

@@ -1,90 +1,80 @@
 // @ts-check
+import * as dotenv from 'dotenv';
+dotenv.config();
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import tailwind from '@astrojs/tailwind';
 import sitemap from '@astrojs/sitemap';
 import { fileURLToPath } from 'node:url';
-import mkcert from 'vite-plugin-mkcert'
+import mkcert from 'vite-plugin-mkcert';
+import fs from 'fs';
+import path from 'path';
 
+// 🔐 Parse .env booleans and file paths
+const isDev = process.env.NODE_ENV === 'development';
+const isLocalDev = process.env.IS_LOCAL_DEV === 'true';
+const hasCerts = fs.existsSync(process.env.SSL_KEY_FILE || '') && fs.existsSync(process.env.SSL_CERT_FILE || '');
 
-// https://astro.build/config
+console.log('[astro.config] isLocalDev:', isLocalDev);
+console.log('[astro.config] SSL certs found:', hasCerts);
+console.log('[astro.config] Using HTTPS:', isDev && isLocalDev && hasCerts);
+
 export default defineConfig({
   site: 'https://trustyconvert.com',
-  // Enable in-browser dev tools in development
+  output: 'static',
+  outDir: './dist',
+  compressHTML: true,
+
   devToolbar: {
     enabled: true,
   },
-  // Configure build output
-  // Using 'static' for Cloudflare Pages deployment (preferred over 'server' mode)
-  // Note: This means Astro.request.headers is not available during build
-  // Client-side code should handle all API interactions and header detection
-  output: 'static',
-  compressHTML: true, // Compress HTML output
-  // Configure integrations
+
   integrations: [
     react({
-      // Only hydrate components that need interactivity
       include: ['**/features/**/*', '**/ui/**/*', '**/providers/**/*', '**/Hero.tsx', '**/ConversionForm.tsx'],
-      // Exclude static components
       exclude: ['**/common/**/*', '**/seo/**/*', '**/*.stories.*'],
     }),
     tailwind({
-      // Apply Tailwind to all files
       applyBaseStyles: false,
-      // Use the config file we created
       configFile: './tailwind.config.mjs',
     }),
     sitemap({
-      // Generate sitemap for better SEO
       changefreq: 'weekly',
       priority: 0.7,
       lastmod: new Date(),
-      // Customize sitemap entries
       customPages: ['https://trustyconvert.com'],
-      // Exclude specific pages if needed
       filter: (page) => !page.includes('/admin/'),
     }),
   ],
-  // Configure Vite
+
   vite: {
     plugins: [
-      // Only use mkcert in development
-      process.env.NODE_ENV === 'development' ? mkcert({
-        hosts: ['localhost', '127.0.0.1'],
-        mkcertPath: undefined, // Let it auto-detect
-        autoUpgrade: true,
-        force: true,
-      }) : null
+      isDev && isLocalDev ? mkcert({ hosts: ['localhost', '127.0.0.1'] }) : null
     ].filter(Boolean),
-    // Enable CSS modules for all .module.css files
+
     css: {
       modules: {
         localsConvention: 'camelCaseOnly',
       },
     },
-    // Build optimizations
+
     build: {
-      cssMinify: 'lightningcss', // Use Lightning CSS for faster builds
-      minify: 'terser', // Use Terser for better minification
-      sourcemap: true, // Generate source maps for better debugging
+      cssMinify: 'lightningcss',
+      minify: 'terser',
+      sourcemap: true,
       rollupOptions: {
         output: {
           manualChunks: (id) => {
-            // Split vendor chunks for better caching
             if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'react-vendor';
-              }
-              if (id.includes('@radix-ui')) {
-                return 'ui-vendor';
-              }
+              if (id.includes('react') || id.includes('react-dom')) return 'react-vendor';
+              if (id.includes('@radix-ui')) return 'ui-vendor';
               return 'vendor';
             }
           },
         },
       },
     },
-    // Resolve aliases for cleaner imports
+
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -93,55 +83,42 @@ export default defineConfig({
         '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
       },
     },
-    // Server configuration - only used in development
-    server: process.env.NODE_ENV === 'development' ? {
-      proxy: {
-        '/api': {
-          target: 'https://api.trustyconvert.com',
-          changeOrigin: true,
-          secure: false, // Don't verify SSL certificate
-          configure: (proxy, _options) => {
-            // Set up SSL handling
-            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Disable certificate validation
 
-            // Log proxy events for debugging
-            proxy.on('error', (err, _req, _res) => {
-              console.log('proxy error', err);
-            });
-            proxy.on('proxyReq', (proxyReq, req, _res) => {
-              console.log('Sending Request to the Target:', req.method, req.url);
-              // Add CORS headers to outgoing requests
-              proxyReq.setHeader('Origin', 'https://localhost:4322');
-            });
-            proxy.on('proxyRes', (proxyRes, req, _res) => {
-              console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-              // Log CORS headers for debugging
-              const corsHeader = proxyRes.headers['access-control-allow-origin'];
-              if (corsHeader) {
-                console.log('CORS header received:', corsHeader);
-              }
-            });
+    server: isDev && isLocalDev
+      ? {
+        https: hasCerts
+          ? {
+            key: process.env.SSL_KEY_FILE ? fs.readFileSync(process.env.SSL_KEY_FILE) : (() => { throw new Error('SSL_KEY_FILE is not defined'); })(),
+            cert: process.env.SSL_CERT_FILE ? fs.readFileSync(process.env.SSL_CERT_FILE) : (() => { throw new Error('SSL_CERT_FILE is not defined'); })(),
           }
-        }
-      },
-      cors: {
-        origin: 'https://localhost:4322',
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        credentials: true
-      },
-      https: {
-        key: process.env.SSL_KEY_FILE,
-        cert: process.env.SSL_CERT_FILE
+          : undefined,
+        proxy: {
+          '/api': {
+            target: process.env.API_BASE_DOMAIN || 'https://localhost:4321',
+            changeOrigin: true,
+            secure: false,
+            configure: (proxy) => {
+              process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+              proxy.on('proxyReq', (proxyReq, req) => {
+                console.log('[Proxy] Request to API:', req.method, req.url);
+                proxyReq.setHeader('Origin', 'https://localhost:4322');
+              });
+              proxy.on('proxyRes', (proxyRes, req) => {
+                console.log('[Proxy] Response from API:', proxyRes.statusCode, req.url);
+              });
+            },
+          },
+        },
+        cors: {
+          origin: process.env.PUBLIC_FRONTEND_DOMAIN || 'https://localhost:4322',
+          methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+          credentials: true,
+        },
       }
-    } : {},
+      : {},
+
     optimizeDeps: {
       include: ['react', 'react-dom', '@tanstack/react-query'],
-      exclude: [],
     },
   },
-  // Astro v5 image config (optional, remove if not using @astrojs/image)
-  // image: {
-  //   service: import('@astrojs/image/sharp'),
-  //   domains: ['trustyconvert.com'],
-  // },
 });

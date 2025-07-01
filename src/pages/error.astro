@@ -1,45 +1,47 @@
 ---
 import MainLayout from '@/layouts/mainLayout.astro'
 
-/**
- * Error page for displaying error messages and status codes.
- * Accepts ?message=...&status=... in the URL.
- */
-const url = new URL(Astro.request.url);
-const message =
-  url.searchParams.get("message") || "An unexpected error occurred";
-const status = url.searchParams.get("status") || "500";
-const statusCode = parseInt(status, 10);
-
-const titles: Record<number, string> = {
-  400: "Bad Request",
-  401: "Unauthorized",
-  403: "Forbidden",
-  404: "Page Not Found",
-  500: "Internal Server Error",
-  502: "Bad Gateway",
-  503: "Service Unavailable",
-  504: "Gateway Timeout",
-};
-
-const title = `${statusCode} - ${titles[statusCode] || "Error"}`;
-const error = { message };
-
 const description = 'An error occurred while processing your request.'
 const alternateLanguages = [
   { code: 'en', name: 'English' }
 ]
 ---
 
-<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+<MainLayout title="Error" description={description} alternateLanguages={alternateLanguages}>
   <div class="trusty-container py-16">
     <div class="mx-auto max-w-lg text-center">
-      <h1 class="mb-6 text-4xl font-bold">Error {statusCode}</h1>
-      <p class="mb-8 text-xl text-muted-foreground">{message}</p>
+      <h1 id="error-title" class="mb-6 text-4xl font-bold">Error</h1>
+      <p id="error-message" class="mb-8 text-xl text-muted-foreground"></p>
       <div class="flex justify-center space-x-4">
         <a href="/" class="btn btn-primary">Return Home</a>
         <button onclick="history.back()" class="btn btn-outline">Go Back</button>
       </div>
     </div>
   </div>
+  <script>
+    // Client-side: read query params and update the page
+    const params = new URLSearchParams(window.location.search);
+    const message = params.get("message") || "An unexpected error occurred";
+    const status = params.get("status") || "500";
+    const titles = {
+      400: "Bad Request",
+      401: "Unauthorized",
+      403: "Forbidden",
+      404: "Page Not Found",
+      500: "Internal Server Error",
+      502: "Bad Gateway",
+      503: "Service Unavailable",
+      504: "Gateway Timeout",
+    };
+    const statusCode = Number(status) || 500;
+    const errorTitleElem = document.getElementById("error-title");
+    const errorMessageElem = document.getElementById("error-message");
+    const statusKey = String(statusCode) as unknown as keyof typeof titles;
+    if (errorTitleElem) {
+      errorTitleElem.textContent = `Error ${statusCode}: ${titles[statusKey] || "Unexpected Error"}`;
+    }
+    if (errorMessageElem) {
+      errorMessageElem.textContent = message || "An unexpected error occurred.";
+    }
+  </script>
 </MainLayout>
