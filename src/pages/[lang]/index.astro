@@ -1,0 +1,87 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro'
+import { Hero } from '@/components/Hero'
+import { Features } from '@/components/Features'
+import { HowItWorks } from '@/components/HowItWorks'
+import { SupportedFormats } from '@/components/SupportedFormats'
+import { Testimonials } from '@/components/Testimonials'
+import { FAQ } from '@/components/FAQ'
+import { LANGUAGES, DEFAULT_LANGUAGE } from '@/lib/i18n/config'
+import { t } from '@/lib/i18n/translations'
+import { getAlternateLanguages } from '@/lib/i18n/middleware'
+
+// Get language from URL parameter
+export function getStaticPaths() {
+	// Filter out the default language - it will be served from the root URL
+	return LANGUAGES.filter((lang) => lang.code !== DEFAULT_LANGUAGE.code).map((lang) => ({
+		params: { lang: lang.code },
+		props: { lang: lang.code }
+	}))
+}
+
+const { lang } = Astro.params
+
+// Get translations for the current language
+const title = t('site_name', lang as string) + ' - ' + t('home_hero_title', lang as string)
+const description = t('site_description', lang as string)
+
+// Create structured data for SEO
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'WebApplication',
+	name: 'TrustyConvert',
+	description: description,
+	applicationCategory: 'UtilityApplication',
+	operatingSystem: 'All',
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD'
+	}
+}
+
+// Get alternate languages for SEO
+const alternateLanguages = getAlternateLanguages(Astro)
+
+// Get formats data (from API or fallback to mock)
+let formats = []
+if (import.meta.env.SSR) {
+	try {
+		const response = await fetch(
+			`${import.meta.env.PUBLIC_API_URL || '/api'}/supported-conversions`,
+			{
+				headers: {
+					Accept: 'application/json'
+				}
+			}
+		)
+		const data = await response.json()
+		formats = data.data
+	} catch (error) {
+		console.error('Failed to fetch formats:', error)
+	}
+}
+---
+
+<MainLayout
+	title={title}
+	description={description}
+	extraStructuredData={structuredData}
+	alternateLanguages={alternateLanguages}
+>
+	<div class="bg-gradient-to-b from-white to-lightGray/20">
+		<div id="convert" class="scroll-mt-24">
+			<Hero client:load />
+		</div>
+
+		<HowItWorks />
+	</div>
+
+	<Features />
+
+	<SupportedFormats />
+
+	<Testimonials />
+
+	<FAQ />
+</MainLayout>

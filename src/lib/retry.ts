@@ -1,81 +1,133 @@
-import { errorLogger } from "@/lib/errors/error-logger";
+/**
+ * @deprecated This file is deprecated. Please use '@/lib/utils/retry.ts' instead.
+ * This file will be removed in a future release.
+ */
 
-interface RetryOptions {
-  maxAttempts?: number;
-  initialDelay?: number;
-  maxDelay?: number;
-  backoffFactor?: number;
-  shouldRetry?: (error: Error) => boolean;
+import {
+	withRetry as utilsWithRetry,
+	createRetryable as utilsCreateRetryable,
+	isRetryableError as utilsIsRetryableError,
+	type RetryConfig,
+	DEFAULT_RETRY_CONFIG,
+	RETRY_STRATEGIES,
+	calculateBackoff
+} from '@/lib/utils/retry'
+
+// Re-export everything from the new location
+export {
+	withRetry,
+	createRetryable,
+	isRetryableError,
+	type RetryConfig,
+	DEFAULT_RETRY_CONFIG,
+	RETRY_STRATEGIES,
+	calculateBackoff
 }
 
-const defaultOptions: Required<RetryOptions> = {
-  maxAttempts: 3,
-  initialDelay: 1000,
-  maxDelay: 10000,
-  backoffFactor: 2,
-  shouldRetry: (error) => {
-    // Retry on network errors or 5xx server errors
-    return (
-      error.name === "NetworkError" ||
-      (error.name === "ApiError" && (error as any).statusCode >= 500)
-    );
-  },
-};
+/**
+ * Advanced Retry Utility
+ *
+ * Provides retry functionality with exponential backoff for async operations,
+ * with configurable retry counts, delays, and conditions.
+ */
 
 /**
- * Utility function to retry a function with exponential backoff
- * @param fn Function to retry
- * @param options Retry options
- * @returns Promise that resolves with the function result
+ * Options for retry configuration
  */
+export interface RetryOptions {
+	/** Maximum number of retry attempts */
+	maxRetries?: number
+
+	/** Initial delay in milliseconds */
+	initialDelay?: number
+
+	/** Maximum delay in milliseconds */
+	maxDelay?: number
+
+	/** Backoff factor for exponential delay calculation */
+	backoffFactor?: number
+
+	/** Jitter factor to add randomness to delay (0-1) */
+	jitter?: number
+
+	/** Function to determine if an error should trigger a retry */
+	retryCondition?: (error: unknown, attempt: number) => boolean
+
+	/** Function called before each retry attempt */
+	onRetry?: (error: unknown, attempt: number, delay: number) => void
+
+	/** Function called when all retries are exhausted */
+	onExhausted?: (error: unknown, attempts: number) => void
+}
+
+/**
+ * Default retry options
+ */
+const DEFAULT_OPTIONS: Required<RetryOptions> = {
+	maxRetries: 3,
+	initialDelay: 300,
+	maxDelay: 30000,
+	backoffFactor: 2,
+	jitter: 0.25,
+	retryCondition: () => true,
+	onRetry: () => {},
+	onExhausted: () => {}
+}
+
+/**
+ * Calculate delay with exponential backoff and jitter
+ *
+ * @param attempt - Current attempt number (0-based)
+ * @param options - Retry options
+ * @returns Delay in milliseconds
+ */
+function calculateDelay(attempt: number, options: Required<RetryOptions>): number {
+	// Calculate exponential backoff
+	const exponentialDelay = options.initialDelay * Math.pow(options.backoffFactor, attempt)
+
+	// Apply maximum delay limit
+	const cappedDelay = Math.min(exponentialDelay, options.maxDelay)
+
+	// Apply jitter to prevent thundering herd problem
+	const jitterAmount = cappedDelay * options.jitter
+	const min = Math.max(0, cappedDelay - jitterAmount)
+	const max = cappedDelay + jitterAmount
+
+	return min + Math.random() * (max - min)
+}
+
+/**
+ * Sleep for a specified duration
+ *
+ * @param ms - Milliseconds to sleep
+ * @returns Promise that resolves after the specified time
+ */
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Export the functions with deprecation warnings
 export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
+	fn: () => Promise<T>,
+	options?: Partial<RetryConfig>
 ): Promise<T> {
-  const opts = { ...defaultOptions, ...options };
-  let attempt = 0;
-  let delay = opts.initialDelay;
-
-  while (true) {
-    try {
-      return await fn();
-    } catch (error) {
-      attempt++;
-      const shouldRetry =
-        attempt < opts.maxAttempts && opts.shouldRetry(error as Error);
-
-      if (!shouldRetry) {
-        throw error;
-      }
-
-      // Log retry attempt
-      errorLogger.logError(error as Error, {
-        attempt,
-        maxAttempts: opts.maxAttempts,
-        delay,
-        willRetry: true,
-      });
-
-      // Wait before retrying
-      await new Promise((resolve) => setTimeout(resolve, delay));
-
-      // Calculate next delay with exponential backoff
-      delay = Math.min(delay * opts.backoffFactor, opts.maxDelay);
-    }
-  }
+	console.warn(
+		'Warning: Using deprecated retry.ts module. Please import from @/lib/utils/retry instead.'
+	)
+	return utilsWithRetry(fn, options)
 }
 
-/**
- * Higher-order function that adds retry capability to any async function
- * @param fn Function to wrap with retry capability
- * @param options Retry options
- * @returns Function with retry capability
- */
-export function retryable<T extends (...args: any[]) => Promise<any>>(
-  fn: T,
-  options: RetryOptions = {}
-): T {
-  return (async (...args: Parameters<T>) => {
-    return withRetry(() => fn(...args), options);
-  }) as T;
+export function createRetryable<T extends (...args: any[]) => Promise<any>>(
+	fn: T,
+	options?: Partial<RetryConfig>
+): (...args: Parameters<T>) => Promise<ReturnType<T>> {
+	console.warn(
+		'Warning: Using deprecated retry.ts module. Please import from @/lib/utils/retry instead.'
+	)
+	return utilsCreateRetryable(fn, options)
+}
+
+export function isRetryableError(error: unknown): boolean {
+	console.warn(
+		'Warning: Using deprecated retry.ts module. Please import from @/lib/utils/retry instead.'
+	)
+	return utilsIsRetryableError(error)
 }

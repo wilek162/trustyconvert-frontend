@@ -1,0 +1,100 @@
+---
+/**
+ * Blog card component for displaying blog post previews
+ */
+import { formatDate } from '@/lib/utils'
+import type { CollectionEntry } from 'astro:content'
+import { blogConfig } from '@/lib/seo/config'
+
+export interface Props {
+	post: CollectionEntry<'blog'>
+	featured?: boolean
+}
+
+const { post, featured = false } = Astro.props
+const { data } = post
+// Get the slug parts to construct the proper URL
+const slugParts = post.slug.split('/')
+let url = ''
+
+// If the post is in a category subdirectory, use the category in the URL
+if (slugParts.length > 1) {
+	const category = slugParts[0]
+	const postSlug = slugParts[1]
+	url = `/blog/${category}/${postSlug}/`
+} else {
+	// For top-level posts
+	url = `/blog/${post.slug}/`
+}
+
+// Format the date for display
+const formattedDate = formatDate(data.publishDate)
+
+// Get the proper category slug from the config
+const categorySlug =
+	blogConfig.categories.find((cat) => cat.name === data.category)?.slug ||
+	data.category.toLowerCase().replace(/\s+/g, '-')
+---
+
+<article
+	class={`group overflow-hidden rounded-xl border border-border bg-card transition-all duration-300 hover:shadow-md ${featured ? 'featured' : ''}`}
+>
+	<a href={url} class="block">
+		<div class="aspect-video relative w-full overflow-hidden">
+			<img
+				src={data.image}
+				alt={data.title}
+				class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+				width="800"
+				height="450"
+				loading="lazy"
+			/>
+			{
+				featured && (
+					<span class="absolute left-4 top-4 rounded-full bg-trustTeal px-3 py-1 text-xs font-medium text-white">
+						Featured
+					</span>
+				)
+			}
+		</div>
+	</a>
+
+	<div class="p-6">
+		<div class="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
+			<span>{formattedDate}</span>
+			<span class="h-1 w-1 rounded-full bg-muted-foreground"></span>
+			<a href={`/blog/category/${categorySlug}`} class="font-medium text-trustTeal hover:underline">
+				{data.category}
+			</a>
+		</div>
+
+		<a href={url} class="group-hover:text-trustTeal">
+			<h3 class="mb-2 text-xl font-semibold tracking-tight transition-colors">
+				{data.title}
+			</h3>
+		</a>
+
+		<p class="mb-4 line-clamp-2 text-muted-foreground">
+			{data.description}
+		</p>
+
+		<div class="flex flex-wrap gap-2">
+			{
+				data.tags.slice(0, 3).map((tag) => (
+					<a
+						href={`/blog/tag/${tag.toLowerCase().replace(/\s+/g, '-')}`}
+						class="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80"
+					>
+						{tag}
+					</a>
+				))
+			}
+		</div>
+	</div>
+</article>
+
+<style>
+	.featured {
+		@apply border-trustTeal/30 bg-gradient-to-br from-trustTeal/5 to-transparent;
+	}
+</style>

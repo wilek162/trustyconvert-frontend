@@ -1,8 +1,7 @@
----
+<!-- ---
 import "@styles/global.css";
 import "@styles/utilities.css";
-import Alert from "@/components/ui/alert.astro";
-import { errorLogger } from "@/lib/errors_legacy";
+import { errorLogger } from "@/lib/errors/error_logger";
 
 /**
  * ErrorDisplay component for showing error messages in a consistent, accessible way.
@@ -77,4 +76,4 @@ errorLogger.logError(errorObj as Error);
       transform: translateY(0);
     }
   }
-</style>
+</style> -->

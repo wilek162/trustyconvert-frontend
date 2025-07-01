@@ -1,30 +1,82 @@
 ---
-import MainLayout from "@/layouts/mainLayout.astro";
-const title = "Privacy Policy - TrustyConvert";
+import MainLayout from '@/layouts/MainLayout.astro'
+
+const title = 'Privacy Policy - TrustyConvert'
 const description =
-  "Read our privacy policy to learn how we protect your data.";
-const canonical = "https://trustyconvert.com/privacy";
-const ogImage = "https://trustyconvert.com/og-image.png";
+	'Our privacy policy explains how TrustyConvert handles your data and protects your privacy during file conversion.'
+const canonical = 'https://trustyconvert.com/privacy'
+const ogImage = 'https://trustyconvert.com/og-image.png'
+const alternateLanguages = [{ code: 'en', name: 'English' }]
 ---
 
-<MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  ogImage={ogImage}
->
-  <section class="max-w-xl mx-auto py-12 px-4">
-    <h1 class="text-3xl font-bold mb-4">Privacy Policy</h1>
-    <p>
-      TrustyConvert values your privacy. We do not store your files or personal
-      data. All conversions are processed securely and deleted immediately after
-      completion.
-    </p>
-    <p>
-      For questions, contact us at <a
-        href="mailto:support@trustyconvert.com"
-        class="underline text-primary">support@trustyconvert.com</a
-      >.
-    </p>
-  </section>
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+	<div class="trusty-container py-12">
+		<div class="mx-auto max-w-3xl">
+			<h1 class="mb-8">Privacy Policy</h1>
+
+			<div class="prose max-w-none">
+				<p class="lead">
+					At TrustyConvert, we prioritize your privacy and data security. This policy explains how
+					we handle your files during the conversion process.
+				</p>
+
+				<h2>No File Storage Policy</h2>
+				<p>
+					<strong>Your files are never permanently stored.</strong> All uploaded files are automatically
+					deleted from our servers immediately after conversion is complete or after 24 hours, whichever
+					comes first.
+				</p>
+
+				<h2>Data Processing</h2>
+				<p>
+					When you use our service, we temporarily process your files solely for the purpose of
+					conversion. This processing happens in a secure, isolated environment.
+				</p>
+
+				<h3>What we collect:</h3>
+				<ul>
+					<li>Temporary file data (deleted after conversion)</li>
+					<li>Basic conversion metrics (file types, sizes)</li>
+					<li>Anonymous usage statistics</li>
+				</ul>
+
+				<h3>What we don't collect:</h3>
+				<ul>
+					<li>Personal information</li>
+					<li>File contents or metadata</li>
+					<li>User accounts or credentials</li>
+				</ul>
+
+				<h2>Cookies and Local Storage</h2>
+				<p>
+					We use a single session cookie for security purposes and local browser storage to remember
+					your recent conversions. No tracking cookies are used.
+				</p>
+
+				<h2>Security Measures</h2>
+				<p>
+					All file transfers use TLS encryption. Our conversion process runs in isolated containers
+					with strict security controls.
+				</p>
+
+				<h2>Third-Party Services</h2>
+				<p>
+					We use minimal third-party services for infrastructure and monitoring. None of these
+					services have access to your file contents.
+				</p>
+
+				<h2>Changes to This Policy</h2>
+				<p>
+					We may update this privacy policy from time to time. Any changes will be posted on this
+					page.
+				</p>
+
+				<h2>Contact Us</h2>
+				<p>
+					If you have any questions about our privacy practices, please contact us at
+					<a href="mailto:privacy@trustyconvert.com">privacy@trustyconvert.com</a>.
+				</p>
+			</div>
+		</div>
+	</div>
 </MainLayout>

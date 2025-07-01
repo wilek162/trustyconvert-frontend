@@ -1,58 +1,77 @@
-import type { ApiError } from "./error-types";
-import type { ConversionError } from "./error-types";
+/**
+ * Error Logger
+ *
+ * Centralized error logging utility that can be configured to send errors
+ * to various monitoring services like Sentry, or fallback to console.
+ */
+
+import type { ApiError, ConversionError } from './error-types'
+
+type LoggerOptions = {
+	componentStack?: string
+	context?: Record<string, any>
+}
 
 // Error logging service
 class ErrorLogger {
-  private static instance: ErrorLogger;
-  private readonly isDevelopment = import.meta.env.DEV;
+	private static instance: ErrorLogger
+	private readonly isDevelopment = import.meta.env.DEV
 
-  private constructor() {}
+	private constructor() {}
 
-  static getInstance(): ErrorLogger {
-    if (!ErrorLogger.instance) {
-      ErrorLogger.instance = new ErrorLogger();
-    }
-    return ErrorLogger.instance;
-  }
+	static getInstance(): ErrorLogger {
+		if (!ErrorLogger.instance) {
+			ErrorLogger.instance = new ErrorLogger()
+		}
+		return ErrorLogger.instance
+	}
 
-  logError(error: Error, context?: Record<string, unknown>): void {
-    const errorInfo = {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
-      ...context,
-    };
+	/**
+	 * Log an error with optional context
+	 */
+	logError(error: Error, options: LoggerOptions = {}) {
+		// In development, log to console with detailed info
+		if (this.isDevelopment) {
+			console.group('Application Error')
+			console.error(error)
 
-    // In development, log to console with more details
-    if (this.isDevelopment) {
-      console.error("Error occurred:", errorInfo);
-      return;
-    }
+			if (options.componentStack) {
+				console.error('Component Stack:', options.componentStack)
+			}
 
-    // In production, send to error tracking service
-    // TODO: Implement proper error tracking service (e.g., Sentry)
-    console.error("Production error:", {
-      name: error.name,
-      message: error.message,
-      ...context,
-    });
-  }
+			if (options.context) {
+				console.log('Error Context:', options.context)
+			}
 
-  logApiError(error: ApiError): void {
-    this.logError(error, {
-      statusCode: error.statusCode,
-      code: error.code,
-      details: error.details,
-    });
-  }
+			console.groupEnd()
+		}
 
-  logConversionError(error: ConversionError): void {
-    this.logError(error, {
-      taskId: error.taskId,
-      status: error.status,
-    });
-  }
+		// In production, we would send to monitoring service
+		// For example, with Sentry:
+		// if (import.meta.env.PROD && window.Sentry) {
+		//   window.Sentry.captureException(error, {
+		//     extra: {
+		//       componentStack: options.componentStack,
+		//       ...options.context
+		//     }
+		//   });
+		// }
+	}
+
+	logApiError(error: ApiError): void {
+		this.logError(error, {
+			statusCode: error.statusCode,
+			code: error.code,
+			details: error.details
+		})
+	}
+
+	logConversionError(error: ConversionError): void {
+		this.logError(error, {
+			taskId: error.taskId,
+			status: error.status
+		})
+	}
 }
 
-export const errorLogger = ErrorLogger.getInstance();
+export const errorLogger = ErrorLogger.getInstance()

@@ -1,0 +1,258 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro'
+import { ConversionFlow } from '@/components/features/conversion'
+import { SupportedFormats } from '@/components/SupportedFormats'
+import { FAQ } from '@/components/FAQ'
+import client from '@/lib/api/client'
+// Define types for the format data
+type FormatInfo = {
+	id: string
+	name: string
+	inputFormats?: string[]
+	outputFormats: string[]
+	maxSize?: number
+	features?: string[]
+	extensions?: string[]
+	mimeTypes?: string[]
+	canConvertTo?: string[]
+	icon?: string
+	description?: string
+}
+
+export async function getStaticPaths() {
+	// Move isStaticMode here
+	const isStaticMode = import.meta.env.OUTPUT === 'static'
+	// Try to fetch real formats from API, fall back to mock data
+	let formats: FormatInfo[] = []
+
+	// In static mode, always use mock data to avoid API requests during build
+	if (isStaticMode) {
+		formats = []
+	} else {
+		try {
+			const response = await client.getSupportedFormats()
+			if (response.success && response.data?.formats) {
+				formats = response.data.formats
+			}
+		} catch (error) {
+			console.warn('Failed to fetch formats from API, using mock data:', error)
+		}
+
+		// Fall back to mock data if API call failed
+		if (formats.length === 0) {
+			formats = []
+		}
+	}
+
+	// Create paths for each source-target format combination
+	return formats.flatMap((format) =>
+		format.outputFormats.map((targetFormat) => {
+			// Find target format info
+			const targetFormatInfo = formats.find((f) => f.id === targetFormat)
+
+			return {
+				params: {
+					source: format.id,
+					target: targetFormat
+				},
+				props: {
+					title: `Convert ${format.name} to ${targetFormatInfo?.name || targetFormat.toUpperCase()} - Free Online Converter`,
+					description: `Convert your ${format.name} files to ${targetFormatInfo?.name || targetFormat.toUpperCase()} format online. Fast, secure, and free file conversion with TrustyConvert.`,
+					sourceFormat: format.id,
+					targetFormat,
+					sourceFormatInfo: format,
+					targetFormatInfo: targetFormatInfo || null,
+					conversionFeatures: [
+						`Convert ${format.id.toUpperCase()} to ${targetFormat.toUpperCase()} instantly`,
+						'100% secure and private conversion',
+						'No registration required',
+						'Download converted files immediately'
+					],
+					allFormats: formats
+				}
+			}
+		})
+	)
+}
+
+const { source, target } = Astro.params
+const {
+	title,
+	description,
+	sourceFormat,
+	targetFormat,
+	sourceFormatInfo,
+	targetFormatInfo,
+	conversionFeatures,
+	allFormats
+} = Astro.props
+
+// Structured data for better SEO
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'SoftwareApplication',
+	name: `${sourceFormat?.toUpperCase()} to ${targetFormat?.toUpperCase()} Converter`,
+	applicationCategory: 'UtilityApplication',
+	operatingSystem: 'All',
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD'
+	},
+	description: description
+} as any // Type assertion to avoid structured data type issues
+
+const alternateLanguages = [{ code: 'en', name: 'English' }]
+
+// Get related conversions (other formats that can be converted to the target format)
+const relatedConversions = allFormats
+	.filter((format) => format.id !== sourceFormat && format.outputFormats.includes(targetFormat))
+	.slice(0, 4)
+---
+
+<MainLayout
+	title={title}
+	description={description}
+	alternateLanguages={alternateLanguages}
+	extraStructuredData={structuredData}
+>
+	<div class="container mx-auto px-4 py-8">
+		<div class="mb-8">
+			<h1 class="text-center text-4xl font-bold text-deepNavy">
+				Convert {sourceFormatInfo?.name || source?.toUpperCase()} to {
+					targetFormatInfo?.name || target?.toUpperCase()
+				}
+			</h1>
+			<p class="mt-4 text-center text-lg text-muted-foreground">
+				Fast, secure, and free online conversion from {sourceFormat?.toUpperCase()} to {
+					targetFormat?.toUpperCase()
+				}
+			</p>
+		</div>
+
+		<div class="grid gap-8 md:grid-cols-3">
+			<div class="md:col-span-2">
+				<div class="rounded-lg border border-border bg-card p-6">
+					<ConversionFlow
+						client:load
+						initialSourceFormat={sourceFormat}
+						initialTargetFormat={targetFormat}
+					/>
+				</div>
+			</div>
+
+			<div class="space-y-6">
+				<div class="rounded-lg border border-trustTeal/20 bg-card p-6">
+					<h2 class="mb-4 text-xl font-semibold text-deepNavy">Features</h2>
+					<ul class="space-y-3">
+						{
+							conversionFeatures.map((feature) => (
+								<li class="flex items-start">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										class="mr-2 mt-0.5 text-trustTeal"
+									>
+										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+										<polyline points="22 4 12 14.01 9 11.01" />
+									</svg>
+									<span>{feature}</span>
+								</li>
+							))
+						}
+					</ul>
+				</div>
+
+				{
+					relatedConversions.length > 0 && (
+						<div class="rounded-lg border border-border bg-card p-6">
+							<h2 class="mb-4 text-xl font-semibold text-deepNavy">Related Conversions</h2>
+							<ul class="space-y-2">
+								{relatedConversions.map((format) => (
+									<li>
+										<a
+											href={`/convert/${format.id}-to-${targetFormat}`}
+											class="flex items-center rounded-md p-2 text-sm transition-colors hover:bg-muted"
+										>
+											<span class="mr-2">{format.icon || '🔄'}</span>
+											<span>
+												{format.name} to {targetFormatInfo?.name || targetFormat.toUpperCase()}
+											</span>
+										</a>
+									</li>
+								))}
+							</ul>
+						</div>
+					)
+				}
+			</div>
+		</div>
+
+		<div class="mt-12">
+			<h2 class="mb-6 text-center text-2xl font-bold text-deepNavy">
+				How to Convert {sourceFormatInfo?.name || source?.toUpperCase()} to {
+					targetFormatInfo?.name || target?.toUpperCase()
+				}
+			</h2>
+
+			<div class="grid gap-6 md:grid-cols-3">
+				<div class="rounded-lg border border-border bg-card p-6 text-center">
+					<div
+						class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-trustTeal/10 text-trustTeal"
+					>
+						<span class="text-xl font-bold">1</span>
+					</div>
+					<h3 class="mb-2 font-semibold">
+						Upload Your {sourceFormatInfo?.name || source?.toUpperCase()} File
+					</h3>
+					<p class="text-sm text-muted-foreground">
+						Select your file by clicking the upload button or drag and drop it into the upload area.
+					</p>
+				</div>
+
+				<div class="rounded-lg border border-border bg-card p-6 text-center">
+					<div
+						class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-trustTeal/10 text-trustTeal"
+					>
+						<span class="text-xl font-bold">2</span>
+					</div>
+					<h3 class="mb-2 font-semibold">
+						Convert to {targetFormatInfo?.name || target?.toUpperCase()}
+					</h3>
+					<p class="text-sm text-muted-foreground">
+						Click the "Convert" button and wait for the conversion process to complete.
+					</p>
+				</div>
+
+				<div class="rounded-lg border border-border bg-card p-6 text-center">
+					<div
+						class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-trustTeal/10 text-trustTeal"
+					>
+						<span class="text-xl font-bold">3</span>
+					</div>
+					<h3 class="mb-2 font-semibold">
+						Download Your {targetFormatInfo?.name || target?.toUpperCase()} File
+					</h3>
+					<p class="text-sm text-muted-foreground">
+						Once conversion is complete, download your converted file instantly.
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="mt-16">
+			<SupportedFormats />
+		</div>
+
+		<div class="mt-16">
+			<FAQ />
+		</div>
+	</div>
+</MainLayout>

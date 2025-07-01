@@ -1,139 +1,115 @@
 ---
 // src/pages/index.astro
-import MainLayout from "@/layouts/mainLayout.astro";
-import FileUpload from "@/components/features/FileUpload.tsx";
-import { Check, Lock, Zap } from "@lucide/astro";
-import FileUploadWithCsrf from "@/components/features/FileUploadWithCsrf.tsx";
-import SupportedFormatsList from "@/components/features/SupportedFormatsList.tsx";
+import { Check, Lock, Zap } from '@lucide/astro'
 
-const title = "TrustyConvert - Fast, Modern File Converter";
-const description =
-  "Convert your files quickly and securely. Free, fast, and privacy-focused file conversion.";
-const canonical = "https://trustyconvert.com/";
-const ogImage = "https://trustyconvert.com/og-image.png";
+import MainLayout from '@/layouts/MainLayout.astro'
+import { Hero } from '@/components/Hero'
+import { HowItWorks } from '@/components/HowItWorks'
+import { Features } from '@/components/Features'
+import { FAQ } from '@/components/FAQ'
+import { SupportedFormats } from '@/components/SupportedFormats'
+import { Testimonials } from '@/components/Testimonials'
+import { DEFAULT_LANGUAGE } from '@/lib/i18n/config'
+import { t } from '@/lib/i18n/translations'
+import { LANGUAGES } from '@/lib/i18n/config'
 
-// Enhanced structured data for better SEO
+// Remove prerender=false flag as it's incompatible with static site generation
+
+// Get the default language
+const lang = DEFAULT_LANGUAGE.code
+
+// Get translations for the current language
+const title = t('site_name', lang) + ' - ' + t('home_hero_title', lang)
+const description = t('site_description', lang)
+
+// Create structured data for SEO
 const structuredData = {
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  name: "TrustyConvert",
-  url: canonical,
-  description: description,
-  applicationCategory: "UtilityApplication",
-  operatingSystem: "Any",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-  },
-  featureList: [
-    "Fast file conversion",
-    "Secure processing",
-    "Privacy focused",
-    "Multiple file formats",
-  ],
-  sameAs: [
-    "https://twitter.com/trustyconvert",
-    "https://github.com/trustyconvert",
-  ],
-};
+	'@context': 'https://schema.org',
+	'@type': 'WebApplication',
+	name: 'TrustyConvert',
+	description: description,
+	applicationCategory: 'UtilityApplication',
+	operatingSystem: 'All',
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD'
+	}
+} as any // Type assertion to avoid structured data type issues
+
+// Generate alternate language URLs for static build
+const alternateLanguages = LANGUAGES.map((lang) => ({
+	code: lang.code,
+	name: lang.name,
+	url: `${Astro.url.origin}${lang.code === DEFAULT_LANGUAGE.code ? '' : `/${lang.code}`}`
+}))
 ---
 
 <MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  ogImage={ogImage}
-  extraStructuredData={structuredData}
+	title={title}
+	description={description}
+	extraStructuredData={structuredData}
+	alternateLanguages={alternateLanguages}
 >
-  <section class="container mx-auto px-4 py-12 md:py-24">
-    <div class="max-w-3xl mx-auto text-center mb-12">
-      <h1
-        class="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent"
-      >
-        Convert Files Fast & Secure
-      </h1>
-      <p class="text-xl text-muted-foreground mb-8">
-        Transform your files instantly with our free, privacy-focused converter.
-        No registration required.
-      </p>
-      <div class="flex flex-wrap justify-center gap-4 mb-12">
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Check class="w-5 h-5 text-green-500" />
-          <span>Free & Secure</span>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Lock class="w-5 h-5 text-green-500" />
-          <span>No Registration</span>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Zap class="w-5 h-5 text-green-500" />
-          <span>Instant Conversion</span>
-        </div>
-      </div>
-    </div>
+	<div class="bg-gradient-to-b from-white to-lightGray/20">
+		<div id="convert" class="scroll-mt-24">
+			<!-- Use client:only for Hero component to avoid hydration issues -->
+			<Hero client:only="react" />
+		</div>
 
-    <div class="max-w-xl mx-auto">
-      <FileUploadWithCsrf client:visible />
-    </div>
+		<HowItWorks />
+	</div>
 
-    <div class="max-w-xl mx-auto mt-12">
-      <h2 class="text-lg font-semibold mb-4">Supported Conversion Formats</h2>
-      <SupportedFormatsList client:visible />
-    </div>
+	<Features />
 
-    <div class="max-w-3xl mx-auto mt-24 grid gap-8 md:grid-cols-3">
-      <div class="text-center">
-        <div
-          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-        >
-          <Lock class="w-6 h-6 text-primary" />
-        </div>
-        <h2 class="text-lg font-semibold mb-2">Secure Processing</h2>
-        <p class="text-sm text-muted-foreground">
-          Your files are processed securely and deleted immediately after
-          conversion.
-        </p>
-      </div>
-      <div class="text-center">
-        <div
-          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-        >
-          <Zap class="w-6 h-6 text-primary" />
-        </div>
-        <h2 class="text-lg font-semibold mb-2">Fast Conversion</h2>
-        <p class="text-sm text-muted-foreground">
-          Convert your files in seconds with our optimized processing system.
-        </p>
-      </div>
-      <div class="text-center">
-        <div
-          class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
-        >
-          <Check class="w-6 h-6 text-primary" />
-        </div>
-        <h2 class="text-lg font-semibold mb-2">Privacy First</h2>
-        <p class="text-sm text-muted-foreground">
-          We never store your files. Your privacy is our top priority.
-        </p>
-      </div>
-    </div>
-  </section>
+	<SupportedFormats />
+
+	<Testimonials />
+
+	<FAQ />
 </MainLayout>
 
 <style is:global>
-  /* Add loading state styles */
-  .file-upload-loading {
-    opacity: 0;
-    animation: fadeIn 0.3s ease-in forwards;
-  }
+	/* Add loading state styles */
+	.file-upload-loading {
+		opacity: 0.7;
+		pointer-events: none;
+	}
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
+	/* Custom card styling */
+	.trusty-card {
+		@apply rounded-xl border border-trustTeal/20 bg-white p-8 shadow-md transition-all duration-300;
+	}
+
+	/* Section styling */
+	.trusty-section {
+		@apply py-20 md:py-28;
+	}
+
+	.trusty-container {
+		@apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+	}
+
+	/* Feature grid styling */
+	.features-grid {
+		@apply grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3;
+	}
+
+	/* Button styling */
+	.btn {
+		@apply inline-flex items-center justify-center rounded-button px-6 py-3 text-base font-medium transition-all duration-200;
+	}
+
+	.btn-primary {
+		@apply bg-trustTeal text-white hover:bg-trustTeal/90 hover:shadow-md;
+	}
+
+	.btn-outline {
+		@apply border border-white text-white hover:bg-white/10;
+	}
+
+	/* Testimonial styling */
+	.testimonial-card {
+		@apply rounded-xl bg-white p-6 shadow-md;
+	}
 </style>

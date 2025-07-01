@@ -1,5 +1,5 @@
 ---
-import ErrorLayout from "@/layouts/ErrorLayout.astro";
+import MainLayout from '@/layouts/MainLayout.astro'
 
 /**
  * Error page for displaying error messages and status codes.
@@ -24,6 +24,22 @@ const titles: Record<number, string> = {
 
 const title = `${statusCode} - ${titles[statusCode] || "Error"}`;
 const error = { message };
+
+const description = 'An error occurred while processing your request.'
+const alternateLanguages = [
+  { code: 'en', name: 'English' }
+]
 ---
 
-<ErrorLayout title={title} error={error} statusCode={statusCode} />
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+  <div class="trusty-container py-16">
+    <div class="mx-auto max-w-lg text-center">
+      <h1 class="mb-6 text-4xl font-bold">Error {statusCode}</h1>
+      <p class="mb-8 text-xl text-muted-foreground">{message}</p>
+      <div class="flex justify-center space-x-4">
+        <a href="/" class="btn btn-primary">Return Home</a>
+        <button onclick="history.back()" class="btn btn-outline">Go Back</button>
+      </div>
+    </div>
+  </div>
+</MainLayout>

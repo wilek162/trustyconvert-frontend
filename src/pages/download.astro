@@ -1,114 +1,40 @@
 ---
-import MainLayout from "@/layouts/mainLayout.astro";
+import MainLayout from '@/layouts/MainLayout.astro'
+import { DownloadManager } from '@/components/features/conversion'
+import { UploadIcon } from 'lucide-react'
 
-const { searchParams } = new URL(Astro.request.url);
-const fileId = searchParams.get("id");
-const displayFilename = searchParams.get("filename");
-const isValidDownloadLink =
-  fileId &&
-  fileId !== "null" &&
-  fileId !== "undefined" &&
-  displayFilename &&
-  displayFilename !== "null" &&
-  displayFilename !== "undefined";
+// Get job ID from URL
+const jobId = Astro.url.searchParams.get('jobId') || ''
 
-const title = "Download your converted file - TrustyConvert";
-const description = "Your file is ready to download!";
-const canonical = "https://trustyconvert.com/download";
-const ogImage = "https://trustyconvert.com/og-image.png";
+// Redirect to home if no job ID
+if (!jobId) {
+	return Astro.redirect('/')
+}
+
+const title = 'Download Your Converted File - TrustyConvert'
+const description = 'Download your securely converted file from TrustyConvert.'
+const alternateLanguages = [{ code: 'en', name: 'English' }]
 ---
 
-<MainLayout
-  title={title}
-  description={description}
-  canonical={canonical}
-  ogImage={ogImage}
->
-  <section class="max-w-xl mx-auto py-24 px-4 text-center">
-    <h1 class="text-3xl font-bold mb-4">Your file is ready!</h1>
-    <div id="download-area">
-      <button
-        id="download-btn"
-        type="button"
-        class="inline-block px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed hidden"
-      >
-        Download
-      </button>
-      <p id="no-file-msg">No file found. Please try converting again.</p>
-      <div id="error-msg" class="text-red-600 mt-4 hidden"></div>
-    </div>
-    <p class="mt-4 text-muted-foreground">Thank you for using TrustyConvert!</p>
-    <script type="module" is:inline>
-      const btn = document.getElementById("download-btn");
-      const msg = document.getElementById("no-file-msg");
-      const errorMsg = document.getElementById("error-msg");
-      const urlParams = new URLSearchParams(window.location.search);
-      const fileId = urlParams.get("id");
-      const filename = urlParams.get("filename");
-      if (btn && msg) {
-        if (fileId && filename) {
-          btn.classList.remove("hidden");
-          btn.textContent = `Download ${filename}`;
-          msg.style.display = "none";
-          btn.addEventListener("click", async () => {
-            btn.disabled = true;
-            btn.textContent = "Downloading...";
-            errorMsg.classList.add("hidden");
-            try {
-              const response = await fetch(
-                `/api/download_secure?id=${encodeURIComponent(fileId)}`,
-                { credentials: "include" }
-              );
-              if (!response.ok) {
-                let message = "Download failed";
-                try {
-                  const data = await response.json();
-                  message = data.detail || message;
-                } catch {}
-                throw new Error(message);
-              }
-              const blob = await response.blob();
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = filename;
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-              URL.revokeObjectURL(url);
-              btn.textContent = "Download again";
-              btn.disabled = false;
-            } catch (err) {
-              btn.textContent = "Download failed";
-              btn.classList.add("bg-red-600");
-              errorMsg.textContent =
-                err instanceof Error
-                  ? err.message
-                  : "Download failed. Please try again.";
-              errorMsg.classList.remove("hidden");
-              btn.disabled = false;
-            }
-          });
-        } else {
-          btn.classList.add("hidden");
-          msg.style.display = "block";
-        }
-      }
-    </script>
-  </section>
+<MainLayout title={title} description={description} alternateLanguages={alternateLanguages}>
+	<div class="trusty-container py-12">
+		<div class="mx-auto max-w-xl">
+			<DownloadManager client:load jobId={jobId} />
+
+			<div class="mt-12 text-center">
+				<h2 class="mb-4 text-xl font-medium">Need to convert another file?</h2>
+				<a href="/" class="btn btn-primary inline-flex items-center gap-2">
+					<UploadIcon size={16} />
+					Convert Another File
+				</a>
+			</div>
+		</div>
+	</div>
 </MainLayout>
 
 <style>
-  .file-upload-loading {
-    opacity: 0;
-    animation: fadeIn 0.3s ease-in forwards;
-  }
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
+	:global(body) {
+		background: linear-gradient(to bottom right, hsl(var(--background)), hsl(var(--muted)));
+		min-height: 100vh;
+	}
 </style>

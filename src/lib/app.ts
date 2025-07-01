@@ -1,0 +1,129 @@
+/**
+ * Application Initialization Module
+ *
+ * Centralizes application initialization logic for consistent startup
+ * across different entry points (SSR, browser, etc.)
+ */
+
+import { initializeMonitoring } from '@/lib/monitoring/init'
+import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
+import { client } from '@/lib/api/client'
+import { debugLog } from '@/lib/utils/debug' // Offline detection is temporarily disabled
+import { hasCsrfToken } from '@/lib/stores/session'
+// import { initOfflineDetection } from '@/lib/utils/offlineDetection'
+
+// Flag to track initialization status
+let isInitializing = false
+
+/**
+ * Initialize the application
+ * Common initialization code for both server and client
+ */
+export async function initializeApp(): Promise<void> {
+	try {
+		// Initialize monitoring first for error tracking
+		await initializeMonitoring()
+
+		// Log initialization in development
+		if (import.meta.env.DEV) {
+			console.log('Application initialized')
+		}
+	} catch (error) {
+		console.error('Failed to initialize application:', error)
+	}
+}
+
+/**
+ * Initialize browser-specific features
+ * Only called in the browser environment
+ */
+export async function initializeBrowser(): Promise<void> {
+	if (typeof window === 'undefined') return
+
+	// Initialize session if needed and not already initializing
+	if (!hasCsrfToken() && !isInitializing) {
+		try {
+			isInitializing = true
+			debugLog('Initializing session during browser startup')
+			await client.initSession()
+			isInitializing = false
+		} catch (error) {
+			debugLog('Failed to initialize session during startup:', error)
+			isInitializing = false
+		}
+	}
+
+	try {
+		// Initialize global error handlers
+		initGlobalErrorHandlers()
+
+		// Initialize offline detection
+		// Offline detection is temporarily disabled
+		// initOfflineDetection()
+		const { initOfflineDetection } = await import('@/lib/utils/offlineDetection')
+		initOfflineDetection()
+
+		// Initialize IndexedDB for job persistence
+		const { initIndexedDB } = await import('@/lib/stores/upload')
+		await initIndexedDB()
+
+		// Configure fetch defaults for CORS
+		const originalFetch = window.fetch
+		window.fetch = async (resource, options = {}) => {
+			const defaultOptions = {
+				...options,
+				credentials: options.credentials || 'include',
+				headers: {
+					...options.headers,
+					Accept: 'application/json'
+				}
+			}
+
+			// For API requests, ensure we're using proper CORS settings
+			if (resource && typeof resource === 'string' && resource.includes('/api')) {
+				defaultOptions.mode = 'cors'
+			}
+
+			return originalFetch(resource, defaultOptions)
+		}
+
+		// Register service worker if available
+		if ('serviceWorker' in navigator && import.meta.env.PROD) {
+			window.addEventListener('load', () => {
+				navigator.serviceWorker
+					.register('/service-worker.js')
+					.then((registration) => {
+						console.log('ServiceWorker registered with scope:', registration.scope)
+					})
+					.catch((error) => {
+						console.error('ServiceWorker registration failed:', error)
+					})
+			})
+		}
+
+		// Log initialization in development
+		if (import.meta.env.DEV) {
+			console.log('Browser features initialized')
+		}
+	} catch (error) {
+		console.error('Failed to initialize browser features:', error)
+	}
+}
+
+// Only auto-initialize in browser environment if not imported by Astro
+// This prevents double initialization
+if (typeof window !== 'undefined' && !import.meta.env.SSR) {
+	// Use requestIdleCallback when available, otherwise use setTimeout
+	const scheduleInit = window.requestIdleCallback || setTimeout
+
+	scheduleInit(
+		() => {
+			initializeApp()
+				.then(initializeBrowser)
+				.catch((err) => {
+					console.error('Failed to auto-initialize app:', err)
+				})
+		},
+		{ timeout: 1000 }
+	)
+}

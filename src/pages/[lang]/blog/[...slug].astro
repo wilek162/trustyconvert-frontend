@@ -1,0 +1,120 @@
+---
+import { type CollectionEntry, getCollection } from 'astro:content'
+import MainLayout from '@/layouts/MainLayout.astro'
+import { formatDate } from '@/lib/i18n/utils'
+import { getAlternateLanguages } from '@/lib/i18n/middleware'
+import { LANGUAGES, DEFAULT_LANGUAGE } from '@/lib/i18n/config'
+
+export async function getStaticPaths() {
+	const posts = await getCollection('blog', ({ data }) => {
+		return !data.draft
+	})
+
+	return posts.flatMap((post) => {
+		// Skip default language as they will be served from the root
+		if (post.data.language === DEFAULT_LANGUAGE.code) {
+			return []
+		}
+
+		return [
+			{
+				params: {
+					lang: post.data.language,
+					slug: post.slug
+				},
+				props: { post }
+			}
+		]
+	})
+}
+
+type Props = {
+	post: CollectionEntry<'blog'>
+}
+
+const { post } = Astro.props
+const { Content } = await post.render()
+
+// Get post data
+const { title, description, publishDate, updatedDate, author, authorImage, image, tags, language } =
+	post.data
+
+// Get the language for this post
+const currentLang = language || 'en'
+
+// Format dates according to the post language
+const formattedPublishDate = formatDate(publishDate, currentLang)
+const formattedUpdatedDate = updatedDate ? formatDate(updatedDate, currentLang) : null
+
+// Get alternate language versions for this post
+const alternateLanguages = getAlternateLanguages(Astro)
+
+// Create structured data for SEO
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'BlogPosting',
+	headline: title,
+	description: description,
+	image: image,
+	datePublished: publishDate.toISOString(),
+	dateModified: updatedDate ? updatedDate.toISOString() : publishDate.toISOString(),
+	author: {
+		'@type': 'Person',
+		name: author
+	}
+}
+---
+
+<MainLayout
+	title={title}
+	description={description}
+	image={image}
+	alternateLanguages={alternateLanguages}
+	extraStructuredData={structuredData}
+>
+	<article class="trusty-container py-12">
+		<div class="mx-auto max-w-3xl">
+			<div class="mb-8">
+				<div class="mb-4 flex flex-wrap gap-2">
+					{
+						tags.map((tag) => (
+							<span class="inline-block rounded-full bg-trustTeal/10 px-3 py-1 text-xs font-medium text-trustTeal">
+								{tag}
+							</span>
+						))
+					}
+				</div>
+				<h1 class="mb-4 text-4xl font-bold md:text-5xl">{title}</h1>
+				<p class="text-xl text-muted-foreground">{description}</p>
+				<div class="mt-6 flex items-center">
+					<img
+						src={authorImage || '/images/authors/default.png'}
+						alt={author}
+						class="mr-4 h-12 w-12 rounded-full object-cover"
+					/>
+					<div>
+						<p class="font-medium">{author}</p>
+						<p class="text-sm text-muted-foreground">
+							{formattedPublishDate}
+							{formattedUpdatedDate && <span class="ml-2">(Updated: {formattedUpdatedDate})</span>}
+						</p>
+					</div>
+				</div>
+			</div>
+
+			<div class="aspect-video relative mb-12 overflow-hidden rounded-lg">
+				<img src={image} alt={title} class="h-full w-full object-cover" />
+			</div>
+
+			<div class="prose prose-lg max-w-none">
+				<Content />
+			</div>
+
+			<div class="mt-12 border-t border-border pt-8">
+				<h2 class="mb-4 text-2xl font-bold">Related Posts</h2>
+				<!-- Related posts would go here -->
+			</div>
+		</div>
+	</article>
+</MainLayout>
+

@@ -1,16 +1,64 @@
 ---
-const { title, description, canonical, ogImage } = Astro.props;
+interface Props {
+  title?: string
+  description?: string
+  image?: string
+  type?: 'website' | 'article'
+  structuredData?: Record<string, any>
+}
+
+const {
+  title = 'TrustyConvert - Fast and Secure File Conversion',
+  description = 'Convert your files quickly and securely with TrustyConvert. Support for multiple formats including PDF, DOCX, and images.',
+  image = '/images/og-image.jpg',
+  type = 'website',
+  structuredData
+} = Astro.props
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site)
 ---
 
+<!-- Primary Meta Tags -->
 <title>{title}</title>
+<meta name="title" content={title} />
 <meta name="description" content={description} />
-<link rel="canonical" href={canonical} />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content={type} />
+<meta property="og:url" content={canonicalURL} />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
-<meta property="og:type" content="website" />
-<meta property="og:url" content={canonical} />
-<meta property="og:image" content={ogImage} />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content={title} />
-<meta name="twitter:description" content={description} />
-<meta name="twitter:image" content={ogImage} />
+<meta property="og:image" content={new URL(image, Astro.site)} />
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:url" content={canonicalURL} />
+<meta property="twitter:title" content={title} />
+<meta property="twitter:description" content={description} />
+<meta property="twitter:image" content={new URL(image, Astro.site)} />
+
+<!-- Canonical URL -->
+<link rel="canonical" href={canonicalURL} />
+
+<!-- Structured Data -->
+{structuredData && (
+  <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+)}
+
+<!-- Default Structured Data -->
+{!structuredData && (
+  <script type="application/ld+json" set:html={JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'TrustyConvert',
+    description: description,
+    url: Astro.site,
+    applicationCategory: 'UtilityApplication',
+    operatingSystem: 'Any',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD'
+    }
+  })} />
+)}

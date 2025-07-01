@@ -1,0 +1,38 @@
+---
+/**
+ * Blog author component for displaying author information
+ */
+export interface Props {
+	name: string
+	image?: string
+	date: string | Date
+}
+
+const { name, image = '/images/default-avatar.png', date } = Astro.props
+
+// Format the date
+const formattedDate =
+	date instanceof Date
+		? date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+		: new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+---
+
+<div class="mt-12 flex items-center border-t border-border pt-8">
+	<div class="mr-4 h-12 w-12 overflow-hidden rounded-full">
+		<img
+			src={image}
+			alt={`Avatar for ${name}`}
+			class="h-full w-full object-cover"
+			width="48"
+			height="48"
+			loading="lazy"
+		/>
+	</div>
+
+	<div>
+		<div class="font-medium text-foreground">{name}</div>
+		<div class="text-sm text-muted-foreground">
+			Published on {formattedDate}
+		</div>
+	</div>
+</div>

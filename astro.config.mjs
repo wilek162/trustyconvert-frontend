@@ -15,13 +15,16 @@ export default defineConfig({
     enabled: true,
   },
   // Configure build output
-  output: 'static', // Use 'static' or 'server' for Astro v5
+  // Using 'static' for Cloudflare Pages deployment (preferred over 'server' mode)
+  // Note: This means Astro.request.headers is not available during build
+  // Client-side code should handle all API interactions and header detection
+  output: 'static',
   compressHTML: true, // Compress HTML output
   // Configure integrations
   integrations: [
     react({
       // Only hydrate components that need interactivity
-      include: ['**/features/**/*', '**/ui/**/*'],
+      include: ['**/features/**/*', '**/ui/**/*', '**/providers/**/*', '**/Hero.tsx', '**/ConversionForm.tsx'],
       // Exclude static components
       exclude: ['**/common/**/*', '**/seo/**/*', '**/*.stories.*'],
     }),
@@ -44,7 +47,15 @@ export default defineConfig({
   ],
   // Configure Vite
   vite: {
-    plugins: [mkcert()],
+    plugins: [
+      // Only use mkcert in development
+      process.env.NODE_ENV === 'development' ? mkcert({
+        hosts: ['localhost', '127.0.0.1'],
+        mkcertPath: undefined, // Let it auto-detect
+        autoUpgrade: true,
+        force: true,
+      }) : null
+    ].filter(Boolean),
     // Enable CSS modules for all .module.css files
     css: {
       modules: {
@@ -82,11 +93,50 @@ export default defineConfig({
         '@styles': fileURLToPath(new URL('./src/styles', import.meta.url)),
       },
     },
-    // Add dev server proxy for API
-    server: {
+    // Server configuration - only used in development
+    server: process.env.NODE_ENV === 'development' ? {
       proxy: {
-        '/api': 'https://127.0.0.1',
+        '/api': {
+          target: 'https://api.trustyconvert.com',
+          changeOrigin: true,
+          secure: false, // Don't verify SSL certificate
+          configure: (proxy, _options) => {
+            // Set up SSL handling
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Disable certificate validation
+
+            // Log proxy events for debugging
+            proxy.on('error', (err, _req, _res) => {
+              console.log('proxy error', err);
+            });
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              console.log('Sending Request to the Target:', req.method, req.url);
+              // Add CORS headers to outgoing requests
+              proxyReq.setHeader('Origin', 'https://localhost:4322');
+            });
+            proxy.on('proxyRes', (proxyRes, req, _res) => {
+              console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+              // Log CORS headers for debugging
+              const corsHeader = proxyRes.headers['access-control-allow-origin'];
+              if (corsHeader) {
+                console.log('CORS header received:', corsHeader);
+              }
+            });
+          }
+        }
       },
+      cors: {
+        origin: 'https://localhost:4322',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        credentials: true
+      },
+      https: {
+        key: process.env.SSL_KEY_FILE,
+        cert: process.env.SSL_CERT_FILE
+      }
+    } : {},
+    optimizeDeps: {
+      include: ['react', 'react-dom', '@tanstack/react-query'],
+      exclude: [],
     },
   },
   // Astro v5 image config (optional, remove if not using @astrojs/image)

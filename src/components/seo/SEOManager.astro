@@ -1,0 +1,156 @@
+---
+/**
+ * Enhanced SEO component with structured data, JSON-LD, and advanced meta tags
+ * This component centralizes all SEO-related tags and structured data
+ */
+
+interface Props {
+	title: string
+	description: string
+	canonicalUrl?: string
+	ogImage?: string
+	articleData?: {
+		publishedTime: string
+		modifiedTime?: string
+		author: string
+		tags?: string[]
+		section?: string
+	}
+	breadcrumbs?: Array<{ name: string; url: string }>
+	noIndex?: boolean
+	alternateLanguages?: Array<{ code: string; url: string }>
+	structuredData?: Record<string, any>
+	pageType?: 'website' | 'article' | 'product' | 'conversion'
+}
+
+const {
+	title,
+	description,
+	canonicalUrl = Astro.url.pathname,
+	ogImage = '/images/og-image.jpg',
+	articleData,
+	breadcrumbs,
+	noIndex = false,
+	alternateLanguages = [],
+	structuredData,
+	pageType = 'website'
+} = Astro.props
+
+// Build the full canonical URL
+const fullCanonicalUrl = new URL(canonicalUrl, Astro.site).toString()
+
+// Build the full OG image URL
+const fullOgImageUrl = new URL(ogImage, Astro.site).toString()
+
+// Generate breadcrumb structured data if breadcrumbs are provided
+const breadcrumbsStructuredData = breadcrumbs
+	? {
+			'@context': 'https://schema.org',
+			'@type': 'BreadcrumbList',
+			itemListElement: breadcrumbs.map((breadcrumb, index) => ({
+				'@type': 'ListItem',
+				position: index + 1,
+				name: breadcrumb.name,
+				item: new URL(breadcrumb.url, Astro.site).toString()
+			}))
+		}
+	: null
+
+// Generate article structured data if article data is provided
+const articleStructuredData =
+	articleData && pageType === 'article'
+		? {
+				'@context': 'https://schema.org',
+				'@type': 'Article',
+				headline: title,
+				description: description,
+				image: fullOgImageUrl,
+				datePublished: articleData.publishedTime,
+				dateModified: articleData.modifiedTime || articleData.publishedTime,
+				author: {
+					'@type': 'Person',
+					name: articleData.author
+				}
+			}
+		: null
+
+// Default web application structured data
+const defaultStructuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'WebApplication',
+	name: 'TrustyConvert',
+	description: description,
+	url: Astro.site?.toString(),
+	applicationCategory: 'UtilityApplication',
+	operatingSystem: 'Any',
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD'
+	}
+}
+
+// Determine which structured data to use
+const finalStructuredData =
+	structuredData || (pageType === 'article' ? articleStructuredData : defaultStructuredData)
+---
+
+<!-- Primary Meta Tags -->
+<title>{title}</title>
+<meta name="title" content={title} />
+<meta name="description" content={description} />
+
+<!-- Robots Meta Tags -->
+{
+	noIndex ? (
+		<meta name="robots" content="noindex, nofollow" />
+	) : (
+		<meta name="robots" content="index, follow" />
+	)
+}
+
+<!-- Canonical URL -->
+<link rel="canonical" href={fullCanonicalUrl} />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content={pageType === 'article' ? 'article' : 'website'} />
+<meta property="og:url" content={fullCanonicalUrl} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={fullOgImageUrl} />
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:url" content={fullCanonicalUrl} />
+<meta property="twitter:title" content={title} />
+<meta property="twitter:description" content={description} />
+<meta property="twitter:image" content={fullOgImageUrl} />
+
+<!-- Article specific meta tags -->
+{
+	articleData && pageType === 'article' && (
+		<>
+			<meta property="article:published_time" content={articleData.publishedTime} />
+			{articleData.modifiedTime && (
+				<meta property="article:modified_time" content={articleData.modifiedTime} />
+			)}
+			{articleData.section && <meta property="article:section" content={articleData.section} />}
+			{articleData.tags &&
+				articleData.tags.map((tag) => <meta property="article:tag" content={tag} />)}
+		</>
+	)
+}
+
+<!-- Alternate language links -->
+{alternateLanguages.map((lang) => <link rel="alternate" hreflang={lang.code} href={lang.url} />)}
+
+<!-- Structured Data -->
+<script type="application/ld+json" set:html={JSON.stringify(finalStructuredData)} />
+
+<!-- Breadcrumbs Structured Data (if provided) -->
+{
+	breadcrumbsStructuredData && (
+		<script type="application/ld+json" set:html={JSON.stringify(breadcrumbsStructuredData)} />
+	)
+}
+
