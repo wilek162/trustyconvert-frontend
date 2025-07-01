@@ -1,9 +1,37 @@
 ---
-import MainLayout from '@/layouts/MainLayout.astro'
+import MainLayout from '@/layouts/mainLayout.astro'
 import { ConversionFlow } from '@/components/features/conversion'
+const {
+	title,
+	description,
+	sourceFormat,
+	targetFormat,
+	sourceFormatInfo,
+	targetFormatInfo,
+	conversionFeatures,
+	allFormats
+} = Astro.props
+const alternateLanguages = [{ code: 'en', name: 'English' }]
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'SoftwareApplication',
+	name: `${sourceFormat?.toUpperCase()} to ${targetFormat?.toUpperCase()} Converter`,
+	applicationCategory: 'UtilityApplication',
+	operatingSystem: 'All',
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD'
+	},
+	description: description
+} as any // Type assertion to avoid structured data type issues
 ---
 
-<MainLayout title="API Integration Test">
+<MainLayout 
+title="API Integration Test"
+description={description}
+alternateLanguages={alternateLanguages}
+extraStructuredData={structuredData}>
 	<div class="container mx-auto py-12">
 		<div class="mb-8 text-center">
 			<h1 class="mb-2 text-3xl font-bold text-deepNavy">API Integration Test</h1>
