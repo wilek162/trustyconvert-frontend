@@ -13,15 +13,17 @@ export const AppProviders = ({ children }: { children: React.ReactNode }) => {
 }
 
 const LazyDevtools = () => {
-	const Devtools = React.useMemo(
-		() =>
-			React.lazy(() =>
-				import('@tanstack/react-query-devtools').then((mod) => ({
-					default: mod.ReactQueryDevtools
-				}))
-			),
-		[]
-	)
+	// Avoid loading the module in production
+	if (!import.meta.env.DEV) return null
+
+	// React.lazy should only be called when actually used
+	const Devtools = React.useMemo(() => {
+		return React.lazy(() =>
+			import('@tanstack/react-query-devtools').then((mod) => ({
+				default: mod.ReactQueryDevtools
+			}))
+		)
+	}, [])
 
 	return (
 		<React.Suspense fallback={null}>
