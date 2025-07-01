@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useDropzone } from 'react-dropzone'
+import type { FileRejection, DropEvent, Accept, FileError } from 'react-dropzone'
 import { toast } from 'sonner'
 
 import { FILE_UPLOAD } from '@/lib/config/constants'
@@ -16,6 +17,36 @@ interface UploadZoneProps {
 	title?: string
 }
 
+/**
+ * Convert format categories to a proper accept object for react-dropzone
+ * Maps extensions to their MIME types
+ */
+const convertFormatsToAccept = (formats: Record<string, string[]>): Accept => {
+	// Create an object that maps MIME types to extensions as required by react-dropzone v14+
+	const acceptObject: Accept = {}
+
+	// For each category (DOCUMENT, IMAGE, etc.)
+	Object.entries(formats).forEach(([category, extensions]) => {
+		// Get the corresponding MIME types for this category
+		const mimeTypes = FILE_UPLOAD.MIME_TYPES[category as keyof typeof FILE_UPLOAD.MIME_TYPES] || []
+
+		// For each MIME type, add the extensions
+		mimeTypes.forEach((mimeType) => {
+			// Format extensions with dots (e.g., '.pdf')
+			const formattedExtensions = extensions.map((ext) => `.${ext}`)
+
+			// Add or append to the acceptObject
+			if (acceptObject[mimeType]) {
+				acceptObject[mimeType] = [...acceptObject[mimeType], ...formattedExtensions]
+			} else {
+				acceptObject[mimeType] = formattedExtensions
+			}
+		})
+	})
+
+	return acceptObject
+}
+
 export function UploadZone({
 	onFileAccepted,
 	onFileRejected,
@@ -30,7 +61,7 @@ export function UploadZone({
 	const [file, setFile] = useState<File | null>(null)
 	const [validationResult, setValidationResult] = useState<FileValidationResult | null>(null)
 	const [filteredFormats, setFilteredFormats] = useState<Record<string, string[]>>(
-		propAcceptedFormats || FILE_UPLOAD.MIME_TYPES
+		propAcceptedFormats || FILE_UPLOAD.SUPPORTED_FORMATS
 	)
 
 	// Set client-side rendering flag
@@ -42,23 +73,25 @@ export function UploadZone({
 	useEffect(() => {
 		if (initialSourceFormat) {
 			// Find the format info from constants
-			const formatKey = Object.keys(FILE_UPLOAD.MIME_TYPES).find((key) => {
-				// Safely access the MIME_TYPES with the key as a known property
-				const mimeTypes = FILE_UPLOAD.MIME_TYPES[key as keyof typeof FILE_UPLOAD.MIME_TYPES]
-				return mimeTypes.some((type: string) => type.includes(initialSourceFormat.toLowerCase()))
+			const formatKey = Object.keys(FILE_UPLOAD.SUPPORTED_FORMATS).find((key) => {
+				// Safely access the SUPPORTED_FORMATS with the key as a known property
+				const formats =
+					FILE_UPLOAD.SUPPORTED_FORMATS[key as keyof typeof FILE_UPLOAD.SUPPORTED_FORMATS]
+				return formats.some((type: string) => type.includes(initialSourceFormat.toLowerCase()))
 			})
 
 			if (formatKey) {
 				const filteredTypes = {
-					[formatKey]: FILE_UPLOAD.MIME_TYPES[formatKey as keyof typeof FILE_UPLOAD.MIME_TYPES]
+					[formatKey]:
+						FILE_UPLOAD.SUPPORTED_FORMATS[formatKey as keyof typeof FILE_UPLOAD.SUPPORTED_FORMATS]
 				}
 				setFilteredFormats(filteredTypes)
 			} else {
-				setFilteredFormats(propAcceptedFormats || FILE_UPLOAD.MIME_TYPES)
+				setFilteredFormats(propAcceptedFormats || FILE_UPLOAD.SUPPORTED_FORMATS)
 			}
 		} else {
 			// Use the props or default if no initialSourceFormat is provided
-			setFilteredFormats(propAcceptedFormats || FILE_UPLOAD.MIME_TYPES)
+			setFilteredFormats(propAcceptedFormats || FILE_UPLOAD.SUPPORTED_FORMATS)
 		}
 	}, [initialSourceFormat, propAcceptedFormats])
 
@@ -79,7 +112,8 @@ export function UploadZone({
 			// Validate file
 			const result = validateFile(selectedFile, {
 				maxSize: maxFileSize,
-				allowedTypes: Object.values(filteredFormats).flat()
+				allowedTypes: Object.values(FILE_UPLOAD.MIME_TYPES).flat(),
+				allowedExtensions: Object.values(FILE_UPLOAD.SUPPORTED_FORMATS).flat()
 			})
 
 			setValidationResult(result)
@@ -99,21 +133,54 @@ export function UploadZone({
 				onFileAccepted(selectedFile)
 			}
 		},
-		[maxFileSize, filteredFormats, onFileRejected, onFileAccepted]
+		[maxFileSize, onFileRejected, onFileAccepted]
 	)
 
 	// Always initialize the dropzone hook, but only use its functionality on the client side
 	// This ensures hooks are always called in the same order
 	const dropzoneConfig = useMemo(() => {
 		return {
-			onDrop: isClient ? onDrop : () => {},
-			accept: filteredFormats,
-			maxFiles: 1,
+			accept: convertFormatsToAccept(filteredFormats),
 			maxSize: maxFileSize,
 			multiple: false,
-			disabled: !isClient
+			onDropAccepted: (files: File[]) => {
+				if (files.length > 0) {
+					const selectedFile = files[0]
+					setFile(selectedFile)
+
+					const result = validateFile(selectedFile, {
+						maxSize: maxFileSize,
+						allowedTypes: Object.values(FILE_UPLOAD.MIME_TYPES).flat(),
+						allowedExtensions: Object.values(FILE_UPLOAD.SUPPORTED_FORMATS).flat()
+					})
+					setValidationResult(result)
+
+					if (result.isValid && onFileAccepted) {
+						onFileAccepted(selectedFile)
+					}
+				}
+			},
+			onDropRejected: (fileRejections: FileRejection[], event: DropEvent) => {
+				if (fileRejections.length > 0) {
+					const rejection = fileRejections[0]
+					const errorMessage = rejection.errors.map((e) => e.message).join(', ') || 'File rejected'
+					setValidationResult({
+						isValid: false,
+						error: errorMessage,
+						details: {
+							sizeValid: !rejection.errors.some((e) => e.code === 'file-too-large'),
+							typeValid: !rejection.errors.some((e) => e.code === 'file-invalid-type'),
+							extensionValid: !rejection.errors.some((e) => e.code === 'file-invalid-type')
+						}
+					})
+
+					if (onFileRejected) {
+						onFileRejected(errorMessage)
+					}
+				}
+			}
 		}
-	}, [isClient, onDrop, filteredFormats, maxFileSize])
+	}, [filteredFormats, maxFileSize, onFileRejected, onFileAccepted])
 
 	// Always call useDropzone, but with conditional config
 	const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone(dropzoneConfig)

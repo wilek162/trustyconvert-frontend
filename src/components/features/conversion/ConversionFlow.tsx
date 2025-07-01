@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress'
 
 import client from '@/lib/api/client'
 import { getFileExtension, formatFileSize } from '@/lib/utils/files'
-import { debugLog } from '@/lib/utils/debug'
+import { debugLog, debugSessionState } from '@/lib/utils/debug'
 import CloseSession from '../session/CloseSession'
 import { useSession } from '@/lib/providers/SessionContext'
 import sessionManager from '@/lib/services/sessionManager'
@@ -202,46 +202,69 @@ export function ConversionFlow({
 
 		// Ensure we have a session before proceeding
 		setIsConverting(true)
-		try {
-			const success = await ensureSession()
-			if (!success) {
-				// In development mode, show more detailed error
-				if (import.meta.env.DEV) {
-					const debugInfo = getDebugInfo()
-					console.group('Session Initialization Failed')
-					console.error('Session error details:', debugInfo)
-					console.log('CSRF token exists:', sessionManager.hasCsrfToken())
-					console.log('Session initialized:', sessionManager.getSessionState().sessionInitialized)
-					console.log('Last error:', lastError || 'No error message')
-					console.groupEnd()
 
-					// Show a more informative error message in development
-					const errorMsg = lastError || 'Session initialization failed. Check console for details.'
+		// First check if we already have a valid session
+		const hasCsrfToken = sessionManager.hasCsrfToken()
+		const isSessionInit = sessionManager.getSessionState().sessionInitialized
+
+		// Log detailed session state for debugging
+		if (import.meta.env.DEV) {
+			debugSessionState(sessionManager, 'handleConvert - before session check')
+		}
+
+		// If we already have a token and session is initialized, proceed without calling ensureSession
+		if (hasCsrfToken && isSessionInit) {
+			debugLog('Using existing session for conversion')
+		} else {
+			// Otherwise try to ensure session
+			try {
+				const success = await ensureSession()
+				if (!success) {
+					// In development mode, show more detailed error
+					if (import.meta.env.DEV) {
+						debugSessionState(sessionManager, 'handleConvert - session initialization failed')
+						console.group('Session Initialization Failed')
+						console.error('Session error details:', getDebugInfo())
+						console.log('CSRF token exists:', sessionManager.hasCsrfToken())
+						console.log('Session initialized:', sessionManager.getSessionState().sessionInitialized)
+						console.log('Last error:', lastError || 'No error message')
+						console.groupEnd()
+
+						// Show a more informative error message in development
+						const errorMsg =
+							lastError || 'Session initialization failed. Check console for details.'
+						showError(errorMsg)
+						setError(errorMsg)
+					} else {
+						// In production, show the standard message
+						showError(MESSAGE_TEMPLATES.session.invalid)
+					}
+					setIsConverting(false)
+					return
+				}
+			} catch (error) {
+				console.error('Failed to initialize session:', error)
+
+				// Show detailed error in development
+				if (import.meta.env.DEV) {
+					debugSessionState(sessionManager, 'handleConvert - session initialization error')
+					const errorMsg =
+						error instanceof Error
+							? `Session error: ${error.message}`
+							: 'Unknown session error. Check console for details.'
 					showError(errorMsg)
 					setError(errorMsg)
 				} else {
-					// In production, show the standard message
 					showError(MESSAGE_TEMPLATES.session.invalid)
 				}
 				setIsConverting(false)
 				return
 			}
-		} catch (error) {
-			console.error('Failed to initialize session:', error)
+		}
 
-			// Show detailed error in development
-			if (import.meta.env.DEV) {
-				const errorMsg =
-					error instanceof Error
-						? `Session error: ${error.message}`
-						: 'Unknown session error. Check console for details.'
-				showError(errorMsg)
-				setError(errorMsg)
-			} else {
-				showError(MESSAGE_TEMPLATES.session.invalid)
-			}
-			setIsConverting(false)
-			return
+		// Log session state after initialization
+		if (import.meta.env.DEV) {
+			debugSessionState(sessionManager, 'handleConvert - after session check')
 		}
 
 		// Generate a job ID if we don't have one
@@ -312,6 +335,29 @@ export function ConversionFlow({
 		}
 	})
 
+	// Format debug info for display
+	const getFormattedDebugInfo = useCallback(() => {
+		try {
+			const sessionState = sessionManager.getSessionState()
+			return JSON.stringify(sessionState, null, 2)
+		} catch (e) {
+			return 'Error formatting debug info'
+		}
+	}, [])
+
+	// Format error details for display
+	const getFormattedErrorDetails = useCallback(() => {
+		if (!detailedError) return 'No detailed error information'
+		try {
+			if (typeof detailedError === 'object') {
+				return JSON.stringify(detailedError, null, 2)
+			}
+			return String(detailedError)
+		} catch (e) {
+			return `Error formatting details: ${String(e)}`
+		}
+	}, [detailedError])
+
 	// Render the component
 	if (!isClient) {
 		return null // Don't render on server
@@ -364,34 +410,30 @@ export function ConversionFlow({
 										<strong>Has CSRF Token:</strong> {String(sessionManager.hasCsrfToken())}
 									</p>
 									<p>
-										<strong>CSRF Token in Store:</strong>{' '}
-										{String(Boolean(sessionManager.getCsrfToken()))}
-									</p>
-									<p>
-										<strong>CSRF Token in Cookie:</strong>{' '}
-										{String(Boolean(sessionManager.getCsrfTokenFromCookie()))}
+										<strong>CSRF Token in Store:</strong> {String(sessionManager.hasCsrfToken())}
 									</p>
 								</div>
 								<h4 className="mb-2 text-sm font-semibold">Session State:</h4>
-								<pre className="overflow-auto text-xs text-gray-700">
-									{JSON.stringify(sessionManager.getSessionState(), null, 2)}
-								</pre>
-								{detailedError && (
-									<>
-										<h4 className="mb-2 mt-2 text-sm font-semibold">Error Details:</h4>
-										<pre className="overflow-auto text-xs text-gray-700">
-											{JSON.stringify(detailedError, null, 2)}
+								<pre className="overflow-auto text-xs text-gray-700">{getFormattedDebugInfo()}</pre>
+								{lastError && (
+									<div className="mt-2">
+										<h4 className="mb-2 text-sm font-semibold">Error Message:</h4>
+										<p className="text-xs text-red-600">{lastError}</p>
+									</div>
+								)}
+								{detailedError !== null && detailedError !== undefined && (
+									<div className="mt-2">
+										<h4 className="mb-2 text-sm font-semibold">Detailed Error:</h4>
+										<pre className="overflow-auto text-xs text-red-600">
+											{getFormattedErrorDetails()}
 										</pre>
-									</>
+									</div>
 								)}
 								<div className="mt-3 flex justify-center">
 									<button
 										onClick={() => {
 											// Force session initialization
-											setIsInitializing(true)
-											sessionManager.initSession(true).finally(() => {
-												setIsInitializing(false)
-											})
+											sessionManager.initSession(true)
 										}}
 										className="rounded bg-blue-500 px-2 py-1 text-xs text-white"
 										disabled={isInitializing}

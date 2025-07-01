@@ -102,9 +102,25 @@ export const client = {
 		try {
 			const response = await _apiClient.initSession()
 
+			// Log the CSRF token from the response for debugging
+			if (import.meta.env.DEV) {
+				console.group('CSRF Token Synchronization')
+				console.log('CSRF token from server response:', response?.csrf_token)
+				console.log('CSRF token in store before update:', sessionManager.getCsrfToken())
+				console.groupEnd()
+			}
+
 			// If we received a response with a CSRF token, update it in the store
 			if (response && response.csrf_token) {
 				sessionManager.updateCsrfTokenFromServer(response.csrf_token)
+
+				// Log after update to verify
+				if (import.meta.env.DEV) {
+					console.group('CSRF Token After Update')
+					console.log('CSRF token in store after update:', sessionManager.getCsrfToken())
+					console.log('Token match status:', sessionManager.getCsrfToken() === response.csrf_token)
+					console.groupEnd()
+				}
 			}
 
 			return response

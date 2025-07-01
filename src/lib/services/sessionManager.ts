@@ -5,9 +5,9 @@
  * server-managed sessions and client-side state.
  */
 
-import { debugLog, debugError } from '@/lib/utils/debug'
+import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
 import { csrfToken, sessionInitialized, updateCsrfToken, clearSession } from '@/lib/stores/session'
-import { getCsrfTokenFromCookie, getCsrfHeaders, dispatchCsrfError } from '@/lib/utils/csrfUtils'
+import { getCsrfTokenFromStore, getCsrfHeaders, dispatchCsrfError } from '@/lib/utils/csrfUtils'
 import { apiConfig } from '@/lib/api/config'
 import client from '../api/client'
 
@@ -26,38 +26,17 @@ let lastInitError: unknown = null
  */
 class SessionManager {
 	/**
-	 * Check if a CSRF token exists in the store or cookie
+	 * Check if a CSRF token exists in the store
 	 */
 	hasCsrfToken(): boolean {
-		return csrfToken.get() !== null || getCsrfTokenFromCookie() !== null
+		return csrfToken.get() !== null
 	}
 
 	/**
-	 * Get the current CSRF token
-	 * First checks the store, then falls back to cookie if needed
+	 * Get the current CSRF token from the store
 	 */
 	getCsrfToken(): string | null {
-		// First check the store
-		const storeToken = csrfToken.get()
-		if (storeToken) return storeToken
-
-		// If not in store, check cookie and update store if found
-		const cookieToken = getCsrfTokenFromCookie()
-		if (cookieToken) {
-			// Update the store with the cookie value
-			this.setCsrfToken(cookieToken)
-			return cookieToken
-		}
-
-		return null
-	}
-
-	/**
-	 * Get the CSRF token from cookie directly
-	 * Exposed for debugging purposes
-	 */
-	getCsrfTokenFromCookie(): string | null {
-		return getCsrfTokenFromCookie()
+		return csrfToken.get()
 	}
 
 	/**
@@ -70,9 +49,33 @@ class SessionManager {
 		}
 
 		try {
+			// Log the token for debugging (only in development)
+			if (import.meta.env.DEV) {
+				console.group('Setting CSRF Token')
+				console.log('Token to set:', token)
+				console.log('Current token in store:', csrfToken.get())
+				console.groupEnd()
+			}
+
 			// Update the nanostore with the new token
 			updateCsrfToken(token)
 			sessionInitialized.set(true)
+
+			// Verify the token was set correctly
+			const storedToken = csrfToken.get()
+
+			if (import.meta.env.DEV) {
+				console.group('CSRF Token Verification')
+				console.log('Token after setting:', storedToken)
+				console.log('Token match status:', storedToken === token)
+				console.groupEnd()
+			}
+
+			if (storedToken !== token) {
+				debugError('CSRF token verification failed - token mismatch')
+				return false
+			}
+
 			debugLog('CSRF token set in store and session marked as initialized')
 			return true
 		} catch (error) {
@@ -82,24 +85,19 @@ class SessionManager {
 	}
 
 	/**
-	 * Synchronize token from cookie to store
-	 * Returns true if a token was found and synchronized
+	 * Check if a token exists in the store
+	 * Returns true if a token was found
 	 */
-	synchronizeTokenFromCookie(): boolean {
-		const cookieToken = getCsrfTokenFromCookie()
+	checkTokenInStore(): boolean {
 		const storeToken = csrfToken.get()
 
-		if (!cookieToken) {
+		if (!storeToken) {
+			debugLog('No token found in store')
 			return false
 		}
 
-		// If cookie token exists and differs from store token, update store
-		if (cookieToken !== storeToken) {
-			debugLog('Synchronizing CSRF token from cookie to store')
-			return this.setCsrfToken(cookieToken)
-		}
-
-		// Token exists and is already synchronized
+		// Token exists in store
+		debugLog('Token found in store')
 		return true
 	}
 
@@ -133,12 +131,13 @@ class SessionManager {
 	 * @returns Promise that resolves to boolean indicating success
 	 */
 	async initSession(forceNew = false): Promise<boolean> {
-		// First try to synchronize from cookie
-		const hasSyncedToken = this.synchronizeTokenFromCookie()
+		// First check if we have a token in the store
+		const hasToken = this.checkTokenInStore()
 
 		// If we have a valid token and not forcing new, return immediately
-		if (hasSyncedToken && !forceNew) {
+		if (hasToken && !forceNew) {
 			sessionInitialized.set(true)
+			debugLog('Using existing session from store')
 			return true
 		}
 
@@ -224,15 +223,79 @@ class SessionManager {
 	 * This should be the primary method used by components
 	 */
 	async ensureSession(): Promise<boolean> {
-		// First try to synchronize from cookie
-		if (this.synchronizeTokenFromCookie()) {
-			sessionInitialized.set(true)
-			return true
-		}
+		try {
+			// First check if we have a token in the store
+			if (this.checkTokenInStore()) {
+				sessionInitialized.set(true)
+				debugLog('Session already initialized in ensureSession')
 
-		// If no token in cookie or store, initialize a new session
-		// This is the last resort when no session exists
-		return this.initSession()
+				if (import.meta.env.DEV) {
+					debugSessionState(this, 'sessionManager.ensureSession - using existing token')
+				}
+
+				return true
+			}
+
+			// If no token in store, initialize a new session
+			// This is the last resort when no session exists
+			debugLog('No token in store, attempting to initialize session')
+
+			// Check if initialization is already in progress
+			if (isInitializing && initializationPromise) {
+				debugLog('Session initialization already in progress, waiting for it to complete')
+
+				if (import.meta.env.DEV) {
+					debugSessionState(
+						this,
+						'sessionManager.ensureSession - waiting for in-progress initialization'
+					)
+				}
+
+				return initializationPromise
+			}
+
+			if (import.meta.env.DEV) {
+				debugSessionState(this, 'sessionManager.ensureSession - before initSession')
+			}
+
+			const result = await this.initSession()
+
+			if (import.meta.env.DEV) {
+				debugSessionState(
+					this,
+					`sessionManager.ensureSession - after initSession (result: ${result})`
+				)
+			}
+
+			// Critical check: If we have a token but initialization reported false,
+			// the session might still be valid
+			if (!result) {
+				const hasToken = this.hasCsrfToken()
+				if (hasToken) {
+					debugLog(
+						'Session initialization reported failure but token exists - considering session valid'
+					)
+					sessionInitialized.set(true)
+					return true
+				}
+			}
+
+			return result
+		} catch (error) {
+			debugError('Error in ensureSession:', error)
+
+			if (import.meta.env.DEV) {
+				debugSessionState(this, 'sessionManager.ensureSession - error')
+			}
+
+			// Even if there was an error, check if we have a token
+			if (this.hasCsrfToken()) {
+				debugLog('Error occurred but token exists - considering session valid')
+				sessionInitialized.set(true)
+				return true
+			}
+			return false
+		}
 	}
 
 	/**
@@ -274,8 +337,7 @@ class SessionManager {
 			isInitializing,
 			lastInitAttempt: new Date(lastInitAttempt).toISOString(),
 			lastInitError,
-			csrfTokenInStore: csrfToken.get() !== null,
-			csrfTokenInCookie: getCsrfTokenFromCookie() !== null
+			csrfTokenInStore: csrfToken.get() !== null
 		}
 	}
 
@@ -288,7 +350,6 @@ class SessionManager {
 			return {
 				sessionState: this.getSessionState(),
 				csrfToken: this.getCsrfToken(),
-				cookieToken: getCsrfTokenFromCookie(),
 				lastInitError,
 				apiConfig: {
 					baseUrl: apiConfig.baseUrl,

@@ -4,21 +4,21 @@
  * Provides state management for session data using nanostores.
  */
 import { atom, onMount } from 'nanostores'
-import { getCsrfTokenFromCookie } from '@/lib/utils/csrfUtils'
+import { getCsrfTokenFromStore } from '@/lib/utils/csrfUtils'
 import { debugLog, debugError } from '@/lib/utils/debug'
 
 // Create atom store for session state
 export const csrfToken = atom<string | null>(null)
 export const sessionInitialized = atom<boolean>(false)
 
-// Initialize from cookie on mount (only for initial page load)
+// Initialize from store on mount (only for initial page load)
 onMount(csrfToken, () => {
-	// Check if we have a token in cookie
-	const cookieToken = getCsrfTokenFromCookie()
-	if (cookieToken) {
-		csrfToken.set(cookieToken)
+	// Check if we have a token in store already
+	const storeToken = getCsrfTokenFromStore()
+	if (storeToken) {
+		csrfToken.set(storeToken)
 		sessionInitialized.set(true)
-		debugLog('Session store initialized from cookie')
+		debugLog('Session store initialized')
 	}
 })
 
@@ -26,7 +26,7 @@ onMount(csrfToken, () => {
  * Check if a CSRF token exists
  */
 export function hasCsrfToken(): boolean {
-	return csrfToken.get() !== null || getCsrfTokenFromCookie() !== null
+	return csrfToken.get() !== null
 }
 
 /**
@@ -38,13 +38,36 @@ export function updateCsrfToken(token: string | null): void {
 		return
 	}
 
-	// Set in store
-	csrfToken.set(token)
+	try {
+		// Set in store
+		csrfToken.set(token)
 
-	// Mark session as initialized
-	sessionInitialized.set(true)
+		// Verify the token was set correctly
+		const storedToken = csrfToken.get()
+		if (storedToken !== token) {
+			debugError('CSRF token update verification failed - token mismatch')
+			console.error('Token mismatch:', { original: token, stored: storedToken })
 
-	debugLog('CSRF token updated in store')
+			// Try setting it again
+			csrfToken.set(token)
+
+			// Check again
+			const recheckToken = csrfToken.get()
+			if (recheckToken !== token) {
+				debugError('CSRF token update failed after retry')
+			} else {
+				debugLog('CSRF token updated successfully after retry')
+			}
+			return
+		}
+
+		// Mark session as initialized
+		sessionInitialized.set(true)
+
+		debugLog('CSRF token updated in store')
+	} catch (error) {
+		debugError('Error updating CSRF token:', error)
+	}
 }
 
 /**
@@ -60,5 +83,5 @@ export function clearSession(): void {
  * Get the CSRF token
  */
 export function getCSRFToken(): string | null {
-	return csrfToken.get() || getCsrfTokenFromCookie()
+	return csrfToken.get()
 }

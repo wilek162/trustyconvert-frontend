@@ -162,6 +162,15 @@ async function processApiResponse<T>(
 				// Check if response contains a new CSRF token and update it in the store
 				if (jsonResponse.data && jsonResponse.data.csrf_token) {
 					debugLog('Received new CSRF token from server response')
+
+					// Log the token for debugging
+					if (import.meta.env.DEV) {
+						console.group('CSRF Token in Response')
+						console.log('CSRF token from response:', jsonResponse.data.csrf_token)
+						console.log('Current token in store:', sessionManager.getCsrfToken())
+						console.groupEnd()
+					}
+
 					sessionManager.updateCsrfTokenFromServer(jsonResponse.data.csrf_token)
 				}
 
@@ -218,9 +227,7 @@ async function makeRequest<T>(
 	try {
 		// Add CSRF headers for non-GET requests if not explicitly skipped
 		if (!skipCsrfCheck && fetchOptions.method && fetchOptions.method !== 'GET') {
-			// First try to synchronize token from cookie to memory
-			sessionManager.synchronizeTokenFromCookie()
-
+			// Get CSRF headers from session manager
 			const csrfHeaders = sessionManager.getCsrfHeaders()
 
 			// Create headers object if it doesn't exist
@@ -279,6 +286,20 @@ async function initSession(): Promise<SessionInitResponse | null> {
 				message: response.data?.message || response.data?.error_message || 'No message provided',
 				correlationId: response.correlation_id || 'no-correlation-id'
 			})
+			return null
+		}
+
+		// Log the CSRF token from the response for debugging
+		if (import.meta.env.DEV) {
+			console.group('Session Initialization Response')
+			console.log('Full response:', response)
+			console.log('CSRF token in response:', response.data?.csrf_token)
+			console.groupEnd()
+		}
+
+		// Ensure the response contains a CSRF token
+		if (!response.data?.csrf_token) {
+			debugError('Session initialization response missing CSRF token')
 			return null
 		}
 

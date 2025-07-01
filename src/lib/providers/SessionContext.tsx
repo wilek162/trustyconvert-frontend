@@ -3,7 +3,7 @@ import sessionManager from '@/lib/services/sessionManager'
 import { useStore } from '@nanostores/react'
 import { csrfToken, sessionInitialized } from '@/lib/stores/session'
 import { createCsrfErrorListener } from '@/lib/utils/csrfUtils'
-import { debugLog, debugError } from '@/lib/utils/debug'
+import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
 
 // Define the context type
 interface SessionContextType {
@@ -65,12 +65,12 @@ export function SessionContextProvider({ children }: SessionProviderProps) {
 	// Initialize session on mount
 	useEffect(() => {
 		const initializeSession = async () => {
-			// First try to synchronize from cookie
-			if (sessionManager.synchronizeTokenFromCookie()) {
+			// First try to check if we have a token in store
+			if (sessionManager.checkTokenInStore()) {
 				return
 			}
 
-			// If no token in cookie, initialize a new session
+			// If no token in store, initialize a new session
 			try {
 				setIsInitializing(true)
 				await sessionManager.initSession()
@@ -94,11 +94,8 @@ export function SessionContextProvider({ children }: SessionProviderProps) {
 	useEffect(() => {
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === 'visible') {
-				// First synchronize any existing token from cookie to memory
-				if (
-					!sessionManager.synchronizeTokenFromCookie() &&
-					!sessionManager.isInitializationInProgress()
-				) {
+				// First check if we have a token in store
+				if (!sessionManager.checkTokenInStore() && !sessionManager.isInitializationInProgress()) {
 					// Only initialize a new session if we don't have a valid token and no initialization is in progress
 					sessionManager.initSession()
 				}
@@ -116,12 +113,9 @@ export function SessionContextProvider({ children }: SessionProviderProps) {
 		const removeCsrfErrorListener = createCsrfErrorListener(() => {
 			debugLog('CSRF error detected, attempting to refresh token')
 
-			// First check if we can get a token from the cookie
-			if (
-				!sessionManager.synchronizeTokenFromCookie() &&
-				!sessionManager.isInitializationInProgress()
-			) {
-				// If no token in cookie, try to get a new one from the server
+			// First check if we have a token in store
+			if (!sessionManager.checkTokenInStore() && !sessionManager.isInitializationInProgress()) {
+				// If no token in store, try to get a new one from the server
 				setIsInitializing(true)
 				sessionManager.initSession().finally(() => {
 					setIsInitializing(false)
@@ -135,8 +129,42 @@ export function SessionContextProvider({ children }: SessionProviderProps) {
 	// Session actions
 	const ensureSession = async (): Promise<boolean> => {
 		try {
+			// First check if we already have a valid session
+			if (sessionManager.hasCsrfToken() && isSessionInitialized) {
+				debugLog('Session already initialized, using existing session')
+				if (import.meta.env.DEV) {
+					debugSessionState(sessionManager, 'ensureSession - using existing session')
+				}
+				return true
+			}
+
 			setIsInitializing(true)
-			return await sessionManager.ensureSession()
+			// Clear any previous errors
+			setLastError(null)
+			setDetailedError(null)
+
+			if (import.meta.env.DEV) {
+				debugSessionState(sessionManager, 'ensureSession - before initialization')
+			}
+
+			const result = await sessionManager.ensureSession()
+
+			if (import.meta.env.DEV) {
+				debugSessionState(
+					sessionManager,
+					`ensureSession - after initialization (result: ${result})`
+				)
+			}
+
+			// Double-check if we have a token after ensuring session
+			// This is a critical check - if we have a token, consider the session valid
+			// even if the ensureSession method returned false for some reason
+			if (result === false && sessionManager.hasCsrfToken()) {
+				debugLog('Session appears valid despite ensureSession returning false')
+				return true
+			}
+
+			return result
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 			setLastError(`Session validation failed: ${errorMessage}`)
@@ -144,6 +172,7 @@ export function SessionContextProvider({ children }: SessionProviderProps) {
 
 			// In development mode, log detailed error information
 			if (import.meta.env.DEV) {
+				debugSessionState(sessionManager, 'ensureSession - error')
 				console.group('Session Validation Error')
 				console.error('Error details:', error)
 				console.log('Session state:', sessionManager.getSessionState())
@@ -173,8 +202,7 @@ export function SessionContextProvider({ children }: SessionProviderProps) {
 			...sessionManager.getSessionState(),
 			lastError,
 			detailedError,
-			csrfTokenExists: Boolean(csrfTokenValue),
-			cookieTokenExists: Boolean(sessionManager.getCsrfTokenFromCookie())
+			csrfTokenExists: Boolean(csrfTokenValue)
 		}
 	}
 

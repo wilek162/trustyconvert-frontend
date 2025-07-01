@@ -4,13 +4,34 @@
  */
 
 import { RETRY_STRATEGIES } from '@/lib/utils/retry'
-import { debugLog } from '@/lib/utils/debug'
+// Remove import from debug.ts to avoid circular dependency
+// import { isDev } from '@/lib/utils/debug'
 
 // Determine if we're in a secure context
 const isSecureContext = typeof window !== 'undefined' && window.isSecureContext
 
-// Check if we're in development mode
-const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+// Local implementation of isDev to avoid circular dependency
+const isDevMode = (): boolean => {
+	try {
+		// Check for browser environment
+		if (typeof window !== 'undefined') {
+			return (
+				window.location.hostname === 'localhost' ||
+				window.location.hostname === '127.0.0.1' ||
+				window.location.port !== ''
+			)
+		}
+
+		// Check for Node.js environment
+		if (typeof process !== 'undefined' && process.env) {
+			return process.env.NODE_ENV === 'development'
+		}
+
+		return false
+	} catch (e) {
+		return false
+	}
+}
 
 // Default to HTTPS in production or secure contexts
 const defaultProtocol = isSecureContext ? 'https:' : 'http:'
@@ -20,9 +41,9 @@ const getApiUrl = () => {
 	// For client-side, use the environment variable or default to production URL
 	if (typeof window !== 'undefined') {
 		// In development, use a local API URL by default if not specified
-		if (isDev) {
+		if (isDevMode()) {
 			const apiUrl = import.meta.env.PUBLIC_API_URL || 'https://localhost:3000/api'
-			debugLog(`Using development API URL: ${apiUrl}`)
+			console.log(`Using development API URL: ${apiUrl}`)
 			return apiUrl
 		}
 		return import.meta.env.PUBLIC_API_URL || 'https://api.trustyconvert.com/api'
@@ -43,7 +64,7 @@ const getApiDomain = () => {
 	if (typeof window !== 'undefined') {
 		try {
 			// In development, extract from the API URL to ensure they match
-			if (isDev) {
+			if (isDevMode()) {
 				const url = new URL(import.meta.env.PUBLIC_API_URL || 'https://localhost:3000')
 				return url.origin
 			}
@@ -55,7 +76,7 @@ const getApiDomain = () => {
 			)
 		} catch (e) {
 			// Handle case where URL parsing fails
-			return isDev ? 'https://localhost:3000' : 'https://api.trustyconvert.com'
+			return isDevMode() ? 'https://localhost:3000' : 'https://api.trustyconvert.com'
 		}
 	}
 
@@ -67,10 +88,10 @@ const getFrontendDomain = () => {
 	if (typeof window !== 'undefined') {
 		// In development mode, always use the current window origin
 		// This ensures the origin matches exactly what the browser sends
-		if (isDev) {
+		if (isDevMode()) {
 			// Always use the actual window origin in development
 			// This handles cases where the port might change due to port conflicts
-			debugLog(`Using frontend origin: ${window.location.origin}`)
+			console.log(`Using frontend origin: ${window.location.origin}`)
 			return window.location.origin
 		}
 
@@ -129,7 +150,7 @@ export const apiConfig = {
 	retryAttempts: DEFAULT_RETRY_ATTEMPTS,
 	csrfTokenHeader: CSRF_TOKEN_HEADER,
 	endpoints: apiEndpoints,
-	isDevelopment: isDev,
+	isDevelopment: isDevMode(),
 	cors: {
 		credentials: true,
 		allowedOrigins: [frontendDomain],
@@ -139,12 +160,4 @@ export const apiConfig = {
 		maxAge: 86400 // 24 hours
 	}
 }
-
-/**
- * Get a download URL from a download token
- *
- * @param token - Download token
- * @returns Download URL
- */
-
 export default apiConfig

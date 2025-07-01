@@ -6,50 +6,25 @@
 
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { apiConfig } from '@/lib/api/config'
+import { csrfToken } from '../stores/session'
 
 // Get the CSRF cookie name from environment variables or use a default
 const CSRF_COOKIE_NAME = import.meta.env.CSRF_COOKIE_NAME || 'csrftoken'
 
 /**
- * Get the CSRF token from cookies (only used for initial load)
+ * Get the CSRF token from the store
  * @returns The CSRF token or null if not found
  */
-export function getCsrfTokenFromCookie(): string | null {
+export function getCsrfTokenFromStore(): string | null {
 	if (typeof document === 'undefined') return null
 
-	// First try the standard cookie parsing approach
-	const cookies = document.cookie.split(';')
-	for (const cookie of cookies) {
-		const [name, value] = cookie.trim().split('=')
-		if (name === CSRF_COOKIE_NAME && value) {
-			try {
-				// The token might be URL encoded or contain special characters
-				const decodedValue = decodeURIComponent(value)
-				return decodedValue
-			} catch (e) {
-				debugError('Failed to decode CSRF token from cookie', e)
-				return value // Return the raw value if decoding fails
-			}
-		}
+	// Only check the nanostore for the token
+	const token = csrfToken.get()
+	if (token) {
+		return token
 	}
 
-	// If not found with the standard approach, try a more direct approach
-	// Some browsers might handle cookie parsing differently
-	const cookieValue = document.cookie.replace(
-		new RegExp(`(?:(?:^|.*;\\s*)${CSRF_COOKIE_NAME}\\s*\\=\\s*([^;]*).*$)|^.*$`),
-		'$1'
-	)
-
-	if (cookieValue) {
-		try {
-			const decodedValue = decodeURIComponent(cookieValue)
-			return decodedValue
-		} catch (e) {
-			return cookieValue
-		}
-	}
-
-	debugLog('No CSRF token found in cookies')
+	// No token in store
 	return null
 }
 

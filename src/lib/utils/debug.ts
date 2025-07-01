@@ -21,6 +21,36 @@ const STACK_TRACKING_TIMEOUT_MS = 5000 // How long to track a stack before clear
 const MAX_STACK_ENTRIES = 100 // Maximum number of stack entries to track
 
 /**
+ * Check if we're in development mode
+ * This must be defined before any functions that use it
+ */
+export const isDev = (): boolean => {
+	// Use a safer check that works during hydration
+	try {
+		// Check for browser environment
+		if (typeof window !== 'undefined') {
+			// Check for development mode in browser
+			return (
+				window.location.hostname === 'localhost' ||
+				window.location.hostname === '127.0.0.1' ||
+				window.location.port !== ''
+			)
+		}
+
+		// Check for Node.js environment
+		if (typeof process !== 'undefined' && process.env) {
+			return process.env.NODE_ENV === 'development'
+		}
+
+		// Fallback check
+		return false
+	} catch (e) {
+		// Default to false if we can't determine
+		return false
+	}
+}
+
+/**
  * Get a simplified stack trace for recursion detection
  * @returns Simplified stack trace
  */
@@ -92,102 +122,84 @@ function isRecursivePattern(key: string): boolean {
 }
 
 /**
- * Debug logging utility for development
- * Usage: debugLog('message', data)
+ * Debug log levels
  */
-export function debugLog(message: string, data?: any) {
-	if (import.meta.env?.MODE === 'development' || process.env.NODE_ENV === 'development') {
-		// Create a key for the message
-		const messageKey = data ? `${message}-${JSON.stringify(data)}` : message
+export enum LogLevel {
+	DEBUG = 'debug',
+	INFO = 'info',
+	WARN = 'warn',
+	ERROR = 'error'
+}
 
-		// Check if this message was recently logged
-		const now = Date.now()
-		const recent = recentMessages.get(messageKey)
-
-		if (recent && now - recent.timestamp < MESSAGE_THROTTLE_MS) {
-			// Update count but don't log again
-			recent.count += 1
-			recent.timestamp = now
-			return
-		}
-
-		// Check for recursive patterns
-		if (isRecursivePattern(messageKey)) {
-			// If we detect a recursive pattern, throttle more aggressively
-			if (!recent || now - recent.timestamp > 10000) {
-				console.warn(`[DEBUG] Detected recursive logging pattern for: ${message}`)
-			}
-			return
-		}
-
-		// Log the message
-		if (data !== undefined) {
-			// eslint-disable-next-line no-console
-			console.log(`[DEBUG] ${message}`, data)
-		} else {
-			// eslint-disable-next-line no-console
-			console.log(`[DEBUG] ${message}`)
-		}
-
-		// Store this message
-		recentMessages.set(messageKey, { count: 1, timestamp: now })
-
-		// Clean up old messages
-		if (recentMessages.size > 100) {
-			const oldestTime = now - MESSAGE_THROTTLE_MS
-			for (const [key, value] of recentMessages.entries()) {
-				if (value.timestamp < oldestTime) {
-					recentMessages.delete(key)
-				}
-			}
-		}
+/**
+ * Debug log function
+ * Only logs in development mode
+ */
+export function debugLog(message: string, ...args: any[]): void {
+	if (isDev()) {
+		console.log(`[DEBUG] ${message}`, ...args)
 	}
 }
 
 /**
- * Debug error logging utility with recursion tracking
- * Usage: debugError('message', error)
+ * Debug error function
+ * Only logs in development mode
  */
-export function debugError(message: string, error?: any) {
-	if (import.meta.env?.MODE === 'development' || process.env.NODE_ENV === 'development') {
-		// Create an error key based on message and error stack
-		const errorStack = error instanceof Error ? error.stack?.slice(0, 100) : String(error)
-		const errorKey = `${message}-${errorStack}`
+export function debugError(message: string, ...args: any[]): void {
+	if (isDev()) {
+		console.error(`[DEBUG] ${message}`, ...args)
+	}
+}
 
-		// Check recursion depth
-		const currentDepth = errorRecursionMap.get(errorKey) || 0
+/**
+ * Debug warning function
+ * Only logs in development mode
+ */
+export function debugWarn(message: string, ...args: any[]): void {
+	if (isDev()) {
+		console.warn(`[DEBUG] ${message}`, ...args)
+	}
+}
 
-		if (currentDepth >= MAX_RECURSION_DEPTH) {
-			// We've seen this error too many times in succession
-			if (currentDepth === MAX_RECURSION_DEPTH) {
-				// Log once that we're suppressing this error
-				console.warn(`[DEBUG] Suppressing recursive error: ${message}`)
-				// Increment to prevent this warning from showing again
-				errorRecursionMap.set(errorKey, currentDepth + 1)
-			}
-			return
+/**
+ * Debug info function
+ * Only logs in development mode
+ */
+export function debugInfo(message: string, ...args: any[]): void {
+	if (isDev()) {
+		console.info(`[DEBUG] ${message}`, ...args)
+	}
+}
+
+/**
+ * Debug session state
+ * Logs detailed session information to help diagnose session issues
+ *
+ * @param sessionManager - The session manager instance
+ * @param context - Additional context information
+ */
+export function debugSessionState(sessionManager: any, context: string = 'general'): void {
+	if (!isDev()) return
+
+	try {
+		const sessionState = sessionManager.getSessionState()
+		const hasCsrfToken = sessionManager.hasCsrfToken()
+		const isInitialized = sessionState.sessionInitialized
+
+		console.group(`[SESSION DEBUG] ${context}`)
+		console.log('Has CSRF Token:', hasCsrfToken)
+		console.log('Session Initialized:', isInitialized)
+		console.log('Is Initializing:', sessionState.isInitializing)
+		console.log('Last Init Attempt:', sessionState.lastInitAttempt)
+
+		if (sessionState.lastInitError) {
+			console.error('Last Init Error:', sessionState.lastInitError)
 		}
 
-		// Check for recursive patterns using stack tracking
-		if (isRecursivePattern(errorKey)) {
-			if (currentDepth === 0) {
-				console.warn(`[DEBUG] Detected recursive error pattern for: ${message}`)
-			}
-			errorRecursionMap.set(errorKey, currentDepth + 1)
-			return
-		}
-
-		// Increment recursion depth
-		errorRecursionMap.set(errorKey, currentDepth + 1)
-
-		// Log the error
-		// eslint-disable-next-line no-console
-		console.error(`[DEBUG ERROR] ${message}`, error)
-
-		// Schedule cleanup of recursion tracking
-		setTimeout(() => {
-			errorRecursionMap.delete(errorKey)
-		}, 5000)
+		console.log('Full Session State:', sessionState)
+		console.groupEnd()
+	} catch (error) {
+		console.error('[SESSION DEBUG] Error getting session state:', error)
 	}
 }
 
