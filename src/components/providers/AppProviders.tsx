@@ -1,86 +1,24 @@
-/**
- * Application Providers Component
- *
- * Wraps the application with all necessary providers for error handling,
- * toast notifications, session management, and other global functionality.
- */
-
-import * as React from 'react'
-import { ErrorBoundary } from '@/components/common'
-import { ToastProvider, ToastListener } from '@/components/providers'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { Toaster } from 'sonner'
-import { LanguageProvider } from './LanguageProvider'
-import { SessionContextProvider } from '@/lib/providers/SessionContext'
-import { debugLog } from '@/lib/utils/debug'
+import React from 'react'
 
-export interface AppProvidersProps {
-	/**
-	 * Child components to be wrapped with providers
-	 */
-	children: React.ReactNode
-	enableDevtools?: boolean
-}
+const queryClient = new QueryClient()
 
-/**
- * AppProviders component that wraps the application with all necessary providers
- */
-export function AppProviders({ children, enableDevtools = false }: AppProvidersProps): JSX.Element {
-	const [queryClient] = React.useState(
-		() =>
-			new QueryClient({
-				defaultOptions: {
-					queries: {
-						staleTime: 60 * 1000,
-						retry: 1
-					}
-				}
-			})
-	)
-
-	// Log when the component mounts
-	React.useEffect(() => {
-		debugLog('AppProviders mounted')
-	}, [])
-
+export const AppProviders = ({ children }: { children: React.ReactNode }) => {
 	return (
-		<ErrorBoundary>
-			<QueryClientProvider client={queryClient}>
-				<LanguageProvider>
-					<ToastProvider>
-						<SessionContextProvider>
-							<ToastListener />
-							{children}
-						</SessionContextProvider>
-					</ToastProvider>
-				</LanguageProvider>
-				{import.meta.env.DEV && enableDevtools && <ReactQueryDevtools />}
-			</QueryClientProvider>
-		</ErrorBoundary>
+		<QueryClientProvider client={queryClient}>
+			{children}
+			{import.meta.env.DEV && (
+				<React.Suspense fallback={null}>
+					<ReactQueryDevtoolsLazy />
+				</React.Suspense>
+			)}
+		</QueryClientProvider>
 	)
 }
 
-/**
- * Higher-order component that wraps a component with all application providers
- *
- * @param Component - Component to wrap
- * @returns Wrapped component with all providers
- */
-export function withAppProviders<P extends object>(Component: React.ComponentType<P>): React.FC<P> {
-	const displayName = Component.displayName || Component.name || 'Component'
-
-	const ComponentWithProviders: React.FC<P> = (props) => {
-		return (
-			<AppProviders>
-				<Component {...props} />
-			</AppProviders>
-		)
-	}
-
-	ComponentWithProviders.displayName = `withAppProviders(${displayName})`
-
-	return ComponentWithProviders
-}
-
-export default AppProviders
+// ⛔ Do not import this at the top!
+const ReactQueryDevtoolsLazy = React.lazy(() =>
+	import('@tanstack/react-query-devtools').then((mod) => ({
+		default: mod.ReactQueryDevtools
+	}))
+)

@@ -1,9 +1,7 @@
-import React from 'react'
+import React, { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { ReactNode } from 'react'
 
-// Create a client
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
@@ -15,15 +13,26 @@ const queryClient = new QueryClient({
 })
 
 interface QueryProviderProps {
-	children: React.ReactNode
+	children: ReactNode
 	enableDevtools?: boolean
 }
+
+// Lazy load devtools only in dev
+const Devtools = lazy(() =>
+	import('@tanstack/react-query-devtools').then((mod) => ({
+		default: mod.ReactQueryDevtools
+	}))
+)
 
 export function QueryProvider({ children, enableDevtools = false }: QueryProviderProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			{children}
-			{enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
+			{enableDevtools && import.meta.env.DEV && (
+				<Suspense fallback={null}>
+					<Devtools initialIsOpen={false} />
+				</Suspense>
+			)}
 		</QueryClientProvider>
 	)
 }

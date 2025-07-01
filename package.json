@@ -52,7 +52,6 @@
     "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
-    "dotenv": "^17.0.0",
     "heroicons": "^2.2.0",
     "idb": "^7.1.1",
     "lucide-react": "^0.482.0",
@@ -71,6 +70,7 @@
     "zod": "^3.25.55"
   },
   "devDependencies": {
+    "dotenv": "^17.0.0",
     "@tanstack/react-query-devtools": "^5.80.6",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^14.3.1",
