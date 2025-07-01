@@ -40,6 +40,7 @@ interface Props {
 	noindex?: boolean
 	extraStructuredData?: StructuredData | any
 	alternateLanguages?: { code: string; name: string; url?: string }[]
+	lang?: string
 }
 
 // Compute the app version for cache busting
@@ -52,7 +53,7 @@ const isStaticMode = import.meta.env.OUTPUT === 'static'
 initializeApp()
 
 // Get the current language from middleware
-const currentLang = Astro.locals.lang || 'en'
+const currentLang = Astro.props.lang || 'en'
 
 // Default SEO values
 const {
@@ -92,11 +93,11 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 		<!-- Alternate language links -->
 		{
 			alternateLanguages &&
-				alternateLanguages.map((lang) => (
+				alternateLanguages.map((lang: { code: string; name: string; url?: string }) => (
 					<link
 						rel="alternate"
 						hreflang={lang.code}
-						href={lang.url || `${Astro.url.origin}/${lang.code !== 'en' ? lang.code : ''}`}
+						href={lang.url || `${Astro.url.origin}${lang.code !== 'en' ? `/${lang.code}` : ''}`}
 					/>
 				))
 		}
@@ -115,8 +116,8 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 		{
 			alternateLanguages &&
 				alternateLanguages
-					.filter((lang) => lang.code !== currentLang)
-					.map((lang) => (
+					.filter((lang: { code: string; name: string; url?: string }) => lang.code !== currentLang)
+					.map((lang: { code: string; name: string; url?: string }) => (
 						<meta
 							property="og:locale:alternate"
 							content={lang.code === 'en' ? 'en_US' : `${lang.code}_${lang.code.toUpperCase()}`}
