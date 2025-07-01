@@ -1,27 +1,41 @@
-# build output
+# Output directories
 dist/
-# generated types
+build/
+.output/
+.cache/
+
+# Generated files
 .astro/
+coverage/
 
-# dependencies
+# Package dependencies
 node_modules/
+.pnpm/
 
-# logs
+# Logs
 npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
-
-# environment variables
+# Environment variables
 .env
-.env.production
+.env.*
+!.env.example
 
-# macOS-specific files
-.DS_Store
-
-# jetbrains setting folder
-.idea/
-
+# Certificates
 certs/
 *.pem
+
+# System-specific files
+.DS_Store
+Thumbs.db
+
+# IDE configurations
+.idea/
+.vscode/
+# Local scripts or notes
+*.local.*
+# Don't ignore lock files!
+# Keep this so Cloudflare uses pnpm
+!pnpm-lock.yaml

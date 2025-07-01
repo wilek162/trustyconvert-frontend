@@ -1,8 +1,0 @@
-src/
-  components/      # Reusable UI (buttons, forms, SEO, etc.)
-  layouts/         # App-wide and page layouts
-  lib/             # Utility functions (API, helpers)
-  pages/           # Route-based pages (index, about, etc.)
-  styles/          # Global and component styles
-  hooks/           # Custom React hooks (if needed)
-public/            # Static assets (favicon, robots.txt, etc.)
