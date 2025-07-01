@@ -1,40 +1,41 @@
-import React, { lazy, Suspense } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+// src/components/providers/QueryProvider.tsx
+import React, { useEffect, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 
 const queryClient = new QueryClient({
-	defaultOptions: {
-		queries: {
-			staleTime: 1000 * 60, // 1 minute
-			retry: 1,
-			refetchOnWindowFocus: false
-		}
-	}
-})
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 interface QueryProviderProps {
-	children: ReactNode
-	enableDevtools?: boolean
+  children: ReactNode;
 }
 
-// Lazy load devtools only in dev
-const Devtools = lazy(() =>
-	import('@tanstack/react-query-devtools').then((mod) => ({
-		default: mod.ReactQueryDevtools
-	}))
-)
+export function QueryProvider({ children }: QueryProviderProps) {
+  const [Devtools, setDevtools] = useState<React.ReactNode>(null);
 
-export function QueryProvider({ children, enableDevtools = false }: QueryProviderProps) {
-	return (
-		<QueryClientProvider client={queryClient}>
-			{children}
-			{enableDevtools && import.meta.env.DEV && (
-				<Suspense fallback={null}>
-					<Devtools initialIsOpen={false} />
-				</Suspense>
-			)}
-		</QueryClientProvider>
-	)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      import('@tanstack/react-query-devtools')
+        .then((mod) => {
+          setDevtools(<mod.ReactQueryDevtools initialIsOpen={false} />);
+        })
+        .catch((err) => {
+          console.warn('[QueryProvider] Failed to load ReactQueryDevtools:', err);
+        });
+    }
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      {Devtools}
+    </QueryClientProvider>
+  );
 }
-
-export default QueryProvider
