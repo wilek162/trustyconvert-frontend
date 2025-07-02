@@ -5,7 +5,7 @@
  */
 
 import { useQuery, type Query } from '@tanstack/react-query'
-import { client } from '@/lib/api/client'
+import client  from '@/lib/api/client'
 import { useErrorHandler } from '@/lib/hooks/useErrorHandler'
 import type { JobStatusResponse } from '@/lib/types/api'
 import { debugLog, debugError } from '@/lib/utils/debug'

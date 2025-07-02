@@ -1,225 +1,153 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import sessionManager from '@/lib/services/sessionManager'
-import { useStore } from '@nanostores/react'
-import { sessionStore } from '@/lib/stores/session'
-import { createCsrfErrorListener } from '@/lib/utils/csrfUtils'
-import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
+import { debugLog, debugError } from '@/lib/utils/debug'
+import client from '@/lib/api/client'
 
 // Define the context type
 interface SessionContextType {
-	// Session state
-	isInitialized: boolean
+	isSessionInitialized: boolean
 	isInitializing: boolean
-	hasCsrfToken: boolean
-
-	// Session actions
-	ensureSession: () => Promise<boolean>
-	resetSession: () => Promise<boolean>
-
-	// Error information
-	lastError: string | null
-	detailedError: unknown | null
-
-	// Debug information
-	getDebugInfo: () => Record<string, any>
+	sessionId: string | null
+	csrfToken: string | null
+	initSession: () => Promise<boolean>
+	resetSession: () => Promise<void>
 }
 
-// Create the context with default values
+// Create context with default values
 const SessionContext = createContext<SessionContextType>({
-	isInitialized: false,
+	isSessionInitialized: false,
 	isInitializing: false,
-	hasCsrfToken: false,
-	ensureSession: async () => false,
-	resetSession: async () => false,
-	lastError: null,
-	detailedError: null,
-	getDebugInfo: () => ({})
+	sessionId: null,
+	csrfToken: null,
+	initSession: async () => false,
+	resetSession: async () => {}
 })
 
 // Hook for using the session context
 export const useSession = () => useContext(SessionContext)
 
-interface SessionProviderProps {
-	children: React.ReactNode
-}
-
-/**
- * SessionContextProvider
- *
- * Provides session state and actions to the entire application
- * Acts as the single source of truth for session state
- */
-export function SessionContextProvider({ children }: SessionProviderProps) {
-	// Use nanostores for session state
-	const sessionState = useStore(sessionStore)
-	const csrfTokenValue = sessionState.csrfToken
-	const isSessionInitialized = sessionState.initialized
-
-	// Local state
+// Session provider component
+export const SessionContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [isInitializing, setIsInitializing] = useState(false)
-	const [lastError, setLastError] = useState<string | null>(null)
-	const [detailedError, setDetailedError] = useState<unknown | null>(null)
+	const [isSessionInitialized, setIsSessionInitialized] = useState(false)
+	const [sessionId, setSessionId] = useState<string | null>(null)
+	const [csrfToken, setCsrfToken] = useState<string | null>(null)
+	const hasAttemptedInitRef = useRef(false)
 
-	// Derived state
-	const hasCsrfToken = Boolean(csrfTokenValue)
-
-	// Initialize session on mount
+	// Initialize session on first render
 	useEffect(() => {
-		const initializeSession = async () => {
-			// First try to check if we have a token in store
-			if (sessionManager.checkTokenInStore()) {
-				return
-			}
-
-			// If no token in store, initialize a new session
-			try {
-				setIsInitializing(true)
-				await sessionManager.initSession()
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-				setLastError(`Session initialization failed: ${errorMessage}`)
-				setDetailedError(error)
-				debugLog('Session initialization error:', error)
-			} finally {
-				setIsInitializing(false)
-			}
+		// Check if we already have a session
+		const sessionState = sessionManager.getSessionState()
+		if (sessionState.sessionInitialized && sessionState.hasCsrfToken) {
+			debugLog('Session already initialized in context')
+			setIsSessionInitialized(true)
+			setCsrfToken(sessionManager.getCsrfToken())
+			return
 		}
 
-		// Only initialize if not already initialized
-		if (!isSessionInitialized && !hasCsrfToken) {
-			initializeSession()
+		// Prevent multiple initialization attempts
+		if (hasAttemptedInitRef.current || isInitializing || sessionManager.isInitializationInProgress()) {
+			debugLog('Skipping duplicate session initialization attempt');
+			return;
 		}
-	}, [isSessionInitialized, hasCsrfToken])
+		
+		// Mark that we've attempted initialization
+		hasAttemptedInitRef.current = true;
 
-	// Handle visibility changes
+		// Auto-initialize session on application startup
+		debugLog('Auto-initializing session on application startup')
+		
+		// Use a short delay to ensure all components are mounted
+		const initTimer = setTimeout(() => {
+			initSession().catch((error) => {
+				debugError('Failed to auto-initialize session', error)
+			});
+		}, 100);
+		
+		// Clean up the timer if the component unmounts
+		return () => clearTimeout(initTimer);
+	}, [])
+
+	// Update context when session state changes
 	useEffect(() => {
-		const handleVisibilityChange = () => {
-			if (document.visibilityState === 'visible') {
-				// First check if we have a token in store
-				if (!sessionManager.checkTokenInStore() && !sessionManager.isInitializationInProgress()) {
-					// Only initialize a new session if we don't have a valid token and no initialization is in progress
-					sessionManager.initSession()
-				}
-			}
+		const updateFromStore = () => {
+			const token = sessionManager.getCsrfToken()
+			const state = sessionManager.getSessionState()
+			setCsrfToken(token)
+			setIsSessionInitialized(state.sessionInitialized)
 		}
 
-		document.addEventListener('visibilitychange', handleVisibilityChange)
+		// Set up event listeners for CSRF token changes
+		const handleCsrfChange = () => {
+			debugLog('CSRF token changed, updating context')
+			updateFromStore()
+		}
+
+		// Add event listener
+		window.addEventListener('csrf-token-changed', handleCsrfChange)
+
+		// Initial update
+		updateFromStore()
+
+		// Cleanup
 		return () => {
-			document.removeEventListener('visibilitychange', handleVisibilityChange)
+			window.removeEventListener('csrf-token-changed', handleCsrfChange)
 		}
 	}, [])
 
-	// Handle CSRF errors
-	useEffect(() => {
-		const removeCsrfErrorListener = createCsrfErrorListener(() => {
-			debugLog('CSRF error detected, attempting to refresh token')
+	// Initialize session
+	const initSession = async (): Promise<boolean> => {
+		if (isInitializing) {
+			debugLog('Session initialization already in progress')
+			return false
+		}
 
-			// First check if we have a token in store
-			if (!sessionManager.checkTokenInStore() && !sessionManager.isInitializationInProgress()) {
-				// If no token in store, try to get a new one from the server
-				setIsInitializing(true)
-				sessionManager.initSession().finally(() => {
-					setIsInitializing(false)
-				})
-			}
-		})
-
-		return removeCsrfErrorListener
-	}, [])
-
-	// Session actions
-	const ensureSession = async (): Promise<boolean> => {
 		try {
-			// First check if we already have a valid session
-			if (sessionManager.hasCsrfToken() && isSessionInitialized) {
-				debugLog('Session already initialized, using existing session')
-				if (import.meta.env.DEV) {
-					debugSessionState(sessionManager, 'ensureSession - using existing session')
-				}
-				return true
-			}
-
 			setIsInitializing(true)
-			// Clear any previous errors
-			setLastError(null)
-			setDetailedError(null)
+			debugLog('Initializing session from context')
 
-			if (import.meta.env.DEV) {
-				debugSessionState(sessionManager, 'ensureSession - before initialization')
+			// Use sessionManager.initSession directly for more control
+			const success = await sessionManager.initSession()
+
+			if (success) {
+				debugLog('Session initialized successfully')
+				setIsSessionInitialized(true)
+				setCsrfToken(sessionManager.getCsrfToken())
+			} else {
+				debugError('Failed to initialize session')
+				setIsSessionInitialized(false)
 			}
 
-			const result = await sessionManager.ensureSession()
-
-			if (import.meta.env.DEV) {
-				debugSessionState(
-					sessionManager,
-					`ensureSession - after initialization (result: ${result})`
-				)
-			}
-
-			// Double-check if we have a token after ensuring session
-			// This is a critical check - if we have a token, consider the session valid
-			// even if the ensureSession method returned false for some reason
-			if (result === false && sessionManager.hasCsrfToken()) {
-				debugLog('Session appears valid despite ensureSession returning false')
-				return true
-			}
-
-			return result
+			return success
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-			setLastError(`Session validation failed: ${errorMessage}`)
-			setDetailedError(error)
-
-			// In development mode, log detailed error information
-			if (import.meta.env.DEV) {
-				debugSessionState(sessionManager, 'ensureSession - error')
-				console.group('Session Validation Error')
-				console.error('Error details:', error)
-				console.log('Session state:', sessionManager.getSessionState())
-				console.groupEnd()
-			}
-
+			debugError('Error initializing session', error)
 			return false
 		} finally {
 			setIsInitializing(false)
 		}
 	}
 
-	const resetSession = async (): Promise<boolean> => {
+	// Reset session
+	const resetSession = async (): Promise<void> => {
 		try {
-			setIsInitializing(true)
-			setLastError(null)
-			setDetailedError(null)
-			return await sessionManager.resetSession()
-		} finally {
-			setIsInitializing(false)
-		}
-	}
-
-	// Debug information
-	const getDebugInfo = (): Record<string, any> => {
-		return {
-			...sessionManager.getSessionState(),
-			lastError,
-			detailedError,
-			csrfTokenExists: Boolean(csrfTokenValue)
+			await sessionManager.resetSession()
+			setIsSessionInitialized(false)
+			setCsrfToken(null)
+			setSessionId(null)
+		} catch (error) {
+			debugError('Error resetting session', error)
 		}
 	}
 
 	// Context value
 	const contextValue: SessionContextType = {
-		isInitialized: isSessionInitialized,
+		isSessionInitialized,
 		isInitializing,
-		hasCsrfToken,
-		ensureSession,
-		resetSession,
-		lastError,
-		detailedError,
-		getDebugInfo
+		sessionId,
+		csrfToken,
+		initSession,
+		resetSession
 	}
 
 	return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>
 }
-
-export default SessionContextProvider

@@ -18,6 +18,7 @@ const isDevMode = (): boolean => {
 			return (
 				window.location.hostname === 'localhost' ||
 				window.location.hostname === '127.0.0.1' ||
+				window.location.hostname === 'domain.local' ||
 				window.location.port !== ''
 			)
 		}
@@ -133,7 +134,10 @@ const DEFAULT_RETRY_ATTEMPTS = RETRY_STRATEGIES.API_REQUEST.maxRetries
 
 // CSRF token header name - check for environment variable or use default
 // The API documentation specifies 'X-CSRF-Token' as the header name
-const CSRF_TOKEN_HEADER = import.meta.env.CSRF_HEADER || 'x-csrf-token'
+const CSRF_TOKEN_HEADER = import.meta.env.CSRF_HEADER || 'X-CSRF-Token'
+
+// CSRF cookie names to check - different APIs use different conventions
+const CSRF_COOKIE_NAMES = ['csrftoken']
 
 // Get the frontend and API domains for CORS settings
 const frontendDomain = getFrontendDomain()
@@ -149,6 +153,7 @@ export const apiConfig = {
 	timeout: DEFAULT_TIMEOUT,
 	retryAttempts: DEFAULT_RETRY_ATTEMPTS,
 	csrfTokenHeader: CSRF_TOKEN_HEADER,
+	csrfCookieNames: CSRF_COOKIE_NAMES,
 	endpoints: apiEndpoints,
 	isDevelopment: isDevMode(),
 	cors: {

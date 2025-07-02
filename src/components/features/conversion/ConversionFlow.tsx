@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress'
 
 import client from '@/lib/api/client'
 import { getFileExtension, formatFileSize } from '@/lib/utils/files'
-import { debugLog, debugSessionState } from '@/lib/utils/debug'
+import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
 import CloseSession from '../session/CloseSession'
 import { useSession } from '@/lib/providers/SessionContext'
 import sessionManager from '@/lib/services/sessionManager'
@@ -56,18 +56,16 @@ export function ConversionFlow({
 
 	// Get session context
 	const {
-		isInitialized,
+		isSessionInitialized,
 		isInitializing,
-		ensureSession,
-		resetSession,
-		lastError,
-		detailedError,
-		getDebugInfo
+		initSession,
+		resetSession
 	} = useSession()
 
 	// Session error state
 	const [sessionError, setSessionError] = useState<string | null>(null)
 	const [showDebugInfo, setShowDebugInfo] = useState(false)
+	const [detailedError, setDetailedError] = useState<any>(null)
 
 	// Conversion flow state
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -85,15 +83,35 @@ export function ConversionFlow({
 	// Reference to the stop polling function
 	const stopPollingRef = useRef<(() => void) | null>(null)
 
-	// Initialize client-side rendering
+	// Initialize client-side rendering and session
 	useEffect(() => {
 		setIsClient(true)
-	}, [])
+		
+		// Initialize session on component mount only if not already initialized or initializing
+		if (!isSessionInitialized && !isInitializing && !sessionManager.isInitializationInProgress()) {
+			debugLog('ConversionFlow: Initializing session on mount')
+			initSession().catch(err => {
+				debugError('Failed to initialize session on mount:', err)
+				setSessionError('Failed to initialize session. Please try again.')
+				setDetailedError(err)
+			})
+		} else if (isInitializing || sessionManager.isInitializationInProgress()) {
+			debugLog('ConversionFlow: Session initialization already in progress, skipping')
+		} else if (isSessionInitialized) {
+			debugLog('ConversionFlow: Session already initialized, skipping')
+		}
+	}, [isSessionInitialized, isInitializing, initSession])
 
 	// Handle restart after error
 	const handleRestart = useCallback(() => {
 		setError(null)
-		resetSession()
+		setSessionError(null)
+		setDetailedError(null)
+		
+		// Reset session if needed
+		resetSession().catch(err => {
+			debugError('Error resetting session:', err)
+		})
 
 		// Reset all state
 		setSelectedFile(null)
@@ -122,14 +140,6 @@ export function ConversionFlow({
 			showError(sessionError)
 		}
 	}, [sessionError])
-
-	// Handle last error from session context
-	useEffect(() => {
-		if (lastError) {
-			debugLog('Session error detected:', lastError)
-			setSessionError(lastError)
-		}
-	}, [lastError])
 
 	// Clean up polling and reset conversion state on unmount
 	useEffect(() => {
@@ -179,7 +189,7 @@ export function ConversionFlow({
 		[initialSourceFormat, initialTargetFormat]
 	)
 
-	// Handle session closed event
+	// Handle session closed
 	const handleSessionClosed = useCallback(() => {
 		// Reset all state
 		handleRestart()
@@ -200,7 +210,7 @@ export function ConversionFlow({
 	const handleConvert = withErrorHandling(async () => {
 		if (!selectedFile || !targetFormat) return
 
-		// Ensure we have a session before proceeding
+		// Set converting state
 		setIsConverting(true)
 
 		// First check if we already have a valid session
@@ -212,27 +222,34 @@ export function ConversionFlow({
 			debugSessionState(sessionManager, 'handleConvert - before session check')
 		}
 
-		// If we already have a token and session is initialized, proceed without calling ensureSession
+		// Check if we need to initialize a session
 		if (hasCsrfToken && isSessionInit) {
-			debugLog('Using existing session for conversion')
+			debugLog('Using existing session for conversion - no API call needed')
 		} else {
-			// Otherwise try to ensure session
+			// Otherwise try to initialize session - this is a state-changing action (file conversion)
+			// so it's appropriate to initialize a session here if needed
 			try {
-				const success = await ensureSession()
+				debugLog('No valid session exists - initializing before conversion')
+				
+				// Force a new session initialization to ensure we have a fresh token
+				const success = await sessionManager.initSession(true)
+				
 				if (!success) {
 					// In development mode, show more detailed error
 					if (import.meta.env.DEV) {
 						debugSessionState(sessionManager, 'handleConvert - session initialization failed')
 						console.group('Session Initialization Failed')
-						console.error('Session error details:', getDebugInfo())
+						const sessionState = sessionManager.getSessionState()
+						setDetailedError(sessionState.lastInitError || 'No detailed error available')
 						console.log('CSRF token exists:', sessionManager.hasCsrfToken())
 						console.log('Session initialized:', sessionManager.getSessionState().sessionInitialized)
-						console.log('Last error:', lastError || 'No error message')
+						console.log('Last error:', sessionState.lastInitError || 'No error message')
 						console.groupEnd()
 
 						// Show a more informative error message in development
-						const errorMsg =
-							lastError || 'Session initialization failed. Check console for details.'
+						const errorMsg = sessionState.lastInitError 
+							? `Session initialization failed: ${JSON.stringify(sessionState.lastInitError)}`
+							: 'Session initialization failed. Check console for details.'
 						showError(errorMsg)
 						setError(errorMsg)
 					} else {
@@ -242,8 +259,17 @@ export function ConversionFlow({
 					setIsConverting(false)
 					return
 				}
+				
+				// Double-check that we have a CSRF token after initialization
+				if (!sessionManager.hasCsrfToken()) {
+					debugError('Session initialization completed but no CSRF token was received')
+					showError('Could not establish a secure session. Please try again.')
+					setIsConverting(false)
+					return
+				}
 			} catch (error) {
 				console.error('Failed to initialize session:', error)
+				setDetailedError(error)
 
 				// Show detailed error in development
 				if (import.meta.env.DEV) {
@@ -283,7 +309,7 @@ export function ConversionFlow({
 			// Upload the file
 			const uploadResponse = await client.uploadFile(selectedFile, currentJobId)
 
-			if (!uploadResponse || !uploadResponse.job_id) {
+			if (!uploadResponse || !uploadResponse.data.jobId) {
 				throw new Error(MESSAGE_TEMPLATES.upload.failed)
 			}
 
@@ -299,7 +325,7 @@ export function ConversionFlow({
 			const sourceFormat = getFileExtension(selectedFile.name)
 			const convertResponse = await client.convertFile(currentJobId, targetFormat, sourceFormat)
 
-			if (!convertResponse || !convertResponse.job_id) {
+			if (!convertResponse || !convertResponse.data.job_id) {
 				throw new Error(MESSAGE_TEMPLATES.conversion.failed)
 			}
 
@@ -401,7 +427,7 @@ export function ConversionFlow({
 								<h4 className="mb-2 text-sm font-semibold">Session Debug Info:</h4>
 								<div className="mb-2 text-xs text-gray-700">
 									<p>
-										<strong>Session Initialized:</strong> {String(isInitialized)}
+										<strong>Session Initialized:</strong> {String(isSessionInitialized)}
 									</p>
 									<p>
 										<strong>Session Initializing:</strong> {String(isInitializing)}
@@ -410,30 +436,27 @@ export function ConversionFlow({
 										<strong>Has CSRF Token:</strong> {String(sessionManager.hasCsrfToken())}
 									</p>
 									<p>
-										<strong>CSRF Token in Store:</strong> {String(sessionManager.hasCsrfToken())}
+										<strong>CSRF Token in Store:</strong> {String(sessionManager.checkTokenInStore())}
 									</p>
 								</div>
 								<h4 className="mb-2 text-sm font-semibold">Session State:</h4>
 								<pre className="overflow-auto text-xs text-gray-700">{getFormattedDebugInfo()}</pre>
-								{lastError && (
+								
+								{detailedError && (
 									<div className="mt-2">
-										<h4 className="mb-2 text-sm font-semibold">Error Message:</h4>
-										<p className="text-xs text-red-600">{lastError}</p>
+										<h4 className="mb-2 text-sm font-semibold">Error Information:</h4>
+										<pre className="overflow-auto text-xs text-red-600">{getFormattedErrorDetails()}</pre>
 									</div>
 								)}
-								{detailedError !== null && detailedError !== undefined && (
-									<div className="mt-2">
-										<h4 className="mb-2 text-sm font-semibold">Detailed Error:</h4>
-										<pre className="overflow-auto text-xs text-red-600">
-											{getFormattedErrorDetails()}
-										</pre>
-									</div>
-								)}
+								
 								<div className="mt-3 flex justify-center">
 									<button
 										onClick={() => {
 											// Force session initialization
-											sessionManager.initSession(true)
+											sessionManager.initSession(true).catch(err => {
+												debugError('Error during forced session init:', err);
+												setDetailedError(err);
+											});
 										}}
 										className="rounded bg-blue-500 px-2 py-1 text-xs text-white"
 										disabled={isInitializing}
@@ -529,56 +552,46 @@ export function ConversionFlow({
 	} else if (currentStep === 'download') {
 		content = (
 			<div className="space-y-6">
-				<div className="mx-auto w-fit rounded-full bg-green-100 p-3">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="24"
-						height="24"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						className="h-6 w-6 text-green-500"
-					>
-						<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-						<polyline points="22 4 12 14.01 9 11.01" />
-					</svg>
-				</div>
 				<div className="text-center">
-					<h3 className="text-lg font-medium">Conversion Complete!</h3>
-					<p className="mt-1 text-sm text-gray-600">Your file has been successfully converted</p>
-				</div>
-				<div className="rounded-lg bg-gray-50 p-4">
-					<p className="text-sm font-medium">
-						{selectedFile?.name} → {selectedFile?.name.split('.')[0]}.{targetFormat}
+					<h3 className="mb-2 text-lg font-medium">Conversion Complete!</h3>
+					<p className="text-sm text-gray-600">
+						{selectedFile?.name} has been converted to {targetFormat.toUpperCase()}
 					</p>
 				</div>
-				<div className="flex flex-col space-y-3">
-					<Button asChild className="w-full">
-						<a href={conversionState.resultUrl} download target="_blank" rel="noopener noreferrer">
-							Download Converted File
-						</a>
+				<div className="flex justify-center">
+					<Button
+						className="w-full max-w-xs"
+						onClick={() => {
+							if (conversionState.resultUrl) {
+								window.open(conversionState.resultUrl, '_blank')
+							}
+						}}
+					>
+						Download File
 					</Button>
-					<Button variant="outline" onClick={handleRestart} className="w-full">
+				</div>
+				<div className="flex justify-center">
+					<Button
+						variant="outline"
+						className="mt-2 w-full max-w-xs"
+						onClick={handleRestart}
+					>
 						Convert Another File
 					</Button>
 				</div>
-				<CloseSession onSessionClosed={handleSessionClosed} />
 			</div>
 		)
 	}
 
 	return (
-		<Card className="mx-auto w-full max-w-md">
+		<Card className="w-full max-w-2xl">
 			<CardHeader>
 				<CardTitle className="text-center">{title}</CardTitle>
 			</CardHeader>
 			<CardContent>{content}</CardContent>
-			{(isUploading || isConverting) && (
-				<CardFooter className="flex justify-center">
-					<p className="text-xs text-gray-500">Please don't close this window</p>
+			{import.meta.env.DEV && (
+				<CardFooter className="flex justify-center border-t pt-4">
+					<CloseSession variant="minimal" onSessionClosed={handleSessionClosed} />
 				</CardFooter>
 			)}
 		</Card>

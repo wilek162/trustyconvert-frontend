@@ -150,17 +150,13 @@ export async function initializeSession(forceNew = false): Promise<boolean> {
 		}
 		
 		debugLog('Initializing session with API')
-		const response = await client.initSession()
+		await client.initSession()
 		
-		if (!response || !response.csrf_token) {
-			throw new Error('No CSRF token received from server')
+		// The CSRF token should have been extracted and stored by processApiResponse
+		// from the response headers
+		if (!hasCsrfToken()) {
+			throw new Error('No CSRF token received in response headers')
 		}
-		
-		// Update store with token and session info
-		updateCsrfToken(
-			response.csrf_token,
-			response.id
-		)
 		
 		return true
 	} catch (error) {

@@ -7,7 +7,7 @@
 
 import { initializeMonitoring } from '@/lib/monitoring/init'
 import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
-import { client } from '@/lib/api/client'
+import  client  from '@/lib/api/client'
 import { debugLog } from '@/lib/utils/debug' // Offline detection is temporarily disabled
 import { hasCsrfToken } from '@/lib/stores/session'
 // import { initOfflineDetection } from '@/lib/utils/offlineDetection'

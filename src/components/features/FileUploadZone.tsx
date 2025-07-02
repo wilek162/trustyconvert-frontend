@@ -2,9 +2,8 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { v4 as uuidv4 } from 'uuid'
 import { getCSRFToken } from '@/lib/stores/session'
-import { uploadFile } from '@/lib/api/_apiClient'
 import { apiConfig } from '@/lib/api/config'
-import { sessionManager } from '@/lib/api/sessionManager'
+import sessionManager from '@/lib/services/sessionManager'
 import { addJob, updateJobStatus, updateJobProgress } from '@/lib/stores/upload'
 import type { FileUploadData, JobStatus } from '@/lib/stores/upload'
 
@@ -134,7 +133,7 @@ export function FileUploadZone({
 		if (!csrfToken) {
 			try {
 				// Attempt to initialize session (or wait if already initializing)
-				await sessionManager.initialize()
+				await sessionManager.initSession()
 			} catch (initError) {
 				console.error('Failed to initialize session before upload', initError)
 			}

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { client } from '@/lib/api/client'
+import  client  from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { 
 	formatsStore, 

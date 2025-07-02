@@ -28,13 +28,14 @@ const hasHttps = isLocalDev && sslKey && sslCert;
 
 console.log('[astro.config] isLocalDev:', isLocalDev);
 console.log('[astro.config] hasHttps:', hasHttps);
+console.log('SSL paths:', sslKey, sslCert);
 
 let mkcertPlugin = null;
 
 if (isDev && isLocalDev) {
   try {
     const mkcert = await import('vite-plugin-mkcert');
-    mkcertPlugin = mkcert.default({ hosts: ['localhost', '127.0.0.1'] });
+    mkcertPlugin = mkcert.default({ hosts: ['localhost', '127.0.0.1', 'domain.local'] });
   } catch (err) {
     if (err && typeof err === 'object' && 'message' in err) {
       console.warn('[astro.config] Skipping dotenv:', (err).message);
@@ -115,23 +116,25 @@ export default defineConfig({
           cert: sslCert,
         }
         : undefined,
-      proxy: {
-        '/api': {
-          target: process.env.API_BASE_DOMAIN || 'https://localhost:4321',
-          changeOrigin: true,
-          secure: false,
-          configure: (proxy) => {
-            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-            proxy.on('proxyReq', (proxyReq, req) => {
-              console.log('[Proxy] Request to API:', req.method, req.url);
-              proxyReq.setHeader('Origin', 'https://localhost:4322');
-            });
-            proxy.on('proxyRes', (proxyRes, req) => {
-              console.log('[Proxy] Response from API:', proxyRes.statusCode, req.url);
-            });
-          },
-        },
-      },
+      host: 'domain.local',
+      port: 4322,
+      // proxy: {
+      //   '/api': {
+      //     target: process.env.API_BASE_DOMAIN || 'https://localhost:4321',
+      //     changeOrigin: true,
+      //     secure: false,
+      //     configure: (proxy) => {
+      //       process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      //       proxy.on('proxyReq', (proxyReq, req) => {
+      //         console.log('[Proxy] Request to API:', req.method, req.url);
+      //         proxyReq.setHeader('Origin', 'https://localhost:4322');
+      //       });
+      //       proxy.on('proxyRes', (proxyRes, req) => {
+      //         console.log('[Proxy] Response from API:', proxyRes.statusCode, req.url);
+      //       });
+      //     },
+      //   },
+      // },
       cors: {
         origin: process.env.PUBLIC_FRONTEND_DOMAIN || 'https://localhost:4322',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

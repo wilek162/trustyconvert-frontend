@@ -1,6 +1,25 @@
 #!/bin/bash
 
-# Clean up cache
+# Function to kill existing dev server processes
+kill_existing_servers() {
+  echo "Checking for existing dev server processes..."
+  if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    # Windows - using taskkill
+    tasklist | findstr "node.exe" > /dev/null
+    if [ $? -eq 0 ]; then
+      echo "Killing existing Node processes..."
+      taskkill //F //IM node.exe > /dev/null 2>&1
+    fi
+  else
+    # Unix-like systems
+    lsof -i :4322-4324 | grep LISTEN | awk '{print $2}' | xargs -r kill -9
+  fi
+  echo "Waiting for ports to be released..."
+  sleep 2
+}
+
+# Clean up processes and cache
+kill_existing_servers
 echo "Cleaning up cache and node_modules/.vite..."
 rm -rf node_modules/.vite
 rm -rf .astro

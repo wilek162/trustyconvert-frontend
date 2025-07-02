@@ -76,8 +76,7 @@ export interface ProgressInfo {
  * Session initialization response
  */
 export interface SessionInitResponse {
-	id: string
-	csrf_token: string
+	message: string
 	expires_at: string
 }
 

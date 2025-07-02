@@ -82,15 +82,70 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 			// Ensure headers are properly set
 			const headers = new Headers(fetchOptions.headers || {})
 			headers.set('Origin', window.location.origin)
+			
+			// Add additional headers that might help with CORS
+			headers.set('Accept', 'application/json')
+			
+			// Log request details in development
+			console.group('API Request Details')
+			console.log('URL:', url)
+			console.log('Method:', fetchOptions.method || 'GET')
+			console.log('Headers:', Object.fromEntries([...headers.entries()]))
+			console.log('Credentials:', fetchOpts.credentials)
+			console.log('Mode:', fetchOpts.mode)
+			console.groupEnd()
+			
 			fetchOpts.headers = headers
 		}
 
+		// Always ensure credentials are included for session cookies
+		if (!fetchOpts.credentials) {
+			fetchOpts.credentials = 'include'
+		}
+
 		const response = await fetch(url, fetchOpts)
+		
+		// In development, log response details
+		if (isDev && typeof window !== 'undefined') {
+			console.group('API Response Details')
+			console.log('URL:', url)
+			console.log('Status:', response.status)
+			console.log('OK:', response.ok)
+			console.log('Status Text:', response.statusText)
+			
+			const headerEntries: string[] = []
+			response.headers.forEach((value, key) => {
+				headerEntries.push(`${key}: ${value}`)
+			})
+			console.log('Headers:', headerEntries)
+			console.groupEnd()
+		}
+		
 		return response
 	} catch (error) {
 		if (error instanceof DOMException && error.name === 'AbortError') {
 			throw new NetworkError('Request timed out', { url, timeout })
 		}
+		
+		// Enhanced error logging in development
+		if (import.meta.env.DEV) {
+			console.group('API Request Error')
+			console.error('Error details:', error)
+			console.log('URL:', url)
+			console.log('Method:', fetchOptions.method || 'GET')
+			
+			// Check for CORS errors
+			if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+				console.warn('This appears to be a CORS error. Check that:')
+				console.log('1. The API server is running and accessible')
+				console.log('2. CORS is properly configured on the API server')
+				console.log('3. The API server allows requests from:', window.location.origin)
+				console.log('4. If using HTTPS locally, certificates are properly set up')
+			}
+			
+			console.groupEnd()
+		}
+		
 		throw error
 	} finally {
 		clearTimeout(timeoutId)
@@ -152,28 +207,203 @@ async function processApiResponse<T>(
 		throw new SessionError('Session validation failed', { endpoint, status: response.status })
 	}
 
+	// Check for CSRF token in response headers
+	const csrfHeaderName = apiConfig.csrfTokenHeader || 'X-CSRF-Token'
+	
+	// Try multiple ways to get the CSRF token from headers
+	let csrfToken = null
+	
+	csrfToken = response.headers.get(csrfHeaderName)
+	
+	if (!csrfToken) {
+		const setCookieHeader = response.headers.get('set-cookie');
+		if (setCookieHeader) {
+			// Log the Set-Cookie header in development mode
+			if (import.meta.env.DEV) {
+				console.log('Set-Cookie header found:', setCookieHeader);
+			}
+			
+			// Try to extract csrftoken from Set-Cookie header
+			const csrfCookieMatch = setCookieHeader.match(/csrftoken=([^;]+)/);
+			if (csrfCookieMatch && csrfCookieMatch[1]) {
+				csrfToken = csrfCookieMatch[1];
+				debugLog('Found CSRF token in Set-Cookie header');
+			}
+		}
+	}
+	
+	// Method 3: Check for token in response body for session init endpoint
+	if (!csrfToken && endpoint.includes('session/init')) {
+		try {
+			// Clone the response to avoid consuming it
+			const clonedResponse = response.clone()
+			const jsonBody = await clonedResponse.json()
+			
+			// Log the full response structure in development mode
+			if (import.meta.env.DEV) {
+				console.group('Session Init Response Body')
+				console.log('Full response body:', jsonBody)
+				console.groupEnd()
+			}
+			
+			// Check for CSRF token in various places in the response structure
+			// Try all possible paths where the CSRF token might be located
+			if (jsonBody) {
+				// Check direct properties
+				if (jsonBody.csrf_token) {
+					csrfToken = jsonBody.csrf_token;
+					debugLog('Found CSRF token in response body (root.csrf_token)');
+				} 
+				// Check in data property
+				else if (jsonBody.data && jsonBody.data.csrf_token) {
+					csrfToken = jsonBody.data.csrf_token;
+					debugLog('Found CSRF token in response body (data.csrf_token)');
+				}
+				// Check in id property (some APIs use this)
+				else if (jsonBody.data && jsonBody.data.id) {
+					csrfToken = jsonBody.data.id;
+					debugLog('Using session ID as CSRF token (data.id)');
+				}
+				// Check for token property
+				else if (jsonBody.token) {
+					csrfToken = jsonBody.token;
+					debugLog('Found CSRF token in response body (root.token)');
+				}
+				// Check in data property for token
+				else if (jsonBody.data && jsonBody.data.token) {
+					csrfToken = jsonBody.data.token;
+					debugLog('Found CSRF token in response body (data.token)');
+				}
+				// Check for session_id as fallback
+				else if (jsonBody.session_id) {
+					csrfToken = jsonBody.session_id;
+					debugLog('Using session_id as CSRF token (root.session_id)');
+				}
+				// Check for session_id in data
+				else if (jsonBody.data && jsonBody.data.session_id) {
+					csrfToken = jsonBody.data.session_id;
+					debugLog('Using session_id as CSRF token (data.session_id)');
+				}
+			}
+		} catch (e) {
+			// Ignore errors parsing JSON
+			debugError('Error checking for CSRF token in response body:', e)
+		}
+	}
+	
+	// Method 4: Check for token in cookies (if accessible)
+	if (!csrfToken && typeof document !== 'undefined') {
+		const cookies = document.cookie.split(';')
+		const csrfCookieNames = apiConfig.csrfCookieNames || ['csrftoken', 'csrf_token']
+		
+		// Log all cookies in development mode
+		if (import.meta.env.DEV) {
+			console.group('Cookies available during API response processing');
+			console.log('All cookies:', document.cookie);
+			cookies.forEach(cookie => {
+				const [name, value] = cookie.trim().split('=');
+				console.log(`Cookie: ${name} = ${value ? value.substring(0, 10) + '...' : 'empty'}`);
+			});
+			console.groupEnd();
+		}
+		
+		for (const cookie of cookies) {
+			const [name, value] = cookie.trim().split('=')
+			if (csrfCookieNames.includes(name) && value) {
+				csrfToken = value
+				debugLog(`Found CSRF token in cookies (${name})`)
+				break
+			}
+		}
+	}
+	
+	// Log all headers in development mode to help with debugging
+	if (import.meta.env.DEV) {
+		console.group('Response Headers')
+		console.log('Endpoint:', endpoint)
+		console.log('Status:', response.status)
+		console.log('Looking for CSRF header:', csrfHeaderName)
+		
+		const headerEntries: string[] = []
+		response.headers.forEach((value, key) => {
+			headerEntries.push(`${key}: ${value}`)
+		})
+		console.log('All headers:', headerEntries)
+		console.groupEnd()
+	}
+	
+	if (csrfToken) {
+		debugLog(`Received CSRF token: ${csrfToken.substring(0, 5)}...`)
+		
+		// Log the token for debugging
+		if (import.meta.env.DEV) {
+			console.group('CSRF Token Found')
+			console.log('CSRF token:', `${csrfToken.substring(0, 5)}...`)
+			console.log('Current token in store:', sessionManager.getCsrfToken() ? 'exists' : 'none')
+			console.groupEnd()
+		}
+		
+		// Update the token in the session manager
+		const success = sessionManager.updateCsrfTokenFromServer(csrfToken)
+		
+		if (import.meta.env.DEV) {
+			console.log('CSRF token update success:', success)
+			console.log('Token after update:', sessionManager.getCsrfToken() ? 'exists' : 'none')
+		}
+	} else {
+		// Log when no CSRF token is found in headers for session-related endpoints
+		if (endpoint.includes('session')) {
+			debugError(`No CSRF token found in response headers for ${endpoint}`)
+			if (import.meta.env.DEV) {
+				console.warn(`No CSRF token found in response headers for ${endpoint}`)
+			}
+		}
+	}
+
 	// Handle successful responses
 	if (response.ok) {
 		try {
 			const contentType = response.headers.get('content-type')
 			if (contentType && contentType.includes('application/json')) {
 				const jsonResponse = await response.json()
-
-				// Check if response contains a new CSRF token and update it in the store
-				if (jsonResponse.data && jsonResponse.data.csrf_token) {
-					debugLog('Received new CSRF token from server response')
-
-					// Log the token for debugging
-					if (import.meta.env.DEV) {
-						console.group('CSRF Token in Response')
-						console.log('CSRF token from response:', jsonResponse.data.csrf_token)
-						console.log('Current token in store:', sessionManager.getCsrfToken())
-						console.groupEnd()
-					}
-
-					sessionManager.updateCsrfTokenFromServer(jsonResponse.data.csrf_token)
+				
+				// Log the full response in development mode
+				if (import.meta.env.DEV && endpoint.includes('session')) {
+					console.group('Parsed JSON Response')
+					console.log('Endpoint:', endpoint)
+					console.log('Full response:', jsonResponse)
+					console.groupEnd()
 				}
-
+				
+				// Additional check for CSRF token in JSON response for session endpoints
+				if (endpoint.includes('session') && !csrfToken) {
+					// Try to find the CSRF token in the response
+					let tokenFromBody = null;
+					
+					// Check various places where the token might be
+					if (jsonResponse.data && jsonResponse.data.csrf_token) {
+						tokenFromBody = jsonResponse.data.csrf_token;
+						debugLog('Found CSRF token in JSON response body (data.csrf_token)');
+					} else if (jsonResponse.csrf_token) {
+						tokenFromBody = jsonResponse.csrf_token;
+						debugLog('Found CSRF token in JSON response body (root.csrf_token)');
+					} else if (jsonResponse.data && jsonResponse.data.token) {
+						tokenFromBody = jsonResponse.data.token;
+						debugLog('Found CSRF token in JSON response body (data.token)');
+					} else if (jsonResponse.token) {
+						tokenFromBody = jsonResponse.token;
+						debugLog('Found CSRF token in JSON response body (root.token)');
+					} else if (jsonResponse.data && jsonResponse.data.id) {
+						// Some APIs use the session ID as the CSRF token
+						tokenFromBody = jsonResponse.data.id;
+						debugLog('Using session ID as CSRF token from response body');
+					}
+					
+					if (tokenFromBody) {
+						sessionManager.updateCsrfTokenFromServer(tokenFromBody);
+					}
+				}
+				
 				return jsonResponse as ApiResponse<T>
 			} else {
 				// For non-JSON responses, return a generic success response
@@ -265,78 +495,64 @@ async function makeRequest<T>(
 }
 
 /**
- * Initialize a session with the backend
- *
- * @returns Session initialization response or null on error
+ * Make a session initialization request
+ * This is a low-level function that just makes the HTTP request
+ * Session state management should be handled by the client
  */
 async function initSession(): Promise<SessionInitResponse | null> {
-	debugLog('API: Initializing session')
-
 	try {
-		// Make the session initialization request
+		// Make the session initialization request with specific options for better CORS handling
 		const response = await makeRequest<SessionInitResponse>(apiConfig.endpoints.sessionInit, {
 			method: 'GET',
-			skipCsrfCheck: true // Skip CSRF check for initial session creation
+			skipCsrfCheck: true, // Skip CSRF check for initial session creation
+			credentials: 'include', // Always include credentials for session cookies
+			headers: {
+				// Explicitly set origin header in development mode
+				...(import.meta.env.DEV && typeof window !== 'undefined' ? { 'Origin': window.location.origin } : {}),
+				// Set accept header to ensure JSON response
+				'Accept': 'application/json'
+			}
 		})
 
 		// Check if the response was successful
 		if (!response.success) {
-			debugError('Session initialization failed', {
-				error: response.data?.error || 'Unknown error',
-				message: response.data?.message || response.data?.error_message || 'No message provided',
+			// For error responses, log what we can
+			debugError('Session initialization request failed', {
 				correlationId: response.correlation_id || 'no-correlation-id'
 			})
 			return null
 		}
 
-		// Log the CSRF token from the response for debugging
-		if (import.meta.env.DEV) {
-			console.group('Session Initialization Response')
-			console.log('Full response:', response)
-			console.log('CSRF token in response:', response.data?.csrf_token)
-			console.groupEnd()
+		// After the response is received, the browser might have already set the cookie
+		// Check for CSRF token in cookies immediately
+		if (typeof document !== 'undefined') {
+			const cookies = document.cookie.split(';')
+			const csrfCookieNames = apiConfig.csrfCookieNames || ['csrftoken', 'csrf_token']
+			
+			if (import.meta.env.DEV) {
+				console.group('Cookies after session init response')
+				console.log('All cookies:', document.cookie)
+				cookies.forEach(cookie => {
+					const [name, value] = cookie.trim().split('=')
+					console.log(`Cookie: ${name} = ${value ? value.substring(0, 10) + '...' : 'empty'}`)
+				})
+				console.groupEnd()
+			}
+			
+			for (const cookie of cookies) {
+				const [name, value] = cookie.trim().split('=')
+				if (csrfCookieNames.includes(name) && value) {
+					debugLog(`Found CSRF token in cookies after session init (${name})`)
+					sessionManager.updateCsrfTokenFromServer(value)
+					break
+				}
+			}
 		}
 
-		// Ensure the response contains a CSRF token
-		if (!response.data?.csrf_token) {
-			debugError('Session initialization response missing CSRF token')
-			return null
-		}
-
-		// Return the session data
 		return response.data
 	} catch (error) {
-		// Log detailed error information in development mode
-		if (import.meta.env.DEV) {
-			console.group('Session Initialization API Error')
-			console.error('Error details:', error)
-
-			// Try to get more information about the error
-			if (error instanceof NetworkError) {
-				console.log('Network error context:', error.context)
-			}
-
-			// Check if the API is reachable
-			try {
-				const healthCheck = await fetch(`${API_BASE_URL}/health`, {
-					method: 'GET',
-					mode: 'cors',
-					credentials: 'include'
-				})
-				console.log(
-					'API health check status:',
-					healthCheck.status,
-					healthCheck.ok ? 'OK' : 'Failed'
-				)
-			} catch (healthError) {
-				console.error('API health check failed:', healthError)
-			}
-
-			console.groupEnd()
-		}
-
-		debugError('Failed to initialize session', error)
-		return null
+		debugError('Failed to make session initialization request', error)
+		throw error
 	}
 }
 
@@ -551,6 +767,62 @@ function getDownloadUrl(token: string): string {
 	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodedToken}`
 }
 
+/**
+ * Start a conversion directly (upload + convert)
+ * 
+ * @param file - File to convert
+ * @param targetFormat - Target format
+ * @returns Conversion response with job_id
+ */
+async function startConversion(file: File, targetFormat: string): Promise<ApiResponse<ConvertResponse & { job_id: string }>> {
+	try {
+		// First upload the file
+		const uploadResp = await uploadFile(file);
+		
+		if (!uploadResp.success || !uploadResp.data.job_id) {
+			throw new Error('File upload failed');
+		}
+		
+		// Then convert the file
+		const jobId = uploadResp.data.job_id;
+		const convertResp = await convertFile(jobId, targetFormat);
+		
+		// Combine the responses
+		return {
+			success: convertResp.success,
+			data: {
+				...convertResp.data,
+				job_id: jobId
+			},
+			correlation_id: convertResp.correlation_id
+		};
+	} catch (error) {
+		debugError('API: Start conversion failed', error);
+		
+		// Handle error
+		handleError(error, {
+			context: {
+				component: 'apiClient',
+				action: 'startConversion',
+				fileName: file.name,
+				fileSize: file.size,
+				targetFormat
+			},
+			showToast: true
+		});
+		
+		// Return error response
+		return {
+			success: false,
+			data: {
+				error: error instanceof Error ? error.name : 'ConversionError',
+				message: getErrorMessageTemplate(error),
+				job_id: '' // Empty job ID for error case
+			} as any
+		};
+	}
+}
+
 // Export the API client as a single object
 export const _apiClient = {
 	initSession,
@@ -561,60 +833,5 @@ export const _apiClient = {
 	closeSession,
 	getSupportedFormats,
 	getDownloadUrl,
-	
-	/**
-	 * Start a conversion directly (upload + convert)
-	 * 
-	 * @param file - File to convert
-	 * @param targetFormat - Target format
-	 * @returns Conversion response with job_id
-	 */
-	async startConversion(file: File, targetFormat: string): Promise<ApiResponse<ConvertResponse & { job_id: string }>> {
-		try {
-			// First upload the file
-			const uploadResp = await uploadFile(file);
-			
-			if (!uploadResp.success || !uploadResp.data.job_id) {
-				throw new Error('File upload failed');
-			}
-			
-			// Then convert the file
-			const jobId = uploadResp.data.job_id;
-			const convertResp = await convertFile(jobId, targetFormat);
-			
-			// Combine the responses
-			return {
-				success: convertResp.success,
-				data: {
-					...convertResp.data,
-					job_id: jobId
-				},
-				correlation_id: convertResp.correlation_id
-			};
-		} catch (error) {
-			debugError('API: Start conversion failed', error);
-			
-			// Handle error
-			handleError(error, {
-				context: {
-					component: 'apiClient',
-					action: 'startConversion',
-					fileName: file.name,
-					fileSize: file.size,
-					targetFormat
-				},
-				showToast: true
-			});
-			
-			// Return error response
-			return {
-				success: false,
-				data: {
-					error: error instanceof Error ? error.name : 'ConversionError',
-					message: getErrorMessageTemplate(error),
-					job_id: '' // Empty job ID for error case
-				} as any
-			};
-		}
-	}
+	startConversion
 }
