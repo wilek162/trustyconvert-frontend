@@ -6,7 +6,7 @@
 
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { apiConfig } from '@/lib/api/config'
-import { csrfToken } from '../stores/session'
+import { sessionStore } from '@/lib/stores/session'
 
 // Get the CSRF cookie name from environment variables or use a default
 const CSRF_COOKIE_NAME = import.meta.env.CSRF_COOKIE_NAME || 'csrftoken'
@@ -19,7 +19,7 @@ export function getCsrfTokenFromStore(): string | null {
 	if (typeof document === 'undefined') return null
 
 	// Only check the nanostore for the token
-	const token = csrfToken.get()
+	const token = sessionStore.get().csrfToken
 	if (token) {
 		return token
 	}

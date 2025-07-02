@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import sessionManager from '@/lib/services/sessionManager'
 import { useStore } from '@nanostores/react'
-import { csrfToken, sessionInitialized } from '@/lib/stores/session'
+import { sessionStore } from '@/lib/stores/session'
 import { createCsrfErrorListener } from '@/lib/utils/csrfUtils'
 import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
 
@@ -51,8 +51,9 @@ interface SessionProviderProps {
  */
 export function SessionContextProvider({ children }: SessionProviderProps) {
 	// Use nanostores for session state
-	const csrfTokenValue = useStore(csrfToken)
-	const isSessionInitialized = useStore(sessionInitialized)
+	const sessionState = useStore(sessionStore)
+	const csrfTokenValue = sessionState.csrfToken
+	const isSessionInitialized = sessionState.initialized
 
 	// Local state
 	const [isInitializing, setIsInitializing] = useState(false)

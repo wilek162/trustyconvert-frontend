@@ -7,20 +7,22 @@ import type { Atom, MapStore, ReadableAtom } from 'nanostores'
 import { batchUpdate } from '@/lib/stores/storeUtils'
 
 /**
- * Hook to use a nanostore atom in a React component
- *
- * @param store - Nanostore atom or map
- * @returns Current store value
+ * React hook for subscribing to a nanostore
+ * 
+ * @param store Any readable nanostore (atom, map, computed)
+ * @returns The current store value
  */
 export function useStore<T>(store: ReadableAtom<T>): T {
 	const [value, setValue] = useState<T>(store.get())
 
 	useEffect(() => {
 		// Subscribe to store changes
-		const unsubscribe = store.subscribe(setValue)
+		const unsubscribe = store.subscribe((newValue) => {
+			setValue(newValue)
+		})
 
-		// Unsubscribe on cleanup
-		return unsubscribe
+		// Cleanup subscription
+		return () => unsubscribe()
 	}, [store])
 
 	return value
@@ -48,7 +50,8 @@ export function useMapStore<T extends object>(
 	// Set key function
 	const setKey = useCallback(
 		<K extends keyof T>(key: K, value: T[K]) => {
-			store.setKey(key, value)
+			// Use type assertion to fix the linter error
+			store.setKey(key as any, value)
 		},
 		[store]
 	)
@@ -67,22 +70,11 @@ export function useAtomStore<T>(store: Atom<T>): [T, (value: T) => void] {
 
 	const setValue = useCallback(
 		(newValue: T) => {
-			store.set(newValue)
+			// Use the atom's set method
+			(store as any).set(newValue)
 		},
 		[store]
 	)
 
 	return [value, setValue]
-}
-
-/**
- * Hook to use a derived value from a store
- *
- * @param store - Source store
- * @param selector - Function to derive value
- * @returns Derived value
- */
-export function useDerivedStore<S, T>(store: ReadableAtom<S>, selector: (state: S) => T): T {
-	const state = useStore(store)
-	return selector(state)
 }

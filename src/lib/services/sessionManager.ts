@@ -6,7 +6,7 @@
  */
 
 import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
-import { csrfToken, sessionInitialized, updateCsrfToken, clearSession } from '@/lib/stores/session'
+import { sessionStore, updateCsrfToken, clearSession, getCSRFToken } from '@/lib/stores/session'
 import { getCsrfTokenFromStore, getCsrfHeaders, dispatchCsrfError } from '@/lib/utils/csrfUtils'
 import { apiConfig } from '@/lib/api/config'
 import client from '../api/client'
@@ -29,14 +29,14 @@ class SessionManager {
 	 * Check if a CSRF token exists in the store
 	 */
 	hasCsrfToken(): boolean {
-		return csrfToken.get() !== null
+		return sessionStore.get().csrfToken !== null
 	}
 
 	/**
 	 * Get the current CSRF token from the store
 	 */
 	getCsrfToken(): string | null {
-		return csrfToken.get()
+		return sessionStore.get().csrfToken
 	}
 
 	/**
@@ -53,16 +53,16 @@ class SessionManager {
 			if (import.meta.env.DEV) {
 				console.group('Setting CSRF Token')
 				console.log('Token to set:', token)
-				console.log('Current token in store:', csrfToken.get())
+				console.log('Current token in store:', this.getCsrfToken())
 				console.groupEnd()
 			}
 
 			// Update the nanostore with the new token
 			updateCsrfToken(token)
-			sessionInitialized.set(true)
+			sessionStore.setKey('initialized', true)
 
 			// Verify the token was set correctly
-			const storedToken = csrfToken.get()
+			const storedToken = this.getCsrfToken()
 
 			if (import.meta.env.DEV) {
 				console.group('CSRF Token Verification')
@@ -89,7 +89,7 @@ class SessionManager {
 	 * Returns true if a token was found
 	 */
 	checkTokenInStore(): boolean {
-		const storeToken = csrfToken.get()
+		const storeToken = this.getCsrfToken()
 
 		if (!storeToken) {
 			debugLog('No token found in store')
@@ -136,7 +136,7 @@ class SessionManager {
 
 		// If we have a valid token and not forcing new, return immediately
 		if (hasToken && !forceNew) {
-			sessionInitialized.set(true)
+			sessionStore.setKey('initialized', true)
 			debugLog('Using existing session from store')
 			return true
 		}
@@ -226,7 +226,7 @@ class SessionManager {
 		try {
 			// First check if we have a token in the store
 			if (this.checkTokenInStore()) {
-				sessionInitialized.set(true)
+				sessionStore.setKey('initialized', true)
 				debugLog('Session already initialized in ensureSession')
 
 				if (import.meta.env.DEV) {
@@ -275,7 +275,7 @@ class SessionManager {
 					debugLog(
 						'Session initialization reported failure but token exists - considering session valid'
 					)
-					sessionInitialized.set(true)
+					sessionStore.setKey('initialized', true)
 					return true
 				}
 			}
@@ -291,7 +291,7 @@ class SessionManager {
 			// Even if there was an error, check if we have a token
 			if (this.hasCsrfToken()) {
 				debugLog('Error occurred but token exists - considering session valid')
-				sessionInitialized.set(true)
+				sessionStore.setKey('initialized', true)
 				return true
 			}
 			return false
@@ -333,11 +333,11 @@ class SessionManager {
 	getSessionState() {
 		return {
 			hasCsrfToken: this.hasCsrfToken(),
-			sessionInitialized: sessionInitialized.get(),
+			sessionInitialized: sessionStore.get().initialized,
 			isInitializing,
 			lastInitAttempt: new Date(lastInitAttempt).toISOString(),
 			lastInitError,
-			csrfTokenInStore: csrfToken.get() !== null
+			csrfTokenInStore: this.getCsrfToken() !== null
 		}
 	}
 

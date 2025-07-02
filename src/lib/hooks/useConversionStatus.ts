@@ -1,6 +1,13 @@
-import { useQuery, Query } from '@tanstack/react-query'
+/**
+ * Conversion Status Hook
+ *
+ * React hook for tracking conversion job status with automatic polling.
+ */
+
+import { useQuery, type Query } from '@tanstack/react-query'
 import { client } from '@/lib/api/client'
-import type { ConversionStatusResponse } from '@/lib/api/client'
+import { useErrorHandler } from '@/lib/hooks/useErrorHandler'
+import type { JobStatusResponse } from '@/lib/types/api'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { handleError } from '@/lib/utils/errorHandling'
 
@@ -22,18 +29,18 @@ type ConversionStatus = 'idle' | 'pending' | 'processing' | 'completed' | 'faile
  * @returns Status information and control functions
  */
 export function useConversionStatus({
-	jobId: jobId,
+	jobId,
 	onError,
 	pollingInterval = POLLING_INTERVAL,
 	maxRetries = 2
 }: UseConversionStatusOptions) {
-	const query = useQuery<ConversionStatusResponse, Error>({
+	const query = useQuery<JobStatusResponse, Error>({
 		queryKey: ['conversion-status', jobId],
 		queryFn: async () => {
-			if (!jobId) throw new Error('No task ID provided')
-			debugLog('[useConversionStatus] Checking status', { jobId: jobId })
+			if (!jobId) throw new Error('No job ID provided')
+			debugLog('[useConversionStatus] Checking status', { jobId })
 			try {
-				// jobId is used as jobId for API calls
+				// jobId is used for API calls
 				const status = await client.getConversionStatus(jobId)
 
 				// The apiClient.getConversionStatus now standardizes the response
@@ -44,14 +51,14 @@ export function useConversionStatus({
 			} catch (error) {
 				debugError('[useConversionStatus] Status check failed', error)
 				const errorMessage = handleError(error, {
-					context: { component: 'useConversionStatus', jobId: jobId }
+					context: { component: 'useConversionStatus', jobId }
 				})
 				if (onError) onError(errorMessage)
 				throw error
 			}
 		},
 		enabled: !!jobId,
-		refetchInterval: (q: Query<ConversionStatusResponse, Error>) => {
+		refetchInterval: (q: Query<JobStatusResponse, Error>) => {
 			const data = q.state.data
 			const error = q.state.error
 			if (!data) return pollingInterval
@@ -61,7 +68,7 @@ export function useConversionStatus({
 			return pollingInterval
 		},
 		retry: maxRetries,
-		retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
+		retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
 	})
 
 	return {

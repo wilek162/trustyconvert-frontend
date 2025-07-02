@@ -7,6 +7,13 @@ import { useToast } from '@/lib/hooks/useToast'
 import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
 import { useConversionStatus } from '@/lib/hooks/useConversionStatus'
 import { debugLog, debugError } from '@/lib/utils/debug'
+import { 
+	conversionService, 
+	conversionStore, 
+	isConversionActive 
+} from '@/lib/stores/conversion'
+import { useStore } from './useStore'
+import type { ConversionStatus } from '@/lib/types/api'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
 
@@ -45,9 +52,13 @@ export function useFileConversion() {
 	const { addToast } = useToast()
 	const [file, setFile] = useState<File | null>(null)
 	const [format, setFormat] = useState<string>('')
-	const [taskId, setTaskId] = useState<string | null>(null)
 	const [error, setError] = useState<Error | null>(null)
 	const [isPosting, setIsPosting] = useState(false)
+	
+	// Get conversion state from store
+	const conversionState = useStore(conversionStore)
+	const isActive = useStore(isConversionActive)
+	const jobId = conversionState.jobId
 
 	// Get supported formats
 	const { formats, isLoading: isLoadingFormats, error: formatsError } = useSupportedFormats()
@@ -64,7 +75,7 @@ export function useFileConversion() {
 		error: statusError,
 		cancel: cancelConversion
 	} = useConversionStatus({
-		jobId: taskId,
+		jobId,
 		onError: (err) => setError(new Error(err))
 	})
 
@@ -74,14 +85,14 @@ export function useFileConversion() {
 				file: file?.name,
 				targetFormat,
 				isPosting,
-				taskId,
+				jobId,
 				status
 			})
 			// Block duplicate requests only if a conversion is actively in progress
-			if (isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
-				debugLog('[conversion.mutationFn] Early exit: already posting or task in progress', {
+			if (isPosting || isActive) {
+				debugLog('[conversion.mutationFn] Early exit: already posting or job in progress', {
 					isPosting,
-					taskId,
+					jobId,
 					status
 				})
 				return
@@ -92,41 +103,18 @@ export function useFileConversion() {
 				format: targetFormat
 			})
 
-			// Use the centralized retry utility with API request strategy
-			return withRetry(
-				async () => {
-					try {
-						const response = await client.startConversion(file, targetFormat)
-						debugLog('[conversion.mutationFn] Conversion response', response)
-						if (!response?.task_id) {
-							throw new Error('No task ID returned from server')
-						}
-						return response
-					} catch (err) {
-						debugError('[conversion.mutationFn] Error during conversion', err)
-						throw err
-					}
-				},
-				{
-					...RETRY_STRATEGIES.API_REQUEST,
-					onRetry: (error, attempt) => {
-						debugLog(`[conversion.mutationFn] Retrying conversion (attempt ${attempt})`, {
-							error: error.message
-						})
-					}
-				}
-			)
+			// Use the conversion service to start the conversion
+			return conversionService.startFileConversion(file, targetFormat)
 		},
 		onSuccess: (data) => {
 			debugLog('[conversion.onSuccess] called', data)
-			if (!data?.task_id) {
-				debugError('[conversion.onSuccess] No task ID returned from server', data)
-				setError(new Error('No task ID returned from server'))
+			if (!data) {
+				debugError('[conversion.onSuccess] No job ID returned from server')
+				setError(new Error('No job ID returned from server'))
 				setIsPosting(false)
 				return
 			}
-			debugLog('[conversion.onSuccess] Conversion started successfully', { taskId: data.task_id })
-			setTaskId(data.task_id)
+			debugLog('[conversion.onSuccess] Conversion started successfully', { jobId: data })
 			setError(null)
 			setIsPosting(false)
 		},
@@ -143,14 +131,14 @@ export function useFileConversion() {
 	})
 
 	const startConversion = useCallback(() => {
-		debugLog('[startConversion] called', { file, format, isPosting, taskId, status })
-		if (!file || !format || isPosting || (taskId && IN_PROGRESS_STATUS_SET.has(status))) {
+		debugLog('[startConversion] called', { file, format, isPosting, jobId, status })
+		if (!file || !format || isPosting || isActive) {
 			const error = new Error('File and format are required or conversion already in progress')
 			debugError('[startConversion] Invalid state for conversion', {
 				file,
 				format,
 				isPosting,
-				taskId,
+				jobId,
 				status
 			})
 			setError(error)
@@ -163,15 +151,15 @@ export function useFileConversion() {
 		}
 		debugLog('[startConversion] Triggering conversion.mutate', { file: file.name, format })
 		conversion.mutate({ file, targetFormat: format })
-	}, [file, format, conversion, addToast, isPosting, taskId, status])
+	}, [file, format, conversion, addToast, isPosting, jobId, status, isActive])
 
 	const reset = useCallback(() => {
 		debug.log('Resetting conversion state')
 		setFile(null)
 		setFormat('')
-		setTaskId(null)
 		setError(null)
 		setIsPosting(false)
+		conversionService.resetConversion()
 		queryClient.removeQueries({ queryKey: ['conversion-status'] })
 	}, [queryClient])
 
@@ -181,12 +169,12 @@ export function useFileConversion() {
 		format,
 		setFormat,
 		startConversion,
-		status,
-		progress,
-		downloadUrl,
-		fileName,
-		fileSize,
-		error: error || statusError,
+		status: conversionState.status,
+		progress: conversionState.progress,
+		downloadUrl: conversionState.resultUrl,
+		fileName: conversionState.filename,
+		fileSize: conversionState.fileSize,
+		error: error || statusError || conversionState.error,
 		isPosting,
 		isStatusLoading,
 		reset,
@@ -199,16 +187,7 @@ export function useFileConversion() {
 	}
 }
 
-// Union of all possible statuses we might receive from the API.
-// Keep this in sync with API_INTEGRATION_GUIDE.md
-export type ConversionStatus =
-	| 'idle'
-	| 'pending'
-	| 'uploading'
-	| 'queued'
-	| 'processing'
-	| 'completed'
-	| 'failed'
+// ConversionStatus is now imported from @/lib/types/api
 
 /**
  * Hook for managing the entire conversion flow
@@ -228,9 +207,9 @@ export function useConversionFlow() {
 		}
 	}, [])
 
-	const taskId = fileConversion.conversion.data?.task_id ?? null
+	const jobId = fileConversion.conversion.data ?? null
 	const { status, progress, downloadUrl } = useConversionStatus({
-		jobId: taskId
+		jobId
 	})
 
 	// Memoize the formats data to prevent unnecessary re-renders
@@ -249,41 +228,22 @@ export function useConversionFlow() {
 	}, [file, format, fileConversion.conversion])
 
 	const reset = useCallback(() => {
-		debug.log('Resetting conversion flow')
 		setFile(null)
 		setFormat('')
-		queryClient.removeQueries({ queryKey: ['conversionStatus'] })
-	}, [queryClient])
-
-	// Log when file or format changes
-	useEffect(() => {
-		debug.log('File or format changed', {
-			hasFile: !!file,
-			fileType: file?.type,
-			format
-		})
-	}, [file, format])
+		fileConversion.reset()
+	}, [fileConversion])
 
 	return {
-		// File state
 		file,
 		setFile,
 		format,
 		setFormat,
-		// Start conversion
 		startConversion,
-		// Current task status
-		status: status as ConversionStatus,
+		status,
 		progress,
 		downloadUrl,
-		// Loading states
-		isLoading: fileConversion.isPosting || fileConversion.isStatusLoading,
-		isError: !!fileConversion.error,
-		error: fileConversion.error,
-		// Reset function
 		reset,
-		// Format data
 		formats: formatsData,
-		isLoadingFormats: fileConversion.isLoadingFormats
+		isLoading: fileConversion.isLoadingFormats
 	}
 }

@@ -1,7 +1,24 @@
 /**
- * API Type definitions for TrustyConvert API responses
- * These types provide a consistent interface for all API communication
+ * API Type Definitions
+ * 
+ * Centralized type definitions for all API-related functionality.
+ * This file is organized into sections by domain (Common, Session, Conversion, etc.)
  */
+
+// ==========================================
+// Common API Types
+// ==========================================
+
+/**
+ * Generic API response wrapper
+ * All API responses follow this structure
+ */
+export interface ApiResponse<T = any> {
+	success: boolean
+	data: T
+	correlation_id?: string
+	message?: string
+}
 
 /**
  * Common error fields that can be present in any API response
@@ -14,16 +31,46 @@ export interface ApiErrorInfo {
 	field_errors?: Record<string, string>
 	session_expired?: boolean
 	csrf_error?: boolean
+	error_type?: string
 }
 
 /**
- * Generic API response wrapper
+ * Job status values used across the API
  */
-export interface ApiResponse<T> {
-	success: boolean
-	data: T & ApiErrorInfo
-	correlation_id?: string
+export type JobStatus = 
+	| 'idle'
+	| 'pending'
+	| 'uploading' 
+	| 'uploaded' 
+	| 'queued'
+	| 'processing' 
+	| 'completed' 
+	| 'failed'
+
+/**
+ * Conversion status (client-side representation of JobStatus)
+ */
+export type ConversionStatus = 
+	| 'idle'
+	| 'pending'
+	| 'uploading'
+	| 'queued'
+	| 'processing'
+	| 'completed'
+	| 'failed'
+
+/**
+ * Progress information for uploads/downloads
+ */
+export interface ProgressInfo {
+	loaded: number
+	total: number
+	percent: number
 }
+
+// ==========================================
+// Session Management
+// ==========================================
 
 /**
  * Session initialization response
@@ -35,9 +82,25 @@ export interface SessionInitResponse {
 }
 
 /**
- * Job status values
+ * Session information
  */
-export type JobStatus = 'idle' | 'uploaded' | 'processing' | 'completed' | 'failed'
+export interface SessionInfo {
+	session_id: string
+	expires_at: string
+	created_at: string
+}
+
+/**
+ * Session close response
+ */
+export interface SessionCloseResponse {
+	message: string
+	session_id?: string
+}
+
+// ==========================================
+// File Upload
+// ==========================================
 
 /**
  * File upload response
@@ -46,8 +109,32 @@ export interface UploadResponse {
 	job_id: string
 	status: JobStatus
 	original_filename?: string
+	filename?: string // Alias for original_filename for backward compatibility
 	file_size?: number
 	mime_type?: string
+	upload_id?: string
+}
+
+// ==========================================
+// Conversion
+// ==========================================
+
+/**
+ * Convert file response
+ */
+export interface ConvertResponse {
+	job_id: string
+	status: JobStatus
+	message?: string
+}
+
+/**
+ * Conversion request parameters
+ */
+export interface ConversionRequest {
+	job_id: string
+	target_format: string
+	options?: Record<string, unknown>
 }
 
 /**
@@ -77,31 +164,96 @@ export interface JobStatusResponse {
 }
 
 /**
+ * Conversion options
+ */
+export interface ConversionOptions {
+	quality?: number
+	password?: string
+	preserveMetadata?: boolean
+	pageRange?: string
+	customOptions?: Record<string, any>
+}
+
+/**
+ * Conversion result
+ */
+export interface ConversionResult {
+	jobId: string
+	resultUrl: string
+	downloadToken?: string
+	filename: string
+	fileSize?: number
+	conversionTime?: number
+	success: boolean
+	error?: string
+}
+
+// ==========================================
+// Download
+// ==========================================
+
+/**
  * Download token response
  */
 export interface DownloadTokenResponse {
 	download_token: string
 	expires_at: string
+	expires_in?: number
+	url?: string
 }
 
 /**
- * Convert file response
+ * Download info response
  */
-export interface ConvertResponse {
-	job_id: string
-	status: JobStatus
+export interface DownloadInfoResponse {
+	filename: string
+	file_size: number
+	mime_type: string
 }
 
 /**
- * Session close response
+ * Download options
  */
-export interface SessionCloseResponse {
-	message: string
-	session_id?: string
+export interface DownloadOptions {
+	onProgress?: (progress: ProgressInfo) => void
+	signal?: AbortSignal
+}
+
+// ==========================================
+// Formats
+// ==========================================
+
+/**
+ * Format information
+ */
+export interface FormatInfo {
+	code: string
+	name: string
+	extension: string
+	mimeType: string
+	mime_type?: string // For API compatibility
+	category?: string
+	description?: string
+	compatibleOutputs: string[]
+	compatible_outputs?: string[] // For API compatibility
+	isInput: boolean
+	is_input?: boolean // For API compatibility
+	isOutput: boolean
+	is_output?: boolean // For API compatibility
+	icon?: string
 }
 
 /**
- * Supported conversion format
+ * Formats listing response
+ */
+export interface FormatsResponse {
+	formats: FormatInfo[]
+	success?: boolean
+	message?: string
+}
+
+/**
+ * Conversion format (higher-level abstraction)
  */
 export interface ConversionFormat {
 	id: string
@@ -112,9 +264,29 @@ export interface ConversionFormat {
 	icon?: string
 }
 
+// ==========================================
+// API Client Interface
+// ==========================================
+
 /**
- * Formats listing response
+ * API client interface
+ * Defines the methods that should be implemented by any API client
  */
-export interface FormatsResponse {
-	formats: ConversionFormat[]
+export interface ApiClientInterface {
+	initSession(): Promise<ApiResponse<SessionInitResponse>>
+	uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>>
+	convertFile(jobId: string, targetFormat: string, sourceFormat?: string): Promise<ApiResponse<ConvertResponse>>
+	startConversion(file: File, targetFormat: string): Promise<ApiResponse<ConvertResponse>>
+	getConversionStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>>
+	getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>>
+	closeSession(): Promise<ApiResponse<SessionCloseResponse>>
+	getSupportedFormats(): Promise<ApiResponse<FormatsResponse>>
+	getDownloadUrl(downloadToken: string): string
 }
+
+// ==========================================
+// Callback Types
+// ==========================================
+
+export type UploadProgressCallback = (progress: number) => void
+export type ErrorCallback = (error: Error) => void

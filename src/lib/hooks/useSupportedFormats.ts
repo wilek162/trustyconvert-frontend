@@ -1,80 +1,112 @@
 import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { client } from '@/lib/api/client'
-import type { ConversionFormat } from '@/lib/api/types'
+import { debugLog, debugError } from '@/lib/utils/debug'
+import { 
+	formatsStore, 
+	inputFormatsStore, 
+	outputFormatsStore, 
+	loadFormats,
+	formatsLoadingStore
+} from '@/lib/stores/formats'
+import { useStore } from './useStore'
+import type { FormatInfo } from '@/lib/types/api'
 
 /**
- * Cache key for supported formats query
- * Using a constant ensures consistent cache key across the application
- */
-const FORMATS_QUERY_KEY = ['supportedFormats'] as const
-
-/**
- * Debug logging utility for development
- * Centralizes logging logic and makes it easy to disable in production
- */
-const debug = {
-	log: (message: string, data?: any) => {
-		if (process.env.NODE_ENV === 'development') {
-			console.log(`[useSupportedFormats] ${message}`, data || '')
-		}
-	},
-	error: (message: string, error?: any) => {
-		if (process.env.NODE_ENV === 'development') {
-			console.error(`[useSupportedFormats] ${message}`, error || '')
-		}
-	}
-}
-
-/**
- * Query configuration for supported formats
- * Extracted to a constant for reuse and easier testing
- */
-const QUERY_CONFIG = {
-	staleTime: Infinity, // Never consider the data stale since formats rarely change
-	gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours
-	refetchOnWindowFocus: false, // Don't refetch when window regains focus
-	refetchOnMount: false, // Don't refetch on component mount
-	refetchOnReconnect: false, // Don't refetch on network reconnection
-	retry: (failureCount: number, error: any) => {
-		// Don't retry on client errors (4xx)
-		if (error?.status >= 400 && error?.status < 500) {
-			return false
-		}
-		// Retry up to 2 times with exponential backoff
-		return failureCount < 2
-	}
-} as const
-
-/**
- * Hook for fetching and caching supported conversion formats
- *
- * Features:
- * - Automatic caching with React Query
- * - Error handling and retries
- * - Type-safe response handling
- * - Development-only debug logging
- *
- * @returns Object containing formats array, loading state, and error state
+ * Hook to fetch and manage supported file formats
  */
 export function useSupportedFormats() {
-	const {
-		data: formats = [],
-		isLoading,
-		error
-	} = useQuery({
-		queryKey: FORMATS_QUERY_KEY,
+	// Get formats from store
+	const formats = useStore(formatsStore)
+	const inputFormats = useStore(inputFormatsStore)
+	const outputFormats = useStore(outputFormatsStore)
+	const loadingState = useStore(formatsLoadingStore)
+
+	// Use React Query to fetch formats
+	const query = useQuery({
+		queryKey: ['supported-formats'],
 		queryFn: async () => {
-			debug.log('Fetching supported formats')
-			const response = await client.getSupportedFormats()
-			debug.log('Formats fetched', { count: response.length })
-			return response
+			try {
+				debugLog('Fetching supported formats')
+				const response = await client.getSupportedFormats()
+				
+				if (!response.formats) {
+					throw new Error('No formats returned from API')
+				}
+				
+				// Update the formats store
+				loadFormats(response.formats)
+				
+				return response.formats
+			} catch (error) {
+				debugError('Error fetching formats:', error)
+				throw error
+			}
 		},
-		...QUERY_CONFIG
+		staleTime: 1000 * 60 * 60, // 1 hour
+		refetchOnWindowFocus: false
 	})
+
+	// Load formats from store on mount if not already loaded
+	useEffect(() => {
+		if (formats.length === 0 && !loadingState.loading && !query.isLoading && !query.isError) {
+			query.refetch()
+		}
+	}, [formats.length, loadingState.loading, query])
 
 	return {
 		formats,
-		isLoading,
-		error: error as Error | null
+		inputFormats,
+		outputFormats,
+		isLoading: loadingState.loading || query.isLoading,
+		error: loadingState.error || (query.error instanceof Error ? query.error.message : query.error),
+		refetch: query.refetch
 	}
 }
+
+/**
+ * Hook to get output formats compatible with a specific input format
+ * @param inputFormat Input format code (e.g., 'pdf')
+ */
+export function useCompatibleFormats(inputFormat: string | null) {
+	const { formats } = useSupportedFormats()
+	
+	if (!inputFormat || formats.length === 0) {
+		return []
+	}
+	
+	// Find the input format object
+	const format = formats.find(f => f.code === inputFormat)
+	
+	// Return compatible output formats
+	return format?.compatibleOutputs || []
+}
+
+/**
+ * Check if a conversion between formats is supported
+ * @param inputFormat Input format code
+ * @param outputFormat Output format code
+ * @returns Boolean indicating if conversion is supported
+ */
+export function isConversionSupported(inputFormat: string, outputFormat: string): boolean {
+	// Get formats from store
+	const formats = formatsStore.get()
+	
+	// Find the input format
+	const format = formats.find(f => f.code === inputFormat)
+	
+	// Check if output format is in compatible outputs
+	return !!format && format.compatibleOutputs.includes(outputFormat)
+}
+
+/**
+ * Get format information by code
+ * @param formatCode Format code to look up
+ * @returns Format information or undefined if not found
+ */
+export function getFormatInfo(formatCode: string): FormatInfo | undefined {
+	const formats = formatsStore.get()
+	return formats.find(f => f.code === formatCode)
+}
+
+export default useSupportedFormats

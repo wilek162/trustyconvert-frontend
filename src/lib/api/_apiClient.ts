@@ -560,5 +560,61 @@ export const _apiClient = {
 	getDownloadToken,
 	closeSession,
 	getSupportedFormats,
-	getDownloadUrl
+	getDownloadUrl,
+	
+	/**
+	 * Start a conversion directly (upload + convert)
+	 * 
+	 * @param file - File to convert
+	 * @param targetFormat - Target format
+	 * @returns Conversion response with job_id
+	 */
+	async startConversion(file: File, targetFormat: string): Promise<ApiResponse<ConvertResponse & { job_id: string }>> {
+		try {
+			// First upload the file
+			const uploadResp = await uploadFile(file);
+			
+			if (!uploadResp.success || !uploadResp.data.job_id) {
+				throw new Error('File upload failed');
+			}
+			
+			// Then convert the file
+			const jobId = uploadResp.data.job_id;
+			const convertResp = await convertFile(jobId, targetFormat);
+			
+			// Combine the responses
+			return {
+				success: convertResp.success,
+				data: {
+					...convertResp.data,
+					job_id: jobId
+				},
+				correlation_id: convertResp.correlation_id
+			};
+		} catch (error) {
+			debugError('API: Start conversion failed', error);
+			
+			// Handle error
+			handleError(error, {
+				context: {
+					component: 'apiClient',
+					action: 'startConversion',
+					fileName: file.name,
+					fileSize: file.size,
+					targetFormat
+				},
+				showToast: true
+			});
+			
+			// Return error response
+			return {
+				success: false,
+				data: {
+					error: error instanceof Error ? error.name : 'ConversionError',
+					message: getErrorMessageTemplate(error),
+					job_id: '' // Empty job ID for error case
+				} as any
+			};
+		}
+	}
 }

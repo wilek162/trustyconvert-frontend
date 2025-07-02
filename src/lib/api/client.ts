@@ -7,18 +7,23 @@
 import { z } from 'zod'
 import { _apiClient } from '@/lib/api/_apiClient'
 
-import type { ConversionFormat, JobStatus } from '@/lib/types'
+import type { ConversionFormat } from '@/lib/types'
 import type {
+	ApiClientInterface,
 	ApiResponse,
+	SessionInitResponse,
 	UploadResponse,
 	ConvertResponse,
-	ApiErrorInfo,
-	SessionInitResponse
+	JobStatusResponse,
+	DownloadTokenResponse,
+	FormatsResponse,
+	DownloadOptions,
+	ProgressInfo,
+	UploadProgressCallback,
+	JobStatus
 } from '@/lib/types/api'
-import type { DownloadProgress } from '@/lib/types/conversion'
 import { v4 as uuidv4 } from 'uuid'
 import { apiConfig } from './config'
-import type { DownloadOptions } from './types'
 import { handleError, NetworkError, SessionError } from '@/lib/utils/errorHandling'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import sessionManager from '@/lib/services/sessionManager'
@@ -39,55 +44,47 @@ export class APIRequestError extends Error {
 	}
 }
 
-/**
- * Schema for conversion status response
- */
-export const ConversionStatusResponseSchema = z.object({
-	job_id: z.string().optional(),
-	task_id: z.string().optional(), // For backward compatibility
-	status: z.enum(['idle', 'pending', 'uploaded', 'queued', 'processing', 'completed', 'failed']),
-	progress: z.number().min(0).max(100).optional(),
-	download_url: z.string().url().optional().nullable(),
-	error_message: z.string().optional().nullable(),
-	error_type: z.string().optional().nullable(),
-	file_size: z.number().optional().nullable(),
-	output_size: z.number().optional().nullable(),
-	started_at: z.string().optional().nullable(),
-	created_at: z.string().optional().nullable(),
-	updated_at: z.string().optional().nullable(),
-	completed_at: z.string().optional().nullable(),
-	failed_at: z.string().optional().nullable(),
-	original_filename: z.string().optional().nullable(),
-	filename: z.string().optional().nullable(), // Alias for original_filename
-	converted_path: z.string().optional().nullable(),
-	conversion_time: z.number().optional().nullable(),
-	download_token: z.string().optional().nullable(),
-	current_step: z.string().optional().nullable(),
-	estimated_time_remaining: z.number().optional().nullable()
+// Response schema for conversion status
+const ConversionStatusResponseSchema = z.object({
+	job_id: z.string(),
+	status: z.string(),
+	progress: z.number().optional().default(0),
+	error_message: z.string().optional(),
+	error_type: z.string().optional(),
+	started_at: z.string().optional(),
+	created_at: z.string().optional(),
+	updated_at: z.string().optional(),
+	completed_at: z.string().optional(),
+	failed_at: z.string().optional(),
+	estimated_time_remaining: z.number().optional(),
+	current_step: z.string().optional(),
+	original_filename: z.string().optional(),
+	converted_path: z.string().nullable().optional(),
+	output_size: z.number().nullable().optional(),
+	conversion_time: z.number().nullable().optional(),
+	download_token: z.string().nullable().optional(),
+	filename: z.string().optional(), // Alias for original_filename
+	file_size: z.number().optional(), // Alias for output_size
+	download_url: z.string().optional() // Constructed URL
 })
 
-// Export the type for use in other components
-export type ConversionStatusResponse = z.infer<typeof ConversionStatusResponseSchema>
-
 /**
- * Standardize response data format
+ * Standardize API response format
  */
 function standardizeResponse(data: any) {
-	if (!data) return {}
 	return data
 }
 
 /**
- * Check if the response indicates a CSRF error
+ * Check if a response contains a CSRF error
  */
 function isCsrfError(response: ApiResponse<any>): boolean {
 	return (
-		response &&
-		!response.success &&
-		((response.data as ApiErrorInfo)?.error === 'CSRFValidationError' ||
-			(typeof (response.data as ApiErrorInfo)?.message === 'string' &&
-				(response.data as ApiErrorInfo)?.message?.includes('CSRF')) ||
-			false)
+		response.data?.csrf_error === true ||
+		response.data?.error_message?.includes('CSRF') ||
+		response.data?.message?.includes('CSRF') ||
+		response.data?.error?.includes('CSRF') ||
+		false
 	)
 }
 
@@ -205,6 +202,38 @@ export const client = {
 		} catch (error) {
 			throw handleError(error, {
 				context: { action: 'convertFile', jobId, targetFormat, sourceFormat }
+			})
+		}
+	},
+
+	/**
+	 * Start a new conversion (upload + convert in one step)
+	 */
+	startConversion: async (file: File, targetFormat: string) => {
+		try {
+			// Ensure we have a valid session
+			await sessionManager.ensureSession()
+			
+			// Use the API's startConversion method
+			const response = await withRetry(
+				() => _apiClient.startConversion(file, targetFormat),
+				{
+					...RETRY_STRATEGIES.API_REQUEST
+				}
+			)
+			
+			// Check for CSRF error
+			if (isCsrfError(response)) {
+				// Try to refresh the CSRF token without creating a new session
+				await sessionManager.initSession()
+				const retryResponse = await _apiClient.startConversion(file, targetFormat)
+				return standardizeResponse(retryResponse.data)
+			}
+			
+			return standardizeResponse(response.data)
+		} catch (error) {
+			throw handleError(error, {
+				context: { action: 'startConversion', fileName: file.name, targetFormat }
 			})
 		}
 	},
