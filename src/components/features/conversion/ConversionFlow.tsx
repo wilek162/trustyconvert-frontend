@@ -13,6 +13,7 @@ import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
 import CloseSession from '../session/CloseSession'
 import { useSession } from '@/lib/providers/SessionContext'
 import sessionManager from '@/lib/services/sessionManager'
+import downloadService from '@/lib/services/downloadService'
 
 // Import store hooks
 import { useAtomStore } from '@/lib/hooks/useStore'
@@ -28,6 +29,7 @@ import {
 // Import error handling and messaging utilities
 import { withErrorHandling } from '@/lib/utils/errorHandling'
 import { showSuccess, showError, showInfo, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { DownloadManager } from './DownloadManager'
 
 // Supported conversions map
 const SUPPORTED_FORMATS = {
@@ -154,6 +156,26 @@ export function ConversionFlow({
 	// Toggle debug info display
 	const toggleDebugInfo = useCallback(() => {
 		setShowDebugInfo((prev) => !prev)
+	}, [])
+
+	// Force session initialization for debugging
+	const forceSessionInit = useCallback(async () => {
+		try {
+			// Force a new session initialization
+			const success = await sessionManager.initSession(true)
+			
+			if (success) {
+				showSuccess("Session initialized successfully")
+			} else {
+				const sessionState = sessionManager.getSessionState()
+				setDetailedError(sessionState.lastInitError || 'No detailed error available')
+				showError("Session initialization failed")
+			}
+		} catch (err) {
+			debugError('Error during forced session init:', err)
+			setDetailedError(err)
+			showError("Session initialization error")
+		}
 	}, [])
 
 	// Handle file upload completion
@@ -309,8 +331,29 @@ export function ConversionFlow({
 			// Upload the file
 			const uploadResponse = await client.uploadFile(selectedFile, currentJobId)
 
-			if (!uploadResponse || !uploadResponse.data.jobId) {
-				throw new Error(MESSAGE_TEMPLATES.upload.failed)
+			// Enhanced error handling for upload responses
+			if (!uploadResponse || !uploadResponse.success) {
+				// Check if we have detailed error information
+				const errorMsg = uploadResponse?.data?.message || MESSAGE_TEMPLATES.upload.failed;
+				throw new Error(errorMsg);
+			}
+			
+			// Check for expected response data
+			if (!uploadResponse.data || (!uploadResponse.data.jobId && !uploadResponse.data.job_id)) {
+				// Log the response for debugging but try to continue anyway
+				debugError('Upload response missing expected job_id', uploadResponse);
+				
+				// Try to continue with our locally generated jobId
+				debugLog('Continuing with locally generated job ID:', currentJobId);
+			}
+			
+			// Get the job ID from the response if available, otherwise use our local one
+			const responseJobId = uploadResponse.data.jobId || uploadResponse.data.job_id || currentJobId;
+			
+			// Update the job ID if needed
+			if (responseJobId !== currentJobId) {
+				setJobId(responseJobId);
+				debugLog('Updated job ID from response:', responseJobId);
 			}
 
 			setUploadProgress(100)
@@ -323,27 +366,51 @@ export function ConversionFlow({
 			showInfo(MESSAGE_TEMPLATES.conversion.started)
 
 			const sourceFormat = getFileExtension(selectedFile.name)
-			const convertResponse = await client.convertFile(currentJobId, targetFormat, sourceFormat)
+			const convertResponse = await client.convertFile(responseJobId, targetFormat, sourceFormat)
 
-			if (!convertResponse || !convertResponse.data.job_id) {
-				throw new Error(MESSAGE_TEMPLATES.conversion.failed)
+			if (!convertResponse || !convertResponse.success) {
+				const errorMsg = convertResponse?.data?.message || MESSAGE_TEMPLATES.conversion.failed;
+				throw new Error(errorMsg);
 			}
+			
+			// Extract the job ID from the conversion response, or use what we have
+			const conversionJobId = convertResponse.data.job_id || responseJobId;
 
 			// Initialize conversion in store
-			startConversion(currentJobId, selectedFile.name, targetFormat, selectedFile.size)
+			startConversion(conversionJobId, selectedFile.name, targetFormat, selectedFile.size)
 
 			// Start polling for status
 			const { startPolling } = await import('@/lib/services/jobPollingService')
 
-			stopPollingRef.current = startPolling(currentJobId, {
+			stopPollingRef.current = startPolling(conversionJobId, {
 				onProgress: (progress) => {
 					updateConversionProgress(progress)
 				},
-				onCompleted: (downloadToken, downloadUrl) => {
-					setIsConverting(false)
-					setCurrentStep('download')
-					completeConversion(downloadUrl)
-					showSuccess(MESSAGE_TEMPLATES.conversion.complete)
+				onCompleted: async (jobId) => {
+					// Job is complete, now get the download token using the download service
+					try {
+						// Get download token
+						const downloadResult = await downloadService.getDownloadToken(jobId)
+						
+						if (downloadResult.success && downloadResult.token) {
+							// Update conversion state with the download token and URL
+							completeConversion(downloadResult.url || '', downloadResult.token)
+							
+							// Transition to download state
+							setIsConverting(false)
+							setCurrentStep('download')
+							showSuccess(MESSAGE_TEMPLATES.conversion.complete)
+						} else {
+							// Handle token retrieval failure
+							throw new Error(downloadResult.error || 'Failed to get download token')
+						}
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error)
+						setIsConverting(false)
+						setError(errorMessage)
+						setConversionError(errorMessage)
+						showError(errorMessage || 'Failed to prepare download')
+					}
 				},
 				onFailed: (errorMessage) => {
 					setIsConverting(false)
@@ -358,6 +425,12 @@ export function ConversionFlow({
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			setError(errorMessage)
 			showError(errorMessage)
+			
+			// Log detailed error in development mode
+			if (import.meta.env.DEV) {
+				console.error('Conversion flow error:', error);
+				setDetailedError(error);
+			}
 		}
 	})
 
@@ -451,13 +524,7 @@ export function ConversionFlow({
 								
 								<div className="mt-3 flex justify-center">
 									<button
-										onClick={() => {
-											// Force session initialization
-											sessionManager.initSession(true).catch(err => {
-												debugError('Error during forced session init:', err);
-												setDetailedError(err);
-											});
-										}}
+										onClick={forceSessionInit}
 										className="rounded bg-blue-500 px-2 py-1 text-xs text-white"
 										disabled={isInitializing}
 									>
@@ -499,6 +566,53 @@ export function ConversionFlow({
 								>
 									{isInitializing ? 'Initializing...' : 'Convert Now'}
 								</Button>
+								
+								{/* Debug button in development mode */}
+								{import.meta.env.DEV && (
+									<div className="mt-4 flex justify-center">
+										<button 
+											onClick={toggleDebugInfo} 
+											className="text-xs text-blue-600 underline"
+										>
+											{showDebugInfo ? 'Hide Debug Info' : 'Show Session Debug Info'}
+										</button>
+										
+										{showDebugInfo && (
+											<div className="absolute mt-8 w-full max-w-md rounded-md bg-gray-100 p-3 shadow-lg">
+												<h4 className="mb-2 text-sm font-semibold">Session Debug Info:</h4>
+												<div className="mb-2 text-xs text-gray-700">
+													<p>
+														<strong>Session Initialized:</strong> {String(isSessionInitialized)}
+													</p>
+													<p>
+														<strong>Session Initializing:</strong> {String(isInitializing)}
+													</p>
+													<p>
+														<strong>Has CSRF Token:</strong> {String(sessionManager.hasCsrfToken())}
+													</p>
+													<p>
+														<strong>CSRF Token in Store:</strong> {String(sessionManager.checkTokenInStore())}
+													</p>
+												</div>
+												<div className="flex justify-center">
+													<button
+														onClick={forceSessionInit}
+														className="rounded bg-blue-500 px-2 py-1 text-xs text-white"
+														disabled={isInitializing}
+													>
+														{isInitializing ? 'Initializing...' : 'Force Session Init'}
+													</button>
+													<button
+														onClick={() => setShowDebugInfo(false)}
+														className="ml-2 rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+													>
+														Close
+													</button>
+												</div>
+											</div>
+										)}
+									</div>
+								)}
 							</>
 						) : (
 							<div className="rounded-lg bg-amber-50 p-4 text-center">
@@ -558,18 +672,14 @@ export function ConversionFlow({
 						{selectedFile?.name} has been converted to {targetFormat.toUpperCase()}
 					</p>
 				</div>
-				<div className="flex justify-center">
-					<Button
-						className="w-full max-w-xs"
-						onClick={() => {
-							if (conversionState.resultUrl) {
-								window.open(conversionState.resultUrl, '_blank')
-							}
-						}}
-					>
-						Download File
-					</Button>
-				</div>
+				<DownloadManager 
+					jobId={conversionState.jobId as string} 
+					initialToken={conversionState.downloadToken}
+					onDownloadComplete={() => {
+						// After successful download, show the convert another button
+						showSuccess('File downloaded successfully')
+					}}
+				/>
 				<div className="flex justify-center">
 					<Button
 						variant="outline"
@@ -580,7 +690,7 @@ export function ConversionFlow({
 					</Button>
 				</div>
 			</div>
-		)
+		)	
 	}
 
 	return (

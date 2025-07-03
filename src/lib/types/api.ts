@@ -281,6 +281,11 @@ export interface ApiClientInterface {
 	closeSession(): Promise<ApiResponse<SessionCloseResponse>>
 	getSupportedFormats(): Promise<ApiResponse<FormatsResponse>>
 	getDownloadUrl(downloadToken: string): string
+	// Direct access to low-level API client
+	apiClient?: {
+		getJobStatus: (jobId: string) => Promise<ApiResponse<JobStatusResponse>>;
+		[key: string]: any;
+	}
 }
 
 // ==========================================

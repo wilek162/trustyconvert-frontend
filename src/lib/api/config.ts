@@ -113,14 +113,14 @@ const getFrontendDomain = () => {
  * API endpoints according to the API Integration Guide
  */
 export const apiEndpoints = {
-	sessionInit: '/session/init',
-	sessionClose: '/session/close',
-	upload: '/upload',
-	convert: '/convert',
-	jobStatus: '/job_status',
-	downloadToken: '/download_token',
-	download: '/download',
-	formats: '/convert/formats'
+	sessionInit: 'session/init',
+	sessionClose: 'session/close',
+	upload: 'upload',
+	convert: 'convert',
+	jobStatus: 'job_status',
+	downloadToken: 'download_token',
+	download: 'download',
+	formats: 'convert/formats'
 }
 
 // Get API URL from environment variables

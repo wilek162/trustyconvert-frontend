@@ -764,7 +764,9 @@ async function getSupportedFormats(): Promise<ApiResponse<FormatsResponse>> {
 function getDownloadUrl(token: string): string {
 	// Ensure the token is properly encoded
 	const encodedToken = encodeURIComponent(token)
-	return `${API_BASE_URL}${apiConfig.endpoints.download}?token=${encodedToken}`
+	// Ensure proper URL joining with forward slash
+	const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`
+	return `${baseUrl}${apiConfig.endpoints.download}?token=${encodedToken}`
 }
 
 /**

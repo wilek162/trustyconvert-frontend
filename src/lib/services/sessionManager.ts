@@ -105,8 +105,7 @@ class SessionManager {
 		// Return both header formats to ensure compatibility with different server implementations
 		return {
 			[csrfHeaderName]: token,
-			'X-CSRF-Token': token, // Always include the standard header
-		}
+				}
 	}
 
 	/**
@@ -127,8 +126,11 @@ class SessionManager {
 		lastInitError: unknown
 		csrfTokenInStore: boolean
 	} {
+		// Get the latest state from the session store to ensure accuracy
+		const storeState = sessionStore.get();
+		
 		return {
-			sessionInitialized: sessionStore.get().initialized,
+			sessionInitialized: storeState.initialized,
 			hasCsrfToken: this.hasCsrfToken(),
 			isInitializing,
 			lastInitAttempt: lastInitAttempt ? new Date(lastInitAttempt).toISOString() : null,
@@ -296,6 +298,8 @@ class SessionManager {
 							if (csrfToken) {
 								debugLog('Found CSRF token in session init response');
 								this.setCsrfToken(csrfToken);
+								success = true;
+								break;
 							}
 						}
 					}
@@ -324,7 +328,7 @@ class SessionManager {
 							
 							for (const cookie of cookies) {
 								const [name, value] = cookie.trim().split('=');
-								if (csrfCookieNames.includes(name) && value) {
+								if (csrfCookieNames.includes(name.toLowerCase()) && value) {
 									debugLog(`Found CSRF token in cookies (${name})`);
 									this.setCsrfToken(value);
 									success = true;
@@ -341,7 +345,7 @@ class SessionManager {
 							
 							for (const cookie of cookies) {
 								const [name, value] = cookie.trim().split('=');
-								if (sessionCookieNames.includes(name) && value) {
+								if (sessionCookieNames.includes(name.toLowerCase()) && value) {
 									debugLog(`Using session cookie value as CSRF token (${name})`);
 									this.setCsrfToken(value);
 									success = true;
@@ -393,6 +397,8 @@ class SessionManager {
 					console.log('Current session state:', this.getSessionState())
 				}
 
+				// Make sure the session store is marked as not initialized
+				sessionStore.setKey('initialized', false)
 				return false
 			}
 
@@ -402,6 +408,13 @@ class SessionManager {
 
 			// Mark session as initialized in store
 			sessionStore.setKey('initialized', true)
+
+			// Double-check for consistency
+			const state = this.getSessionState()
+			if (!state.sessionInitialized) {
+				debugLog('Warning: Session state inconsistency detected - fixing')
+				sessionStore.setKey('initialized', true)
+			}
 
 			return true
 		} catch (error) {
@@ -413,6 +426,8 @@ class SessionManager {
 				console.log('Current session state:', this.getSessionState())
 			}
 
+			// Make sure the session store is marked as not initialized
+			sessionStore.setKey('initialized', false)
 			return false
 		} finally {
 			completeInit()
@@ -427,7 +442,19 @@ class SessionManager {
 		try {
 			// First check if we have a token in the store AND session is initialized
 			const storeState = sessionStore.get()
-			if (this.checkTokenInStore() && storeState.initialized) {
+			
+			// Check if there's an inconsistency between the store and the token
+			const hasTokenInStore = this.checkTokenInStore();
+			const isStoreInitialized = storeState.initialized;
+			
+			// Fix inconsistent state: if we have a token but session is not marked as initialized
+			if (hasTokenInStore && !isStoreInitialized) {
+				debugLog('Session state inconsistency detected: has token but not marked as initialized - fixing');
+				sessionStore.setKey('initialized', true);
+			}
+			
+			// After potential fix, check again
+			if (this.checkTokenInStore() && sessionStore.get().initialized) {
 				debugLog('Session already initialized in ensureSession - no API call needed')
 
 				if (import.meta.env.DEV) {
@@ -476,6 +503,12 @@ class SessionManager {
 						'Session initialization reported failure but token exists - considering session valid'
 					)
 					sessionStore.setKey('initialized', true)
+					
+					// Double-check consistency again
+					if (!sessionStore.get().initialized) {
+						debugError('Failed to update session initialization status in store');
+					}
+					
 					return true
 				}
 			}

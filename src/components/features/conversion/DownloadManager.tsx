@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { getJob } from '@/lib/stores/upload'
-import type { FileUploadData } from '@/lib/stores/upload'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { Loader2, DownloadCloud, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
-import downloadService, { downloadFile, getExistingToken } from '@/lib/services/downloadService'
+import downloadService from '@/lib/services/downloadService'
 import client from '@/lib/api/client'
+import { showError } from '@/lib/utils/messageUtils'
 
 interface DownloadManagerProps {
 	jobId: string
@@ -21,6 +21,7 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 	const [isDownloading, setIsDownloading] = useState(false)
 	const [downloadComplete, setDownloadComplete] = useState(false)
 	const [retryCount, setRetryCount] = useState(0)
+	const [downloadProgress, setDownloadProgress] = useState(0)
 
 	// On mount, check if we have a token or need to fetch one
 	useEffect(() => {
@@ -51,14 +52,7 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 
 		try {
 			// Use the download service to get a token without auto-downloading
-			const result = await downloadService.downloadFile({
-				jobId,
-				autoDownload: false,
-				onError: (errorMessage) => {
-					setError(errorMessage)
-					setIsLoading(false)
-				}
-			})
+			const result = await downloadService.getDownloadToken(jobId)
 
 			if (!result.success) {
 				throw new Error(result.error || 'Failed to get download token')
@@ -84,25 +78,21 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 	const handleDownload = async () => {
 		if (!downloadToken) return
 		setError(null)
-
+		setDownloadProgress(0)
 		setIsDownloading(true)
 
 		try {
-			const result = await downloadFile({
-				jobId,
-				autoDownload: true,
-				onSuccess: () => {
-					setDownloadComplete(true)
-					setDownloadStarted(true)
-					if (onDownloadComplete) onDownloadComplete()
-				},
-				onError: (errorMessage) => {
-					setError(errorMessage)
-				}
-			})
-
-			setDownloadStarted(result.success)
-			setIsDownloading(false)
+			// Use the new initiateDownload method which follows the download_guide.md approach
+			const downloadSuccess = await downloadService.initiateDownload(downloadToken)
+			
+			if (downloadSuccess) {
+				setDownloadComplete(true)
+				setDownloadStarted(true)
+				setIsDownloading(false)
+				if (onDownloadComplete) onDownloadComplete()
+			} else {
+				throw new Error('Failed to initiate download')
+			}
 		} catch (error) {
 			setIsDownloading(false)
 			const errorMessage = error instanceof Error ? error.message : 'Download failed'
@@ -133,16 +123,27 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 			</div>
 
 			{/* Loading states */}
-			{(isLoading || isDownloading) && (
+			{isLoading && (
 				<div className="flex flex-col items-center justify-center space-y-4 py-6">
 					<div className="animate-spin">
 						<Loader2 className="h-10 w-10 text-blue-600" />
 					</div>
-					<p className="font-medium text-gray-700">
-						{isLoading ? 'Preparing your download' : 'Downloading file...'}
-					</p>
+					<p className="font-medium text-gray-700">Preparing your download</p>
 					<p className="max-w-md text-center text-sm text-gray-500">
 						This may take a few moments depending on the file size
+					</p>
+				</div>
+			)}
+			
+			{/* Downloading state */}
+			{isDownloading && (
+				<div className="flex flex-col items-center justify-center space-y-4 py-6">
+					<div className="animate-spin">
+						<Loader2 className="h-10 w-10 text-blue-600" />
+					</div>
+					<p className="font-medium text-gray-700">Starting download...</p>
+					<p className="max-w-md text-center text-sm text-gray-500">
+						Your download should begin automatically
 					</p>
 				</div>
 			)}
@@ -173,7 +174,7 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 			)}
 
 			{/* Download button */}
-			{downloadUrl && !isLoading && !isDownloading && !error && (
+			{downloadUrl && !isLoading && !isDownloading && !error && !downloadComplete && (
 				<div className="flex justify-center">
 					<button
 						onClick={handleDownload}
@@ -193,9 +194,9 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 						<p className="font-medium">Download started!</p>
 					</div>
 					<p className="text-sm text-gray-600">
-						If your download didn't begin,{' '}
+						If your download didn't start automatically,{' '}
 						<button onClick={handleDownload} className="text-blue-600 hover:underline">
-							click here to try again
+							click here to download again
 						</button>
 					</p>
 				</div>
