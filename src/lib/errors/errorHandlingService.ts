@@ -17,6 +17,7 @@ import {
 } from './error-types'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import sessionManager from '@/lib/services/sessionManager'
+import { isRetryableError, RETRY_STRATEGIES } from '@/lib/utils/retry'
 
 // Error context interface
 export interface ErrorContext {
@@ -25,6 +26,7 @@ export interface ErrorContext {
   recoverable?: boolean
   retryCount?: number
   maxRetries?: number
+  retryStrategy?: keyof typeof RETRY_STRATEGIES
   [key: string]: any
 }
 
@@ -86,17 +88,48 @@ class ErrorHandlingService {
     // Log the error
     this.logError(errorObj, context)
 
+    // Check if the error is retryable
+    const isRetryable = this.isErrorRetryable(errorObj, context)
+    
+    // Determine retry limits based on strategy or defaults
+    const retryStrategy = context.retryStrategy || 'API_REQUEST'
+    const maxRetries = context.maxRetries || RETRY_STRATEGIES[retryStrategy].maxRetries
+    const retryCount = context.retryCount || 0
+    
+    // Don't attempt recovery if max retries reached
+    if (retryCount >= maxRetries) {
+      debugLog(`Recovery aborted: max retries (${maxRetries}) reached`)
+      
+      // Call the onExhausted handler if provided
+      if (options.retryAction && context.onExhausted) {
+        try {
+          await context.onExhausted(errorObj, retryCount)
+        } catch (e) {
+          debugError('Error in onExhausted handler:', e)
+        }
+      }
+      
+      return {
+        recovered: false,
+        message: this.formatErrorForUser(errorObj)
+      }
+    }
+
     // Try to recover from the error
     let recovered = false
     let retryResult
     
-    if (context.recoverable !== false) {
+    if (context.recoverable !== false && isRetryable) {
       const recoveryStrategy = this.recoveryStrategies.get(errorType)
       
       if (recoveryStrategy) {
         try {
-          debugLog(`Attempting to recover from ${errorType}`)
-          recovered = await recoveryStrategy.call(this, errorObj, context)
+          debugLog(`Attempting to recover from ${errorType} (attempt ${retryCount + 1}/${maxRetries})`)
+          recovered = await recoveryStrategy.call(this, errorObj, {
+            ...context,
+            retryCount,
+            maxRetries
+          })
           
           // If recovery was successful and we have a retry action, execute it
           if (recovered && options.retryAction) {
@@ -140,6 +173,28 @@ class ErrorHandlingService {
       message: userMessage,
       retryResult
     }
+  }
+
+  /**
+   * Determine if an error is retryable based on type and context
+   */
+  private isErrorRetryable(error: Error, context: ErrorContext): boolean {
+    // If explicitly marked as not recoverable, don't retry
+    if (context.recoverable === false) {
+      return false
+    }
+    
+    // Check if we've reached max retries
+    const retryCount = context.retryCount || 0
+    const maxRetries = context.maxRetries || 
+      RETRY_STRATEGIES[context.retryStrategy as keyof typeof RETRY_STRATEGIES || 'API_REQUEST'].maxRetries
+    
+    if (retryCount >= maxRetries) {
+      return false
+    }
+    
+    // Use the utility function from retry.ts to determine if error is retryable
+    return isRetryableError(error)
   }
 
   /**
@@ -242,7 +297,8 @@ class ErrorHandlingService {
     
     // Get retry count from context or default to 0
     const retryCount = context.retryCount || 0
-    const maxRetries = context.maxRetries || 3
+    const retryStrategy = context.retryStrategy || 'API_REQUEST'
+    const maxRetries = context.maxRetries || RETRY_STRATEGIES[retryStrategy].maxRetries
     
     // Don't retry if we've reached the max retries
     if (retryCount >= maxRetries) {
@@ -251,13 +307,17 @@ class ErrorHandlingService {
     }
     
     try {
-      // Implement exponential backoff
-      const backoffTime = Math.pow(2, retryCount) * 500 // 500ms, 1s, 2s, 4s, etc.
+      // Get backoff configuration from the retry strategy
+      const strategyConfig = RETRY_STRATEGIES[retryStrategy]
       
-      debugLog(`Network recovery: waiting ${backoffTime}ms before retry ${retryCount + 1}/${maxRetries}`)
+      // Implement exponential backoff
+      const backoffTime = Math.pow(strategyConfig.backoffFactor, retryCount) * strategyConfig.initialDelay
+      const cappedBackoff = Math.min(backoffTime, strategyConfig.maxDelay)
+      
+      debugLog(`Network recovery: waiting ${cappedBackoff}ms before retry ${retryCount + 1}/${maxRetries}`)
       
       // Wait for backoff time
-      await new Promise(resolve => setTimeout(resolve, backoffTime))
+      await new Promise(resolve => setTimeout(resolve, cappedBackoff))
       
       // We don't actually retry here - we just prepare for the retry
       // The actual retry will be done by the caller if we return true

@@ -26,7 +26,7 @@ import {
 } from '@/lib/stores/conversion'
 
 // Import error handling and messaging utilities
-import { withErrorHandling } from '@/lib/utils/errorHandling'
+import { withErrorHandling } from '@/lib/errors/errorHandlingService'
 import { showSuccess, showError, showInfo, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
 import { DownloadManager } from './DownloadManager'
 

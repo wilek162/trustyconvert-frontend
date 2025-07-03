@@ -9,7 +9,7 @@ import client  from '@/lib/api/client'
 import { useErrorHandler } from '@/lib/hooks/useErrorHandler'
 import type { JobStatusResponse } from '@/lib/types/api'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { handleError } from '@/lib/utils/errorHandling'
+import { handleError } from '@/lib/errors/errorHandlingService'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
 

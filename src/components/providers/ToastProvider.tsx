@@ -1,12 +1,10 @@
 import * as React from 'react'
 import { Toaster } from 'sonner'
 
-import { ToastProvider as ToastProviderUI } from '@/components/ui/toast'
-
 export function ToastProvider({ children }: { children: React.ReactNode }) {
 	return (
 		<>
-			<ToastProviderUI>{children}</ToastProviderUI>
+			{children}
 			<Toaster
 				position="top-right"
 				toastOptions={{

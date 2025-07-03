@@ -9,10 +9,19 @@ import { debugLog, debugError } from '@/lib/utils/debug'
 import { 
 	conversionService, 
 	conversionStore, 
-	isConversionActive 
+	isConversionActive, 
+	updateConversionStatus, 
+	startConversion, 
+	completeConversion, 
+	setConversionError 
 } from '@/lib/stores/conversion'
 import { useStore } from './useStore'
 import type { ConversionStatus } from '@/lib/types/api'
+import apiClient from '@/lib/api/client'
+import { MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { withErrorRetry } from '@/lib/utils/errorRetry'
+import { ConversionError, NetworkError, SessionError } from '@/lib/errors/error-types'
+import { useConversionStore } from '@/lib/stores/conversion'
 
 const POLLING_INTERVAL = 2000 // 2 seconds
 
@@ -42,6 +51,12 @@ const debug = {
 	}
 }
 
+export interface FileConversionOptions {
+	onSuccess?: (jobId: string) => void
+	onError?: (error: Error) => void
+	onProgress?: (progress: number) => void
+}
+
 /**
  * Hook for managing file conversion flow
  * Handles file upload, format selection, conversion status, and download
@@ -53,6 +68,10 @@ export function useFileConversion() {
 	const [format, setFormat] = useState<string>('')
 	const [error, setError] = useState<Error | null>(null)
 	const [isPosting, setIsPosting] = useState(false)
+	const [isConverting, setIsConverting] = useState(false)
+	const [progress, setProgress] = useState(0)
+	const { success, error: toastError } = useToast()
+	const { setConversionJob, updateConversionStatus } = useConversionStore()
 	
 	// Get conversion state from store
 	const conversionState = useStore(conversionStore)
@@ -65,7 +84,6 @@ export function useFileConversion() {
 	// Use status polling hook
 	const {
 		status,
-		progress,
 		downloadUrl,
 		fileName,
 		fileSize,
@@ -162,6 +180,184 @@ export function useFileConversion() {
 		queryClient.removeQueries({ queryKey: ['conversion-status'] })
 	}, [queryClient])
 
+	/**
+	 * Convert a file to the specified format
+	 */
+	const convertFile = useCallback(
+		async (file: File, targetFormat: string, options: FileConversionOptions = {}) => {
+			if (!file || !targetFormat) {
+				toastError('Missing file or target format')
+				return null
+			}
+
+			setIsConverting(true)
+			setProgress(0)
+
+			try {
+				// Use the error retry system for the conversion process
+				const result = await withErrorRetry(
+					async () => {
+						// Show initial progress
+						setProgress(10)
+						updateConversionStatus('uploading', { progress: 10 })
+
+						// Step 1: Upload the file
+						const uploadResult = await apiClient.uploadFile(file)
+						if (!uploadResult.success) {
+							throw new Error('File upload failed')
+						}
+
+						// Update progress
+						setProgress(40)
+						updateConversionStatus('converting', { progress: 40 })
+						
+						// Get the job ID from the upload response
+						const jobId = uploadResult.data.job_id
+
+						// Start tracking this conversion
+						startConversion(
+							jobId,
+							file.name,
+							targetFormat,
+							file.size
+						)
+
+						// Step 2: Start the conversion
+						const conversionResult = await apiClient.convertFile(
+							jobId,
+							targetFormat,
+							file.name.split('.').pop()
+						)
+
+						if (!conversionResult.success) {
+							throw new ConversionError(
+								'Conversion failed',
+								jobId,
+								'failed'
+							)
+						}
+
+						// Update progress
+						setProgress(90)
+						updateConversionStatus('completed', { progress: 90 })
+
+						// Get download token if available
+						let downloadToken = conversionResult.data.download_token
+						if (!downloadToken) {
+							try {
+								const tokenResult = await apiClient.getDownloadToken(jobId)
+								if (tokenResult.success) {
+									downloadToken = tokenResult.data.download_token
+								}
+							} catch (err) {
+								debugError('Error getting download token:', err)
+								// Continue without token - we'll try again when downloading
+							}
+						}
+
+						// Get download URL
+						const downloadUrl = downloadToken 
+							? apiClient.getDownloadUrl(downloadToken)
+							: '';
+
+						// Complete the conversion
+						completeConversion(downloadUrl, downloadToken)
+
+						// Show success message
+						success(MESSAGE_TEMPLATES.conversion.complete)
+						
+						// Call success callback
+						if (options.onSuccess) {
+							options.onSuccess(jobId)
+						}
+
+						// Complete progress
+						setProgress(100)
+						
+						return jobId
+					},
+					{
+						component: 'useFileConversion',
+						action: 'convertFile',
+						retryStrategy: 'API_REQUEST',
+						showToast: true,
+						rethrow: false,
+						maxRetries: 2, // Limit retries for user-facing operations
+						
+						// Additional context for error handling
+						fileType: file.type,
+						fileSize: file.size,
+						targetFormat
+					}
+				)
+				
+				return result
+			} catch (error) {
+				// This should rarely be reached since we set rethrow: false
+				debugError('Unhandled error in convertFile:', error)
+				
+				// Update status to failed
+				setConversionError(error instanceof Error ? error.message : 'Unknown error')
+				
+				// Call error callback if provided
+				if (options.onError && error instanceof Error) {
+					options.onError(error)
+				}
+				
+				return null
+			} finally {
+				setIsConverting(false)
+			}
+		},
+		[success, toastError]
+	)
+
+	/**
+	 * Check the status of a conversion job
+	 */
+	const checkConversionStatus = useCallback(
+		async (jobId: string) => {
+			if (!jobId) {
+				return null
+			}
+
+			try {
+				const result = await apiClient.getConversionStatus(jobId)
+				if (result.success) {
+					return result.data
+				}
+				return null
+			} catch (error) {
+				debugError('Error checking conversion status:', error)
+				return null
+			}
+		},
+		[]
+	)
+
+	/**
+	 * Get a download token for a completed conversion
+	 */
+	const getDownloadToken = useCallback(
+		async (jobId: string) => {
+			if (!jobId) {
+				return null
+			}
+
+			try {
+				const result = await apiClient.getDownloadToken(jobId)
+				if (result.success) {
+					return result.data.download_token
+				}
+				return null
+			} catch (error) {
+				debugError('Error getting download token:', error)
+				return null
+			}
+		},
+		[]
+	)
+
 	return {
 		file,
 		setFile,
@@ -182,7 +378,12 @@ export function useFileConversion() {
 		formats,
 		isLoadingFormats,
 		formatsError,
-		retryCount
+		retryCount,
+		convertFile,
+		checkConversionStatus,
+		getDownloadToken,
+		isConverting,
+		progress
 	}
 }
 
@@ -246,3 +447,5 @@ export function useConversionFlow() {
 		isLoading: fileConversion.isLoadingFormats
 	}
 }
+
+export default useFileConversion

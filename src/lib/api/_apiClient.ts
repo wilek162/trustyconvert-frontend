@@ -19,17 +19,12 @@ import type {
 	SessionCloseResponse,
 	FormatsResponse
 } from '@/lib/types/api'
-import {
-	NetworkError,
-	SessionError,
-	ValidationError,
-	handleError,
-	getErrorMessageTemplate
-} from '@/lib/utils/errorHandling'
+import { handleError } from '@/lib/errors/errorHandlingService'
+import { NetworkError, SessionError, ValidationError } from '@/lib/errors/error-types'
 import { apiConfig } from './config'
 import { withRetry, RETRY_STRATEGIES, isRetryableError } from '@/lib/utils/retry'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { formatMessage } from '@/lib/utils/messageUtils'
+import { formatMessage, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
 
 // Configuration
 const API_BASE_URL = apiConfig.baseUrl
@@ -598,7 +593,7 @@ async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<Uploa
 			success: false,
 			data: {
 				error: 'NetworkError',
-				message: getErrorMessageTemplate(error)
+				message: MESSAGE_TEMPLATES.generic.networkError
 			} as any
 		}
 	}
@@ -662,7 +657,7 @@ async function convertFile(
 			success: false,
 			data: {
 				error: error instanceof Error ? error.name : 'ConversionError',
-				message: getErrorMessageTemplate(error)
+				message: MESSAGE_TEMPLATES.conversion.failed
 			} as any
 		}
 	})
@@ -818,7 +813,7 @@ async function startConversion(file: File, targetFormat: string): Promise<ApiRes
 			success: false,
 			data: {
 				error: error instanceof Error ? error.name : 'ConversionError',
-				message: getErrorMessageTemplate(error),
+				message: MESSAGE_TEMPLATES.conversion.failed,
 				job_id: '' // Empty job ID for error case
 			} as any
 		};

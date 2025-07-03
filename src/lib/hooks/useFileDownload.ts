@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import  client  from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { handleError } from '@/lib/utils/errorHandling'
+import { handleError } from '@/lib/errors/errorHandlingService'
 import sessionManager from '@/lib/services/sessionManager'
 import type { DownloadProgress } from '@/lib/types/api'
 interface UseFileDownloadOptions {

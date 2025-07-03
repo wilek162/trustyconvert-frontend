@@ -15,6 +15,7 @@ type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface ToastOptions {
 	dismissible?: boolean
 	id?: string
+	duration?: number
 }
 
 interface ToastEvent extends CustomEvent {
@@ -35,12 +36,11 @@ export function ToastListener(): null {
 		const handleToastEvent = (event: Event): void => {
 			const toastEvent = event as ToastEvent
 			const { message, type, duration, options = {} } = toastEvent.detail
-			const { dismissible, id } = options
 
 			const toastOptions = {
-				duration,
-				id,
-				dismissible
+				duration: duration || 4000,
+				id: options.id,
+				dismissible: options.dismissible !== false
 			}
 
 			switch (type) {
@@ -55,7 +55,7 @@ export function ToastListener(): null {
 					break
 				case 'info':
 				default:
-					toast.info(message, toastOptions)
+					toast(message, toastOptions)
 					break
 			}
 		}
@@ -75,17 +75,12 @@ export function ToastListener(): null {
 
 /**
  * Utility function to show a toast from anywhere in the application
- *
- * @param message - Toast message to display
- * @param type - Toast type (success, error, warning, info)
- * @param duration - Display duration in milliseconds
- * @param options - Additional toast options
  */
 export function showToast(
 	message: string,
 	type: ToastType = 'info',
 	duration?: number,
-	options?: ToastOptions
+	options?: Omit<ToastOptions, 'duration'>
 ): void {
 	window.dispatchEvent(
 		new CustomEvent('toast:show', {
