@@ -20,7 +20,6 @@ import { useAtomStore } from '@/lib/hooks/useStore'
 import {
 	conversionStore,
 	startConversion,
-	updateConversionProgress,
 	completeConversion,
 	setConversionError,
 	resetConversion
@@ -383,9 +382,6 @@ export function ConversionFlow({
 			const { startPolling } = await import('@/lib/services/jobPollingService')
 
 			stopPollingRef.current = startPolling(conversionJobId, {
-				onProgress: (progress) => {
-					updateConversionProgress(progress)
-				},
 				onCompleted: async (jobId) => {
 					// Job is complete, now get the download token using the download service
 					try {
@@ -417,6 +413,9 @@ export function ConversionFlow({
 					setError(errorMessage)
 					setConversionError(errorMessage)
 					showError(errorMessage || MESSAGE_TEMPLATES.conversion.failed)
+				},
+				onStatusChange: (status) => {
+					debugLog(`Conversion status update: ${status}`)
 				}
 			})
 		} catch (error) {
@@ -648,19 +647,22 @@ export function ConversionFlow({
 						{selectedFile?.name} to {targetFormat.toUpperCase()}
 					</p>
 				</div>
-				<Progress value={conversionState.progress} className="h-2 w-full" />
-				<div className="flex items-center justify-between">
-					<p className="text-sm text-gray-600">Converting format...</p>
-					<p className="text-sm font-medium">{Math.round(conversionState.progress)}%</p>
+				
+				{/* Spinning animation instead of progress bar */}
+				<div className="flex justify-center py-8">
+					<div className="h-12 w-12 animate-spin rounded-full border-4 border-trustTeal border-t-transparent"></div>
 				</div>
-				{conversionState.progress > 0 && conversionState.progress < 100 && (
-					<div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">
-						<p>
-							Your file is being processed securely. This may take a few moments depending on file
-							size.
-						</p>
-					</div>
-				)}
+				
+				<div className="text-center">
+					<p className="text-sm text-gray-600">Converting your file securely...</p>
+					<p className="mt-2 text-xs text-gray-500">This may take a moment depending on file size.</p>
+				</div>
+				
+				<div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">
+					<p>
+						Your file is being processed securely. Please don't close this window.
+					</p>
+				</div>
 			</div>
 		)
 	} else if (currentStep === 'download') {

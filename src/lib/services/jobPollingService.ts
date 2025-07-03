@@ -1,7 +1,7 @@
 /**
  * Job Polling Service
  *
- * A centralized service for polling job status with proper cleanup and error handling.
+ * A simplified service for polling job status with proper cleanup and error handling.
  * This service ensures that we don't have multiple polling intervals for the same job
  * and that polling is properly cleaned up when no longer needed.
  */
@@ -9,7 +9,7 @@
 import { debugLog, debugError } from '@/lib/utils/debug'
 import client from '@/lib/api/client'
 import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
-import { updateJobStatus, updateJobProgress } from '@/lib/stores/upload'
+import { updateJobStatus } from '@/lib/stores/upload'
 import type { JobStatus as ApiJobStatus } from '@/lib/types/api'
 
 // Map API job status to upload store job status
@@ -34,30 +34,22 @@ export function mapApiStatusToUploadStatus(
 	}
 }
 
-// Polling intervals configuration
-const DEFAULT_POLLING_INTERVAL = 2000 // 2 seconds
-const MAX_POLLING_INTERVAL = 10000 // 10 seconds
+// Polling configuration
+const POLLING_INTERVAL = 1000 // Poll every 1 second
 const MAX_POLLING_DURATION = 10 * 60 * 1000 // 10 minutes
-const BACKOFF_FACTOR = 1.5 // Increase polling interval by 50% on each error
 const MAX_CONSECUTIVE_ERRORS = 5 // Maximum number of consecutive errors before stopping polling
-const MAX_TOTAL_ERRORS = 15 // Maximum total errors before stopping polling
 
 // Active polling jobs
 interface PollingJob {
 	jobId: string
 	intervalId: NodeJS.Timeout
 	startTime: number
-	currentInterval: number
-	errorCount: number
 	consecutiveErrorCount: number
-	totalErrorCount: number
-	lastPollTime: number
-	isCompleting: boolean // Add flag to prevent multiple completion handling
+	isCompleting: boolean // Flag to prevent multiple completion handling
 	callbacks: {
-		onProgress?: (progress: number) => void
 		onCompleted?: (jobId: string) => void
 		onFailed?: (errorMessage: string) => void
-		onStatusChange?: (status: string, progress: number) => void
+		onStatusChange?: (status: string) => void
 	}
 }
 
@@ -69,18 +61,15 @@ const activePollingJobs = new Map<string, PollingJob>()
  *
  * @param jobId The job ID to poll for
  * @param callbacks Optional callbacks for status updates
- * @param initialInterval Optional initial polling interval (ms)
  * @returns A function to stop polling
  */
 export function startPolling(
 	jobId: string,
 	callbacks: {
-		onProgress?: (progress: number) => void
 		onCompleted?: (jobId: string) => void
 		onFailed?: (errorMessage: string) => void
-		onStatusChange?: (status: string, progress: number) => void
-	} = {},
-	initialInterval = DEFAULT_POLLING_INTERVAL
+		onStatusChange?: (status: string) => void
+	} = {}
 ): () => void {
 	// If already polling this job, update callbacks and return existing stop function
 	if (activePollingJobs.has(jobId)) {
@@ -92,12 +81,9 @@ export function startPolling(
 
 	// Create a new polling job
 	const startTime = Date.now()
-	let currentInterval = initialInterval
-	let errorCount = 0
 	let consecutiveErrorCount = 0
-	let totalErrorCount = 0
 
-	debugLog(`Starting polling for job ${jobId} with interval ${currentInterval}ms`)
+	debugLog(`Starting polling for job ${jobId} with interval ${POLLING_INTERVAL}ms`)
 
 	// Create the polling function
 	const pollFunction = async () => {
@@ -107,78 +93,47 @@ export function startPolling(
 		if (!job) return // Job was stopped
 		if (job.isCompleting) return // Skip if already handling completion
 
-		// Update last poll time
-		job.lastPollTime = now
-
 		// Check if we've been polling too long
 		if (now - startTime > MAX_POLLING_DURATION) {
 			debugError(`Polling for job ${jobId} exceeded maximum duration, stopping`)
 			stopPolling(jobId)
 			if (job.callbacks.onFailed) {
-				job.callbacks.onFailed('Polling timed out after maximum duration')
+				job.callbacks.onFailed('Conversion timed out. Please try again.')
 			}
 			return
 		}
 
 		try {
-			// Use a safe, centralized retry strategy with limits
-			let statusResponse = null;
-			
-			try {
-				// Properly typed function with retry
-				statusResponse = await withRetry(async () => {
-					// Call the API using the client
-					try {
-						// First try the high-level API client function
-						return await client.getConversionStatus(jobId);
-					} catch (err) {
-						// If that fails, try the low-level API client as fallback
-						if (client.apiClient && client.apiClient.getJobStatus) {
-							debugLog('Falling back to low-level API client for job status');
-							return await client.apiClient.getJobStatus(jobId);
-						}
-						throw err;
-					}
-				}, {
+			// Use withRetry for robust API calls
+			const statusResponse = await withRetry(
+				async () => client.getConversionStatus(jobId),
+				{
 					...RETRY_STRATEGIES.POLLING,
 					maxRetries: 2, // Limit retries for each poll attempt
 					onRetry: (error, attempt) => {
-						debugLog(`Retrying job status poll (attempt ${attempt}) for job ${jobId}`);
-					},
-					onExhausted: (error) => {
-						debugError(`All retries exhausted for job status poll: ${error instanceof Error ? error.message : 'Unknown error'}`);
+						debugLog(`Retrying job status poll (attempt ${attempt}) for job ${jobId}`)
 					}
-				});
-			} catch (apiError) {
-				debugError(`API error while polling job status:`, apiError);
-				throw apiError;
-			}
+				}
+			)
 
 			// Reset consecutive error count on success
 			consecutiveErrorCount = 0
 			
 			// Check if the response is valid
-			if (!statusResponse || !statusResponse.data) {
-				throw new Error('Invalid status response from server');
+			if (!statusResponse || !statusResponse.success || !statusResponse.data) {
+				throw new Error('Invalid status response from server')
 			}
 
 			// Extract the status information from the response
-			const status = statusResponse.data.status || 'unknown';
-			const progress = statusResponse.data.progress || 0;
+			const status = statusResponse.data.status || 'unknown'
 
 			// Update job status in store
 			const uploadStatus = mapApiStatusToUploadStatus(status as ApiJobStatus)
-			await updateJobStatus(jobId, uploadStatus)
-			await updateJobProgress(jobId, progress)
+			updateJobStatus(jobId, uploadStatus)
 
 			// Call status change callback
 			if (job.callbacks.onStatusChange) {
-				job.callbacks.onStatusChange(status, progress)
-			}
-
-			// Call progress callback
-			if (job.callbacks.onProgress) {
-				job.callbacks.onProgress(progress)
+				job.callbacks.onStatusChange(status)
 			}
 
 			// Handle job completion
@@ -198,8 +153,6 @@ export function startPolling(
 					} catch (callbackError) {
 						debugError(`Error in completion callback for job ${jobId}:`, callbackError)
 					}
-				} else {
-					debugLog(`No completion callback defined for job ${jobId}`)
 				}
 				
 				// Clean up the job
@@ -216,124 +169,64 @@ export function startPolling(
 					// Get error message from response if available
 					const errorMessage = statusResponse.data.error_message || 
 						statusResponse.data.message || 
-						'Conversion failed';
+						'Conversion failed. Please try again.'
 					
 					job.callbacks.onFailed(errorMessage)
 				}
 			}
 		} catch (error) {
-			// Increment error counts
-			errorCount++
+			// Increment consecutive error count
 			consecutiveErrorCount++
-			totalErrorCount++
 			
-			// Update the polling job with error counts
-			if (job) {
-				job.errorCount = errorCount;
-				job.consecutiveErrorCount = consecutiveErrorCount;
-				job.totalErrorCount = totalErrorCount;
-			}
-			
-			debugError(`Error polling job status for ${jobId} (error #${errorCount}):`, error)
+			debugError(`Error polling job status for ${jobId} (consecutive error #${consecutiveErrorCount}):`, error)
 
-			// Increase polling interval on error (with a maximum)
-			if (consecutiveErrorCount > 2) {
-				currentInterval = Math.min(currentInterval * BACKOFF_FACTOR, MAX_POLLING_INTERVAL)
-				debugLog(`Increased polling interval to ${currentInterval}ms for job ${jobId}`)
-
-				// Update the interval
-				if (job && job.intervalId) {
-					clearInterval(job.intervalId)
-					job.intervalId = setInterval(pollFunction, currentInterval)
-					job.currentInterval = currentInterval
-				}
-			}
-
-			// Stop polling after too many consecutive errors or total errors
-			if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS || totalErrorCount >= MAX_TOTAL_ERRORS) {
-				debugError(`Too many errors polling job ${jobId}, stopping. Consecutive: ${consecutiveErrorCount}, Total: ${totalErrorCount}`)
+			// If too many consecutive errors, stop polling
+			if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
+				debugError(`Too many consecutive errors for job ${jobId}, stopping polling`)
 				stopPolling(jobId)
+				
+				// Call failure callback
+				const job = activePollingJobs.get(jobId)
 				if (job && job.callbacks.onFailed) {
-					job.callbacks.onFailed('Failed to check conversion status after multiple attempts')
+					job.callbacks.onFailed('Connection issues detected. Please try again.')
 				}
 			}
 		}
 	}
 
-	// Start polling
-	const intervalId = setInterval(pollFunction, currentInterval)
+	// Create the interval
+	const intervalId = setInterval(pollFunction, POLLING_INTERVAL)
 
 	// Store the polling job
 	activePollingJobs.set(jobId, {
 		jobId,
 		intervalId,
 		startTime,
-		currentInterval,
-		errorCount,
 		consecutiveErrorCount,
-		totalErrorCount,
-		lastPollTime: Date.now(),
 		isCompleting: false,
 		callbacks
 	})
 
-	// Execute immediately for first status check
-	pollFunction()
+	// Execute first poll immediately
+	pollFunction().catch(error => {
+		debugError(`Error in initial poll for job ${jobId}:`, error)
+	})
 
-	// Also perform an immediate check for completed status
-	// This helps catch cases where the job completed between polling intervals
-	setTimeout(async () => {
-		try {
-			const job = activePollingJobs.get(jobId)
-			if (!job || job.isCompleting) return
-
-			// Use a try/catch to handle possible errors safely
-			try {
-				// Try to get job status using available methods
-				let statusResponse;
-				try {
-					statusResponse = await client.getConversionStatus(jobId);
-				} catch (err) {
-					// If that fails, try the low-level API client
-					if (client.apiClient && client.apiClient.getJobStatus) {
-						debugLog('Falling back to low-level API client for immediate status check');
-						statusResponse = await client.apiClient.getJobStatus(jobId);
-					} else {
-						throw err;
-					}
-				}
-				
-				if (statusResponse && 
-					statusResponse.data && 
-					statusResponse.data.status === 'completed') {
-					debugLog(`Immediate check found job ${jobId} already completed`)
-					// Trigger the poll function again to handle completion
-					pollFunction()
-				}
-			} catch (error) {
-				debugError(`Error in immediate status check for job ${jobId}:`, error)
-				// Don't increment error counters here, just log the error
-			}
-		} catch (error) {
-			debugError(`General error in immediate status check for job ${jobId}:`, error)
-		}
-	}, 100)
-
-	// Return a function to stop polling
+	// Return function to stop polling
 	return () => stopPolling(jobId)
 }
 
 /**
  * Stop polling for a job's status
- *
+ * 
  * @param jobId The job ID to stop polling for
  */
 export function stopPolling(jobId: string): void {
 	const job = activePollingJobs.get(jobId)
 	if (job) {
-		debugLog(`Stopping polling for job ${jobId}`)
 		clearInterval(job.intervalId)
 		activePollingJobs.delete(jobId)
+		debugLog(`Stopped polling for job ${jobId}`)
 	}
 }
 
@@ -341,36 +234,23 @@ export function stopPolling(jobId: string): void {
  * Stop all active polling jobs
  */
 export function stopAllPolling(): void {
-	debugLog(`Stopping all polling jobs (${activePollingJobs.size} active)`)
-	for (const job of activePollingJobs.values()) {
+	activePollingJobs.forEach((job) => {
 		clearInterval(job.intervalId)
-	}
+	})
 	activePollingJobs.clear()
+	debugLog(`Stopped all polling jobs (${activePollingJobs.size})`)
 }
 
 /**
  * Get information about active polling jobs
- * @returns Array of active polling job information
  */
 export function getActivePollingJobs(): Array<{
 	jobId: string
 	duration: number
-	interval: number
-	errorCount: number
 }> {
 	const now = Date.now()
 	return Array.from(activePollingJobs.values()).map((job) => ({
 		jobId: job.jobId,
-		duration: now - job.startTime,
-		interval: job.currentInterval,
-		errorCount: job.errorCount
+		duration: now - job.startTime
 	}))
-}
-
-export default {
-	startPolling,
-	stopPolling,
-	stopAllPolling,
-	getActivePollingJobs,
-	mapApiStatusToUploadStatus
 }
