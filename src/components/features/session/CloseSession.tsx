@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import client from '@/lib/api/client'
 import { showSuccess, showError, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { debugError } from '@/lib/utils/debug'
 
 interface CloseSessionProps {
 	variant?: 'default' | 'minimal' | 'text'
@@ -40,72 +41,78 @@ function CloseSession({ variant = 'default', className = '', onSessionClosed }: 
 					window.location.reload()
 				}, 1000)
 			} else {
-				throw new Error('Failed to close session')
+				throw new Error(response.data?.message || 'Failed to close session')
 			}
 		} catch (error) {
-			console.error('Session close error:', error)
+			debugError('Session close error:', error)
 			showError(MESSAGE_TEMPLATES.generic.error)
 		} finally {
 			setIsClosing(false)
 		}
 	}
 
-	if (variant === 'minimal') {
+	// Render different button variants
+	const renderButton = () => {
+		if (variant === 'minimal') {
+			return (
+				<button
+					onClick={handleCloseSession}
+					disabled={isClosing}
+					className={`text-xs text-muted-foreground hover:text-deepNavy ${className}`}
+				>
+					{isClosing ? 'Closing session...' : 'Close Session'}
+				</button>
+			)
+		}
+
+		if (variant === 'text') {
+			return (
+				<button
+					onClick={handleCloseSession}
+					disabled={isClosing}
+					className={`text-sm font-medium text-deepNavy hover:text-trustTeal ${className}`}
+				>
+					{isClosing ? 'Closing session...' : 'Close Session'}
+				</button>
+			)
+		}
+
+		// Default variant
 		return (
 			<button
 				onClick={handleCloseSession}
 				disabled={isClosing}
-				className={`text-xs text-muted-foreground hover:text-deepNavy ${className}`}
+				className={`flex items-center rounded-full border border-warningRed/30 bg-white px-3 py-1.5 text-xs font-medium text-warningRed transition-colors hover:bg-warningRed/10 disabled:opacity-50 ${className}`}
 			>
-				{isClosing ? 'Closing session...' : 'Close Session'}
+				{isClosing ? (
+					<>
+						<div className="mr-1.5 h-3 w-3 animate-spin rounded-full border border-warningRed border-t-transparent"></div>
+						Closing...
+					</>
+				) : (
+					<>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="mr-1.5 h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+							/>
+						</svg>
+						Close Session
+					</>
+				)}
 			</button>
 		)
 	}
 
-	if (variant === 'text') {
-		return (
-			<button
-				onClick={handleCloseSession}
-				disabled={isClosing}
-				className={`text-sm font-medium text-deepNavy hover:text-trustTeal ${className}`}
-			>
-				{isClosing ? 'Closing session...' : 'Close Session'}
-			</button>
-		)
-	}
-
-	return (
-		<button
-			onClick={handleCloseSession}
-			disabled={isClosing}
-			className={`flex items-center rounded-full border border-warningRed/30 bg-white px-3 py-1.5 text-xs font-medium text-warningRed transition-colors hover:bg-warningRed/10 disabled:opacity-50 ${className}`}
-		>
-			{isClosing ? (
-				<>
-					<div className="mr-1.5 h-3 w-3 animate-spin rounded-full border border-warningRed border-t-transparent"></div>
-					Closing...
-				</>
-			) : (
-				<>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						className="mr-1.5 h-3.5 w-3.5"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-							d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-						/>
-					</svg>
-					Close Session
-				</>
-			)}
-		</button>
-	)
+	return renderButton()
 }
 
 export default CloseSession

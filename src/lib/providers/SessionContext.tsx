@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import sessionManager from '@/lib/services/sessionManager'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import client from '@/lib/api/client'
 
 // Define the context type
 interface SessionContextType {
@@ -47,12 +46,12 @@ export const SessionContextProvider: React.FC<{ children: React.ReactNode }> = (
 
 		// Prevent multiple initialization attempts
 		if (hasAttemptedInitRef.current || isInitializing || sessionManager.isInitializationInProgress()) {
-			debugLog('Skipping duplicate session initialization attempt');
-			return;
+			debugLog('Skipping duplicate session initialization attempt')
+			return
 		}
 		
 		// Mark that we've attempted initialization
-		hasAttemptedInitRef.current = true;
+		hasAttemptedInitRef.current = true
 
 		// Auto-initialize session on application startup
 		debugLog('Auto-initializing session on application startup')
@@ -61,11 +60,11 @@ export const SessionContextProvider: React.FC<{ children: React.ReactNode }> = (
 		const initTimer = setTimeout(() => {
 			initSession().catch((error) => {
 				debugError('Failed to auto-initialize session', error)
-			});
-		}, 100);
+			})
+		}, 100)
 		
 		// Clean up the timer if the component unmounts
-		return () => clearTimeout(initTimer);
+		return () => clearTimeout(initTimer)
 	}, [])
 
 	// Update context when session state changes

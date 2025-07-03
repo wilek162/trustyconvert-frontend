@@ -21,6 +21,7 @@ interface ExtendedClient {
 	getConversionStatus(jobId: string): Promise<StandardResponse>
 	getDownloadToken(jobId: string): Promise<StandardResponse>
 	getDownloadUrl(token: string): string
+	closeSession(): Promise<StandardResponse>
 	_apiClient?: typeof _apiClient
 }
 
@@ -291,6 +292,35 @@ const client = {
 	 */
 	getDownloadUrl: (token: string): string => {
 		return _apiClient.getDownloadUrl(token);
+	},
+	
+	/**
+	 * Close the current session
+	 */
+	closeSession: async (): Promise<StandardResponse> => {
+		try {
+			// Check if we have a valid session
+			if (!sessionManager.hasCsrfToken()) {
+				debugLog('No valid session for closing - initializing session');
+				await sessionManager.ensureSession();
+			}
+
+			// Make the API call
+			const response = await _apiClient.closeSession();
+
+			// Handle CSRF errors by refreshing the token and retrying
+			if (isCsrfError(response)) {
+				await sessionManager.initSession(true);
+				const retryResponse = await _apiClient.closeSession();
+				return standardizeResponse(retryResponse.data);
+			}
+
+			return standardizeResponse(response.data);
+		} catch (error) {
+			throw handleError(error, {
+				context: { action: 'closeSession' }
+			});
+		}
 	},
 	
 	// Expose the low-level API client for direct access
