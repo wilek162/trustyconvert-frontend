@@ -11,7 +11,7 @@ interface ErrorState {
   timestamp: number;
 }
 
-export function useErrorHandler() {
+export function useErrorHandler(p0: string) {
   const [error, setError] = useState<ErrorState | null>(null);
 
   const handleError = useCallback((error: unknown) => {
