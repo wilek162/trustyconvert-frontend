@@ -6,6 +6,7 @@ import { apiConfig } from '@/lib/api/config'
 import sessionManager from '@/lib/services/sessionManager'
 import { addJob, updateJobStatus, updateJobProgress } from '@/lib/stores/upload'
 import type { FileUploadData, JobStatus } from '@/lib/stores/upload'
+import { FILE_UPLOAD } from '@/lib/config/constants'
 
 // Supported MIME types and their extensions
 const SUPPORTED_FORMATS = {
@@ -28,8 +29,8 @@ const SUPPORTED_FORMATS = {
 	'application/xml': ['.xml']
 }
 
-// Maximum file size (100MB)
-const MAX_FILE_SIZE = 100 * 1024 * 1024
+// Maximum file size from centralized config
+const MAX_FILE_SIZE = FILE_UPLOAD.MAX_SIZE
 
 interface FileUploadZoneProps {
 	onFileUploaded?: (jobId: string) => void

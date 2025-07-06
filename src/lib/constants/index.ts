@@ -9,7 +9,7 @@ export const API_CONFIG = {
 	MAX_RETRIES: 3,
 	RETRY_DELAY: 1000, // 1 second
 	UPLOAD_CHUNK_SIZE: 1024 * 1024, // 1MB
-	MAX_FILE_SIZE: 100 * 1024 * 1024, // 100MB
+	MAX_FILE_SIZE: 15 * 1024 * 1024, // 15MB
 	SUPPORTED_FORMATS: {
 		IMAGE: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
 		DOCUMENT: [
@@ -86,7 +86,7 @@ export const ERROR_MESSAGES = {
 		REQUIRED: 'This field is required.',
 		INVALID_EMAIL: 'Please enter a valid email address.',
 		INVALID_FILE_TYPE: 'Invalid file type. Please upload a supported file format.',
-		FILE_TOO_LARGE: 'File size exceeds the maximum limit of 100MB.'
+		FILE_TOO_LARGE: 'File size exceeds the maximum limit of 15MB.'
 	},
 	CONVERSION: {
 		FAILED: 'File conversion failed. Please try again.',

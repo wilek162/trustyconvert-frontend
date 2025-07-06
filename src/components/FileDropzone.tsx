@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { formatFileSize } from '@/lib/utils'
+import { FILE_UPLOAD } from '@/lib/config/constants'
 
 interface FileDropzoneProps {
 	onFileAccepted: (file: File) => void
@@ -13,7 +14,7 @@ interface FileDropzoneProps {
 export function FileDropzone({
 	onFileAccepted,
 	onFileRejected,
-	maxSize = 100 * 1024 * 1024, // 100MB default
+	maxSize = FILE_UPLOAD.MAX_SIZE, // 15MB default
 	accept = {
 		'application/pdf': ['.pdf'],
 		'image/jpeg': ['.jpg', '.jpeg'],

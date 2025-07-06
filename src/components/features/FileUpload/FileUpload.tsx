@@ -17,9 +17,10 @@ import { Progress } from '@/components/ui/progress'
 import { Label } from '@/components/ui/label'
 import { Download, FileUp, Loader2, RefreshCw, Upload, X } from 'lucide-react'
 import type { ConversionFormat } from '@/lib/types'
+import { FILE_UPLOAD } from '@/lib/config/constants'
 
 // Constants
-const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+const MAX_FILE_SIZE = FILE_UPLOAD.MAX_SIZE // 15MB
 const ACCEPTED_FILE_TYPES = {
 	'application/pdf': ['.pdf'],
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
@@ -75,7 +76,7 @@ const UPLOAD_CONFIG = {
 		'image/gif': ['.gif'],
 		'image/webp': ['.webp']
 	},
-	maxFileSize: 100 * 1024 * 1024 // 100MB
+	maxFileSize: FILE_UPLOAD.MAX_SIZE // 15MB
 } as const
 
 /**
