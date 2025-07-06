@@ -452,7 +452,7 @@ async function makeRequest<T>(
 	options: ApiRequestOptions = {}
 ): Promise<ApiResponse<T>> {
 	const { skipAuthCheck = false, skipCsrfCheck = false, ...fetchOptions } = options
-	const url = `${API_BASE_URL}/${endpoint}`
+	const url = `${API_BASE_URL}${endpoint}`
 
 	try {
 		// Add CSRF headers for non-GET requests if not explicitly skipped
