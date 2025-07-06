@@ -59,8 +59,9 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 	const timeoutId = setTimeout(() => controller.abort(), timeout)
 
 	try {
-		// Check if we're in development mode to handle self-signed certificates
+		// Detect environment
 		const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+		const isBrowser = typeof window !== 'undefined'
 
 		// Create fetch options with proper signal
 		const fetchOpts = {
@@ -68,45 +69,32 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 			signal: controller.signal
 		}
 
-		// In development, we need to handle CORS and SSL issues
-		if (isDev && typeof window !== 'undefined') {
-			// For browser environments in development mode
-			debugLog('Development mode: Using self-signed certificate and handling CORS')
+		// Always include credentials for session cookies
+		fetchOpts.credentials = 'include'
 
-			// Add mode: 'cors' to explicitly enable CORS
-			fetchOpts.mode = 'cors'
-
-			// Always include credentials for CORS requests
-			fetchOpts.credentials = 'include'
-
-			// Ensure headers are properly set
+		// Always set Origin header if in browser (for CORS in prod & dev)
+		if (isBrowser) {
 			const headers = new Headers(fetchOptions.headers || {})
 			headers.set('Origin', window.location.origin)
-
-			// Add additional headers that might help with CORS
 			headers.set('Accept', 'application/json')
-
-			// Log request details in development
-			console.group('API Request Details')
-			console.log('URL:', url)
-			console.log('Method:', fetchOptions.method || 'GET')
-			console.log('Headers:', Object.fromEntries([...headers.entries()]))
-			console.log('Credentials:', fetchOpts.credentials)
-			console.log('Mode:', fetchOpts.mode)
-			console.groupEnd()
-
 			fetchOpts.headers = headers
 		}
 
-		// Always ensure credentials are included for session cookies
-		if (!fetchOpts.credentials) {
-			fetchOpts.credentials = 'include'
+		// In development, log request details
+		if (isDev && isBrowser) {
+			console.group('API Request Details')
+			console.log('URL:', url)
+			console.log('Method:', fetchOptions.method || 'GET')
+			console.log('Headers:', Object.fromEntries([...new Headers(fetchOpts.headers).entries()]))
+			console.log('Credentials:', fetchOpts.credentials)
+			console.log('Mode:', fetchOpts.mode)
+			console.groupEnd()
 		}
 
 		const response = await fetch(url, fetchOpts)
 
 		// In development, log response details
-		if (isDev && typeof window !== 'undefined') {
+		if (isDev && isBrowser) {
 			console.group('API Response Details')
 			console.log('URL:', url)
 			console.log('Status:', response.status)
