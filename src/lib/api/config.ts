@@ -19,6 +19,7 @@ const isDevMode = (): boolean => {
 				window.location.hostname === 'localhost' ||
 				window.location.hostname === '127.0.0.1' ||
 				window.location.hostname === 'domain.local' ||
+				window.location.hostname === 'dev.trustyconvert.com' || // Added dev.trustyconvert.com as dev
 				window.location.port !== ''
 			)
 		}
