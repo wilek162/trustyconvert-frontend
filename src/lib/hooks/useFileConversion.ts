@@ -68,14 +68,15 @@ export function useFileConversion() {
 		progress,
 		downloadUrl,
 		fileName,
-		fileSize,
+		fileSize: responseFileSize,
 		isLoading: isStatusLoading,
 		retryCount,
 		error: statusError,
 		cancel: cancelConversion
 	} = useConversionStatus({
 		jobId,
-		onError: (err) => setError(new Error(err))
+		onError: (err) => setError(new Error(err)),
+		fileSize: file?.size // Pass the file size to enable adaptive polling
 	})
 
 	const conversion = useMutation({
@@ -172,7 +173,7 @@ export function useFileConversion() {
 		progress: conversionState.progress,
 		downloadUrl: conversionState.resultUrl,
 		fileName: conversionState.filename,
-		fileSize: conversionState.fileSize,
+		fileSize: responseFileSize,
 		error: error || statusError || conversionState.error,
 		isPosting,
 		isStatusLoading,

@@ -52,7 +52,34 @@ interface ApiRequestOptions extends RequestInit {
  * @returns Fetch response
  */
 async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): Promise<Response> {
-	const { timeout = DEFAULT_TIMEOUT, ...fetchOptions } = options
+	// Calculate timeout based on file size if it's an upload request
+	let { timeout = DEFAULT_TIMEOUT } = options;
+	
+	// For file uploads, adjust timeout based on file size
+	if (options.body instanceof FormData && options.method === 'POST') {
+		const formData = options.body as FormData;
+		const fileField = formData.get('file');
+		
+		if (fileField instanceof File) {
+			const fileSize = fileField.size;
+			// Calculate adaptive timeout: base + additional time based on file size
+			// 30s base + 1s per MB with a reasonable maximum
+			const fileSizeInMB = fileSize / (1024 * 1024);
+			const adaptiveTimeout = Math.min(
+				DEFAULT_TIMEOUT + (fileSizeInMB * 1000),
+				5 * 60 * 1000 // Cap at 5 minutes
+			);
+			
+			// Use the larger of default or adaptive timeout
+			timeout = Math.max(timeout, adaptiveTimeout);
+			
+			if (timeout > DEFAULT_TIMEOUT) {
+				debugLog(`Increased timeout to ${timeout}ms for ${fileSize} byte file upload`);
+			}
+		}
+	}
+	
+	const { ...fetchOptions } = options;
 
 	// Create abort controller for timeout
 	const controller = new AbortController()
@@ -88,6 +115,14 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 			console.log('Headers:', Object.fromEntries([...new Headers(fetchOpts.headers).entries()]))
 			console.log('Credentials:', fetchOpts.credentials)
 			console.log('Mode:', fetchOpts.mode)
+			if (options.body instanceof FormData) {
+				const formData = options.body as FormData;
+				const fileField = formData.get('file');
+				if (fileField instanceof File) {
+					console.log('File size:', formatFileSize(fileField.size));
+					console.log('Timeout:', timeout);
+				}
+			}
 			console.groupEnd()
 		}
 
@@ -112,7 +147,28 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 		return response
 	} catch (error) {
 		if (error instanceof DOMException && error.name === 'AbortError') {
-			throw new NetworkError('Request timed out', { url, timeout })
+			// Provide more context for timeout errors
+			const timeoutError = new NetworkError(
+				options.body instanceof FormData && options.method === 'POST' 
+					? 'Upload request timed out. This may be due to the file size being too large or network issues.'
+					: 'Request timed out', 
+				{ url, timeout }
+			);
+			
+			// Add more context to the error
+			if (options.body instanceof FormData) {
+				const formData = options.body as FormData;
+				const fileField = formData.get('file');
+				if (fileField instanceof File) {
+					timeoutError.context = {
+						...timeoutError.context,
+						fileSize: fileField.size,
+						fileName: fileField.name
+					};
+				}
+			}
+			
+			throw timeoutError;
 		}
 
 		// Enhanced error logging in development
@@ -138,6 +194,15 @@ async function fetchWithTimeout(url: string, options: ApiRequestOptions = {}): P
 	} finally {
 		clearTimeout(timeoutId)
 	}
+}
+
+// Helper function to format file size for logging
+function formatFileSize(bytes: number): string {
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 /**
@@ -560,27 +625,64 @@ async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<Uploa
 		if (jobId) {
 			formData.append('job_id', jobId)
 		}
+		
+		// Add file size hint to help server prepare for large files
+		formData.append('file_size', file.size.toString())
 
-		// Make the request
+		// Make the request with adaptive timeout based on file size
+		// The timeout will be calculated in fetchWithTimeout based on file size
 		debugLog('API: Uploading file', { fileName: file.name, fileSize: file.size, jobId })
-		const response = await makeRequest<UploadResponse>(apiConfig.endpoints.upload, {
-			method: 'POST',
-			body: formData
-		})
+		
+		// For large files, use a more robust retry strategy
+		const isLargeFile = file.size > 20 * 1024 * 1024; // 20MB
+		const retryStrategy = isLargeFile 
+			? {
+				...RETRY_STRATEGIES.CRITICAL,
+				maxRetries: 2, // Limit retries for large files to avoid timeouts
+				initialDelay: 1000, // Longer initial delay
+				onRetry: (error: unknown, attempt: number) => {
+					debugLog(`Retrying large file upload (attempt ${attempt})`, { fileName: file.name, fileSize: file.size })
+				}
+			}
+			: RETRY_STRATEGIES.API_REQUEST;
+		
+		const response = await withRetry(
+			async () => makeRequest<UploadResponse>(apiConfig.endpoints.upload, {
+				method: 'POST',
+				body: formData,
+				// Let fetchWithTimeout calculate the appropriate timeout
+			}),
+			retryStrategy
+		);
 
 		return response
 	} catch (error) {
 		debugError('API: File upload failed', error)
 
+		// Enhanced error handling for large files
+		const errorContext = {
+			component: 'apiClient',
+			action: 'uploadFile',
+			fileName: file.name,
+			fileSize: file.size,
+			jobId
+		};
+		
+		// Provide more specific error messages for large files
+		if (file.size > 50 * 1024 * 1024) { // 50MB
+			const errorMessage = 'The file exceeds the maximum allowed size. Please try a smaller file or contact support for assistance with large file uploads.';
+			return {
+				success: false,
+				data: {
+					error: 'FileTooLarge',
+					message: errorMessage
+				} as any
+			};
+		}
+
 		// Use centralized error handling
 		handleError(error, {
-			context: {
-				component: 'apiClient',
-				action: 'uploadFile',
-				fileName: file.name,
-				fileSize: file.size,
-				jobId
-			},
+			context: errorContext,
 			showToast: true
 		})
 

@@ -2,28 +2,26 @@
  * Conversion Status Hook
  *
  * React hook for tracking conversion job status with automatic polling.
+ * Uses the centralized jobPollingService for consistent polling behavior.
  */
 
-import { useQuery, type Query } from '@tanstack/react-query'
-import client  from '@/lib/api/client'
-import { useErrorHandler } from '@/lib/hooks/useErrorHandler'
-import type { JobStatusResponse } from '@/lib/types/api'
+import { useState, useEffect, useRef } from 'react'
+import type { JobStatusResponse, ConversionStatus } from '@/lib/types/api'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { handleError } from '@/lib/utils/errorHandling'
-
-const POLLING_INTERVAL = 2000 // 2 seconds
+import { startPolling, stopPolling } from '@/lib/services/jobPollingService'
 
 interface UseConversionStatusOptions {
 	jobId: string | null
 	onError?: (error: string) => void
 	pollingInterval?: number
 	maxRetries?: number
+	fileSize?: number
 }
-
-type ConversionStatus = 'idle' | 'pending' | 'processing' | 'completed' | 'failed'
 
 /**
  * Hook for polling and tracking conversion status
+ * Uses the centralized jobPollingService for efficient and consistent polling
  *
  * @param options - Configuration options
  * @returns Status information and control functions
@@ -31,59 +29,104 @@ type ConversionStatus = 'idle' | 'pending' | 'processing' | 'completed' | 'faile
 export function useConversionStatus({
 	jobId,
 	onError,
-	pollingInterval = POLLING_INTERVAL,
-	maxRetries = 2
+	pollingInterval,
+	maxRetries,
+	fileSize
 }: UseConversionStatusOptions) {
-	const query = useQuery<JobStatusResponse, Error>({
-		queryKey: ['conversion-status', jobId],
-		queryFn: async () => {
-			if (!jobId) throw new Error('No job ID provided')
-			debugLog('[useConversionStatus] Checking status', { jobId })
-			try {
-				// jobId is used for API calls
-				const status = await client.getConversionStatus(jobId)
-
-				// The apiClient.getConversionStatus now standardizes the response
-				// so we don't need to manually handle field aliases anymore
-
-				debugLog('[useConversionStatus] Status received', status)
-				return status
-			} catch (error) {
-				debugError('[useConversionStatus] Status check failed', error)
-				const errorMessage = handleError(error, {
-					context: { component: 'useConversionStatus', jobId }
-				})
-				if (onError) onError(errorMessage)
-				throw error
+	// State for tracking conversion status
+	const [status, setStatus] = useState<ConversionStatus>('idle')
+	const [progress, setProgress] = useState<number>(0)
+	const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+	const [fileName, setFileName] = useState<string | null>(null)
+	const [fileSize_, setFileSize] = useState<number | null>(null)
+	const [error, setError] = useState<string | null>(null)
+	const [isLoading, setIsLoading] = useState<boolean>(false)
+	const [retryCount, setRetryCount] = useState<number>(0)
+	
+	// Ref to store the stop polling function
+	const stopPollingRef = useRef<(() => void) | null>(null)
+	
+	// Set up polling when jobId changes
+	useEffect(() => {
+		// Clear previous state when jobId changes
+		if (jobId !== null) {
+			setIsLoading(true)
+			setError(null)
+			setRetryCount(0)
+		} else {
+			setStatus('idle')
+			setProgress(0)
+			setIsLoading(false)
+			return
+		}
+		
+		// Start polling with the jobPollingService
+		if (jobId) {
+			debugLog('[useConversionStatus] Starting polling', { jobId })
+			
+			// Start polling with callbacks
+			const stopFn = startPolling(jobId, {
+				onCompleted: (completedJobId) => {
+					debugLog('[useConversionStatus] Job completed', { completedJobId })
+					setStatus('completed')
+					setProgress(100)
+					setIsLoading(false)
+				},
+				onFailed: (errorMessage) => {
+					debugError('[useConversionStatus] Job failed', errorMessage)
+					setStatus('failed')
+					setError(errorMessage)
+					setIsLoading(false)
+					if (onError) onError(errorMessage)
+				},
+				onStatusChange: (newStatus) => {
+					debugLog('[useConversionStatus] Status changed', { jobId, status: newStatus })
+					setStatus(newStatus as ConversionStatus)
+					setIsLoading(newStatus !== 'completed' && newStatus !== 'failed')
+				},
+				onProgress: (newProgress) => {
+					setProgress(newProgress)
+				},
+				fileSize
+			})
+			
+			// Store the stop function
+			stopPollingRef.current = stopFn
+			
+			// Clean up when unmounting or when jobId changes
+			return () => {
+				if (stopPollingRef.current) {
+					debugLog('[useConversionStatus] Stopping polling', { jobId })
+					stopPollingRef.current()
+					stopPollingRef.current = null
+				}
 			}
-		},
-		enabled: !!jobId,
-		refetchInterval: (q: Query<JobStatusResponse, Error>) => {
-			const data = q.state.data
-			const error = q.state.error
-			if (!data) return pollingInterval
-			if (data.status === 'completed' || data.status === 'failed' || error) {
-				return false
-			}
-			return pollingInterval
-		},
-		retry: maxRetries,
-		retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
-	})
+		}
+	}, [jobId, onError, fileSize])
+	
+	// Cancel method for future implementation
+	const cancel = () => {
+		if (jobId && stopPollingRef.current) {
+			stopPollingRef.current()
+			stopPollingRef.current = null
+			setStatus('idle')
+			setProgress(0)
+			setIsLoading(false)
+			debugLog('[useConversionStatus] Conversion cancelled', { jobId })
+		} else {
+			console.warn('Conversion cancellation not implemented or no active job')
+		}
+	}
 
 	return {
-		status: (query.data?.status as ConversionStatus) ?? 'idle',
-		progress: query.data?.progress ?? 0,
-		downloadUrl: query.data?.download_url ?? null,
-		fileName: query.data?.filename ?? null,
-		fileSize: query.data?.file_size ?? null,
-		isLoading: query.isLoading,
-		error: query.error instanceof Error ? query.error.message : null,
-		retryCount: query.failureCount,
-		// Add a cancel method for future implementation
-		cancel: () => {
-			// This would be implemented if the API supports cancellation
-			console.warn('Conversion cancellation not implemented')
-		}
+		status,
+		progress,
+		downloadUrl,
+		fileName,
+		fileSize: fileSize_,
+		isLoading,
+		error,
+		retryCount,
+		cancel
 	}
 }

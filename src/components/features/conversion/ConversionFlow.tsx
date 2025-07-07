@@ -416,7 +416,20 @@ export function ConversionFlow({
 				},
 				onStatusChange: (status) => {
 					debugLog(`Conversion status update: ${status}`)
-				}
+				},
+				// Add progress tracking callback
+				onProgress: (progress) => {
+					// Update progress in the UI
+					if (progress > 0) {
+						// Update conversion state with progress
+						setConversionState({
+							...conversionState,
+							progress: progress
+						});
+					}
+				},
+				// Pass file size for adaptive polling
+				fileSize: selectedFile.size
 			})
 		} catch (error) {
 			setIsUploading(false)
@@ -646,16 +659,38 @@ export function ConversionFlow({
 					<p className="text-sm text-gray-600">
 						{selectedFile?.name} to {targetFormat.toUpperCase()}
 					</p>
+					{selectedFile && (
+						<p className="text-xs text-gray-500 mt-1">
+							File size: {formatFileSize(selectedFile.size)}
+						</p>
+					)}
 				</div>
 				
-				{/* Spinning animation instead of progress bar */}
-				<div className="flex justify-center py-8">
-					<div className="h-12 w-12 animate-spin rounded-full border-4 border-trustTeal border-t-transparent"></div>
-				</div>
+				{/* Progress indicator for larger files */}
+				{conversionState.progress > 0 ? (
+					<div className="space-y-2">
+						<Progress value={conversionState.progress} className="h-2 w-full" />
+						<div className="flex items-center justify-between">
+							<p className="text-sm text-gray-600">Converting...</p>
+							<p className="text-sm font-medium">{Math.round(conversionState.progress)}%</p>
+						</div>
+					</div>
+				) : (
+					/* Spinning animation for when progress is not available */
+					<div className="flex justify-center py-8">
+						<div className="h-12 w-12 animate-spin rounded-full border-4 border-trustTeal border-t-transparent"></div>
+					</div>
+				)}
 				
 				<div className="text-center">
 					<p className="text-sm text-gray-600">Converting your file securely...</p>
-					<p className="mt-2 text-xs text-gray-500">This may take a moment depending on file size.</p>
+					<p className="mt-2 text-xs text-gray-500">
+						{selectedFile && selectedFile.size > 20 * 1024 * 1024 ? (
+							<>This is a large file and may take several minutes to process. Please be patient.</>
+						) : (
+							<>This may take a moment depending on file size.</>
+						)}
+					</p>
 				</div>
 				
 				<div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">

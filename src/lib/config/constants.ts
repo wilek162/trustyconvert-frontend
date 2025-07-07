@@ -22,8 +22,15 @@ export const API = {
 
 // File Upload Constraints
 export const FILE_UPLOAD = {
-	MAX_SIZE: 50 * 1024 * 1024, // 50MB
-	CHUNK_SIZE: 5 * 1024 * 1024, // 5MB chunks for resumable uploads
+	MAX_SIZE: 100 * 1024 * 1024, // 100MB (increased from 50MB)
+	CHUNK_SIZE: 10 * 1024 * 1024, // 10MB chunks for resumable uploads (increased from 5MB)
+	// File size categories for adaptive handling
+	SIZE_CATEGORIES: {
+		SMALL: 5 * 1024 * 1024, // 5MB
+		MEDIUM: 20 * 1024 * 1024, // 20MB
+		LARGE: 50 * 1024 * 1024, // 50MB
+		VERY_LARGE: 100 * 1024 * 1024, // 100MB
+	},
 	SUPPORTED_FORMATS: {
 		DOCUMENT: ['pdf', 'docx', 'doc', 'txt', 'rtf', 'odt'],
 		IMAGE: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
