@@ -12,19 +12,6 @@ import { handleError } from '@/lib/utils/errorHandling'
 import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
 import type { SessionInitResponse } from '@/lib/types/api'
 
-// Define the extended client type with the _apiClient property
-interface ExtendedClient {
-	initSession(forceNew?: boolean): Promise<SessionInitResponse | null>
-	ensureSession(): Promise<boolean>
-	uploadFile(file: File, fileJobId?: string): Promise<StandardResponse>
-	convertFile(jobId: string, targetFormat: string, sourceFormat?: string): Promise<StandardResponse>
-	startConversion(file: File, targetFormat: string): Promise<StandardResponse>
-	getConversionStatus(jobId: string): Promise<StandardResponse>
-	getDownloadToken(jobId: string): Promise<StandardResponse>
-	getDownloadUrl(token: string): string
-	closeSession(): Promise<StandardResponse>
-	_apiClient?: typeof _apiClient
-}
 
 /**
  * Standard API response type

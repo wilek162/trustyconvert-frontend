@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'astro:middleware'
 import { createLanguageMiddleware, detectBrowserLanguage } from './lib/i18n/middleware'
-import { DEFAULT_LANGUAGE } from './lib/i18n/config'
+import { DEFAULT_LANGUAGE, LANGUAGES } from './lib/i18n/config'
 
 // Create language middleware
 const languageMiddleware = createLanguageMiddleware()
@@ -84,7 +84,7 @@ export function getLanguageDetectionScript() {
 						// Detect browser language
 						const browserLang = navigator.language.split('-')[0];
 						const supportedLanguages = ${JSON.stringify(
-							Object.values(DEFAULT_LANGUAGE.supportedLanguages || []).map((l) => l.code)
+							LANGUAGES.map((l) => l.code)
 						)};
 						
 						// If browser language is supported and not the default, redirect

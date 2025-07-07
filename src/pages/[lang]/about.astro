@@ -1,0 +1,85 @@
+---
+import MultilingualLayout from '@/layouts/MultilingualLayout.astro'
+import { t } from '@/lib/i18n/translations'
+import { generateLanguagePaths } from '@/lib/i18n/utils'
+import TranslatedText from '@/components/common/TranslatedText.astro'
+
+// Generate paths for all supported languages
+export function getStaticPaths() {
+	return generateLanguagePaths()
+}
+
+const { lang } = Astro.params
+
+// Create structured data for SEO
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@type': 'Organization',
+	name: 'TrustyConvert',
+	description: t('about_subtitle', lang as string),
+	url: 'https://trustyconvert.com',
+	logo: 'https://trustyconvert.com/logo.png'
+}
+---
+
+<MultilingualLayout
+	title={`${t('site_name', lang as string)} - ${t('about_title', lang as string)}`}
+	description={t('about_subtitle', lang as string)}
+	extraStructuredData={structuredData}
+	lang={lang as string}
+>
+	<div class="trusty-container py-16">
+		<div class="mx-auto max-w-3xl text-center">
+			<h1 class="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+				<TranslatedText translationKey="about_title" as="span" />
+			</h1>
+			<p class="mt-6 text-lg leading-8 text-muted-foreground">
+				<TranslatedText translationKey="about_subtitle" as="span" />
+			</p>
+		</div>
+
+		<div class="mx-auto mt-16 max-w-3xl space-y-8">
+			<div>
+				<h2 class="text-2xl font-bold tracking-tight text-foreground">
+					<TranslatedText translationKey="about_mission_title" as="span" />
+				</h2>
+				<p class="mt-4 text-lg text-muted-foreground">
+					<TranslatedText translationKey="about_mission_text" as="span" />
+				</p>
+			</div>
+
+			<div>
+				<h2 class="text-2xl font-bold tracking-tight text-foreground">
+					<TranslatedText translationKey="about_values_title" as="span" />
+				</h2>
+				<ul class="mt-4 list-disc space-y-2 pl-5 text-lg text-muted-foreground">
+					<li>
+						<strong><TranslatedText translationKey="about_value_privacy_title" as="span" /></strong> - 
+						<TranslatedText translationKey="about_value_privacy_text" as="span" />
+					</li>
+					<li>
+						<strong><TranslatedText translationKey="about_value_security_title" as="span" /></strong> - 
+						<TranslatedText translationKey="about_value_security_text" as="span" />
+					</li>
+					<li>
+						<strong><TranslatedText translationKey="about_value_simplicity_title" as="span" /></strong> - 
+						<TranslatedText translationKey="about_value_simplicity_text" as="span" />
+					</li>
+					<li>
+						<strong><TranslatedText translationKey="about_value_quality_title" as="span" /></strong> - 
+						<TranslatedText translationKey="about_value_quality_text" as="span" />
+					</li>
+				</ul>
+			</div>
+
+			<div>
+				<h2 class="text-2xl font-bold tracking-tight text-foreground">
+					<TranslatedText translationKey="about_team_title" as="span" />
+				</h2>
+				<p class="mt-4 text-lg text-muted-foreground">
+					<TranslatedText translationKey="about_team_text" as="span" />
+				</p>
+			</div>
+		</div>
+	</div>
+</MultilingualLayout> 

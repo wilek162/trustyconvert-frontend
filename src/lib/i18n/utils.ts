@@ -66,3 +66,86 @@ export function formatNumber(
 
 	return new Intl.NumberFormat(locale, options).format(number)
 }
+
+/**
+ * Generate static paths for language-specific routes
+ * This is a utility function for Astro's getStaticPaths
+ * 
+ * @param additionalParams Additional parameters to include in the static paths
+ * @returns An array of objects with params and props for use with getStaticPaths
+ */
+export function generateLanguagePaths<T extends Record<string, any>>(
+	additionalParams: T[] = [{}] as T[]
+) {
+	const paths: { params: Record<string, string>; props: Record<string, any> }[] = []
+
+	// For each language (except default), create a path with the language code
+	LANGUAGES.filter(lang => lang.code !== DEFAULT_LANGUAGE.code).forEach(lang => {
+		additionalParams.forEach(params => {
+			paths.push({
+				params: { 
+					lang: lang.code,
+					...params
+				},
+				props: { 
+					lang: lang.code,
+					...params
+				}
+			})
+		})
+	})
+
+	return paths
+}
+
+/**
+ * Get current language from Astro params or default
+ * This is useful in pages with [lang] parameter
+ */
+export function getLanguageFromParams(params: Record<string, string>): string {
+	return params.lang || DEFAULT_LANGUAGE.code
+}
+
+/**
+ * Create language-specific routes for all pages
+ * This wraps a normal getStaticPaths function to add language-specific routes
+ * 
+ * @param getPagePaths Function that returns the original page paths
+ * @returns A function that returns language-specific paths for all pages
+ */
+export function createMultilingualPaths<T extends Record<string, any>>(
+	getPagePaths: () => { params: T; props?: any }[]
+) {
+	return function() {
+		// Get original page paths
+		const originalPaths = getPagePaths()
+		
+		// Create paths for non-default languages
+		const languagePaths = LANGUAGES
+			.filter(lang => lang.code !== DEFAULT_LANGUAGE.code)
+			.flatMap(lang => {
+				return originalPaths.map(({ params, props = {} }) => ({
+					params: {
+						...params,
+						lang: lang.code
+					},
+					props: {
+						...props,
+						lang: lang.code
+					}
+				}))
+			})
+		
+		// Return both original paths and language paths
+		return [
+			...originalPaths.map(path => ({
+				...path,
+				props: {
+					...path.props,
+					lang: DEFAULT_LANGUAGE.code
+				}
+			})),
+			...languagePaths
+		]
+	}
+}

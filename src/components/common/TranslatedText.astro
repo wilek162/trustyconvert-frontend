@@ -1,0 +1,28 @@
+---
+import { t, tFormat } from '@/lib/i18n/translations'
+import type { TranslationKey } from '@/lib/i18n/translations'
+
+interface Props {
+	translationKey: TranslationKey
+	variables?: Record<string, string | number>
+	as?: keyof HTMLElementTagNameMap
+	class?: string
+}
+
+const { 
+	translationKey, 
+	variables, 
+	as: Element = 'span', 
+	class: className = '',
+	...rest 
+} = Astro.props
+
+const currentLang = Astro.locals.lang || 'en'
+const translatedText = variables 
+	? tFormat(translationKey, currentLang, variables) 
+	: t(translationKey, currentLang)
+---
+
+<Element class={className} {...rest}>
+	{translatedText}
+</Element> 

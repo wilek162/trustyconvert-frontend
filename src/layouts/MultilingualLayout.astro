@@ -1,0 +1,37 @@
+---
+import MainLayout from './mainLayout.astro'
+import { getAlternateLanguages } from '@/lib/i18n/middleware'
+import { t } from '@/lib/i18n/translations'
+import { getLanguageFromParams } from '@/lib/i18n/utils'
+
+interface Props {
+	title?: string
+	description?: string
+	image?: string
+	ogImage?: string
+	noindex?: boolean
+	extraStructuredData?: any
+	lang?: string
+}
+
+// Get language from props or params
+const { lang: propsLang, ...rest } = Astro.props
+const lang = propsLang || getLanguageFromParams(Astro.params) || Astro.locals.lang || 'en'
+
+// Get translations for the current language
+const title = rest.title || t('site_name', lang) + ' - ' + t('home_hero_title', lang)
+const description = rest.description || t('site_description', lang)
+
+// Get alternate languages for SEO
+const alternateLanguages = getAlternateLanguages(Astro)
+---
+
+<MainLayout 
+	{...rest}
+	title={title}
+	description={description}
+	alternateLanguages={alternateLanguages}
+	lang={lang}
+>
+	<slot />
+</MainLayout> 

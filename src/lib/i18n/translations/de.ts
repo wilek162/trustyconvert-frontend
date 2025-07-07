@@ -57,6 +57,8 @@ const translations = {
 	footer_terms: 'Nutzungsbedingungen',
 	footer_privacy: 'Datenschutzrichtlinie',
 	footer_contact: 'Kontaktieren Sie uns',
+	footer_product: 'Produkt',
+	footer_legal: 'Rechtliches',
 
 	// Error messages
 	error_page_title: 'Fehler {code}',
@@ -77,6 +79,19 @@ const translations = {
 	// About page
 	about_title: 'Über TrustyConvert',
 	about_subtitle: 'Erfahren Sie mehr über unsere Mission und Werte',
+	about_mission_title: 'Unsere Mission',
+	about_mission_text: 'Bei TrustyConvert glauben wir, dass Dateikonvertierung einfach, sicher und für jeden zugänglich sein sollte. Unsere Mission ist es, den zuverlässigsten und benutzerfreundlichsten Dateikonvertierungsdienst im Web anzubieten und dabei höchste Standards für Datenschutz und Sicherheit zu gewährleisten.',
+	about_values_title: 'Unsere Werte',
+	about_value_privacy_title: 'Privatsphäre',
+	about_value_privacy_text: 'Ihre Dateien gehören nur Ihnen. Wir löschen alle hochgeladenen Dateien nach der Konvertierung automatisch und teilen Ihre Daten niemals mit Dritten.',
+	about_value_security_title: 'Sicherheit',
+	about_value_security_text: 'Wir verwenden Verschlüsselung auf Bankniveau und sichere Verarbeitungsumgebungen, um sicherzustellen, dass Ihre Dateien jederzeit geschützt sind.',
+	about_value_simplicity_title: 'Einfachheit',
+	about_value_simplicity_text: 'Wir glauben, dass leistungsstarke Tools einfach zu bedienen sein sollten. Unsere Benutzeroberfläche ist intuitiv und unkompliziert gestaltet.',
+	about_value_quality_title: 'Qualität',
+	about_value_quality_text: 'Wir sind bestrebt, Konvertierungen von höchster Qualität mit präziser Formatierung und Inhaltsbewahrung anzubieten.',
+	about_team_title: 'Unser Team',
+	about_team_text: 'TrustyConvert wurde von einem Team von Entwicklern und Designern gegründet, die leidenschaftlich daran arbeiten, Tools zu schaffen, die die digitale Arbeit erleichtern. Wir sind ein kleines, engagiertes Team, das sich auf kontinuierliche Verbesserung und Innovation konzentriert.',
 
 	// Language selector
 	language_selector_label: 'Sprache auswählen',

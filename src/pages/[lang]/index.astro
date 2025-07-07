@@ -1,5 +1,5 @@
 ---
-import MainLayout from '@/layouts/mainLayout.astro'
+import MultilingualLayout from '@/layouts/MultilingualLayout.astro'
 import { Hero } from '@/components/Hero'
 import { Features } from '@/components/Features'
 import { HowItWorks } from '@/components/HowItWorks'
@@ -8,29 +8,21 @@ import { Testimonials } from '@/components/Testimonials'
 import { FAQ } from '@/components/FAQ'
 import { LANGUAGES, DEFAULT_LANGUAGE } from '@/lib/i18n/config'
 import { t } from '@/lib/i18n/translations'
-import { getAlternateLanguages } from '@/lib/i18n/middleware'
+import { generateLanguagePaths } from '@/lib/i18n/utils'
 
 // Get language from URL parameter
 export function getStaticPaths() {
-	// Filter out the default language - it will be served from the root URL
-	return LANGUAGES.filter((lang) => lang.code !== DEFAULT_LANGUAGE.code).map((lang) => ({
-		params: { lang: lang.code },
-		props: { lang: lang.code }
-	}))
+	return generateLanguagePaths()
 }
 
 const { lang } = Astro.params
-
-// Get translations for the current language
-const title = t('site_name', lang as string) + ' - ' + t('home_hero_title', lang as string)
-const description = t('site_description', lang as string)
 
 // Create structured data for SEO
 const structuredData = {
 	'@context': 'https://schema.org',
 	'@type': 'WebApplication',
 	name: 'TrustyConvert',
-	description: description,
+	description: t('site_description', lang as string),
 	applicationCategory: 'UtilityApplication',
 	operatingSystem: 'All',
 	offers: {
@@ -39,9 +31,6 @@ const structuredData = {
 		priceCurrency: 'USD'
 	}
 }
-
-// Get alternate languages for SEO
-const alternateLanguages = getAlternateLanguages(Astro)
 
 // Get formats data (from API or fallback to mock)
 let formats = []
@@ -63,11 +52,9 @@ if (import.meta.env.SSR) {
 }
 ---
 
-<MainLayout
-	title={title}
-	description={description}
+<MultilingualLayout
 	extraStructuredData={structuredData}
-	alternateLanguages={alternateLanguages}
+	lang={lang as string}
 >
 	<div class="bg-gradient-to-b from-white to-lightGray/20">
 		<div id="convert" class="scroll-mt-24">
@@ -84,4 +71,4 @@ if (import.meta.env.SSR) {
 	<Testimonials />
 
 	<FAQ />
-</MainLayout>
+</MultilingualLayout>

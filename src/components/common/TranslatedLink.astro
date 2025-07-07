@@ -1,6 +1,6 @@
 ---
 import { formatLocalizedPath } from '@/lib/i18n/config'
-import { t } from '@/lib/i18n/translations'
+import { t, tFormat } from '@/lib/i18n/translations'
 import type { TranslationKey } from '@/lib/i18n/translations'
 
 interface Props {
@@ -8,9 +8,17 @@ interface Props {
 	textKey: TranslationKey
 	class?: string
 	activeClass?: string
+	variables?: Record<string, string | number>
 }
 
-const { href, textKey, class: className = '', activeClass = 'text-foreground' } = Astro.props
+const { 
+	href, 
+	textKey, 
+	class: className = '', 
+	activeClass = 'text-foreground',
+	variables 
+} = Astro.props
+
 const currentLang = Astro.locals.lang || 'en'
 const localizedHref = formatLocalizedPath(href, currentLang)
 
@@ -23,7 +31,9 @@ const isActive =
 const classes = `${className} ${isActive ? activeClass : 'text-muted-foreground'}`
 
 // Get translated text
-const linkText = t(textKey, currentLang)
+const linkText = variables 
+	? tFormat(textKey, currentLang, variables) 
+	: t(textKey, currentLang)
 ---
 
 <a href={localizedHref} class={classes}>

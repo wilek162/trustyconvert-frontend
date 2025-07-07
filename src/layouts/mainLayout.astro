@@ -13,8 +13,10 @@ import { CloseSession } from '@/components/features/session'
 import { getAlternateLanguages } from '@/lib/i18n/middleware'
 import LanguageSelector from '@/components/common/LanguageSelector.astro'
 import NavLink from '@/components/common/NavLink.astro'
-import { t } from '@/lib/i18n/translations'
+import TranslatedLink from '@/components/common/TranslatedLink.astro'
+import { t, tFormat } from '@/lib/i18n/translations'
 import { getLanguageDetectionScript } from '@/middleware'
+import { formatLocalizedPath } from '@/lib/i18n/config'
 // import { OfflineBanner } from '@/components/ui/offlineBanner'
 
 // Define a type for structured data to avoid using 'any'
@@ -53,12 +55,12 @@ const isStaticMode = import.meta.env.OUTPUT === 'static'
 initializeApp()
 
 // Get the current language from middleware
-const currentLang = Astro.props.lang || 'en'
+const currentLang = Astro.props.lang || Astro.locals.lang || 'en'
 
 // Default SEO values
 const {
-	title = 'TrustyConvert - Fast & Secure File Conversion',
-	description = 'Convert files quickly and securely with TrustyConvert. No registration required, your privacy guaranteed.',
+	title = t('site_name', currentLang) + ' - ' + t('home_hero_title', currentLang),
+	description = t('site_description', currentLang),
 	canonical = Astro.url.href,
 	ogImage = '/og-image.png',
 	noindex = false,
@@ -71,6 +73,9 @@ initializeBrowser()
 
 // Get the language detection script for static mode
 const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
+
+// Get localized home path
+const localizedHomePath = formatLocalizedPath('/', currentLang)
 ---
 
 <!doctype html>
@@ -157,70 +162,66 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 		>
 			<div class="trusty-container flex h-24 items-center justify-between">
 				<div class="flex items-center gap-6">
-					<a href="/" class="group flex items-center space-x-3">
+					<a href={localizedHomePath} class="group flex items-center space-x-3">
 						<div
 							class="relative h-20 w-20 overflow-hidden rounded-lg bg-trustTeal/10 p-0.5 transition-all group-hover:bg-trustTeal/20 group-hover:shadow-sm"
 						>
 							<img
 								src="/logo-no-bg.svg"
-								alt="TrustyConvert Logo"
+								alt={t('site_name', currentLang)}
 								class="h-full w-full object-contain transition-transform group-hover:scale-105"
 							/>
 						</div>
 						<span
 							class="text-2xl font-bold text-foreground transition-all group-hover:text-trustTeal"
-							>TrustyConvert</span
+							>{t('site_name', currentLang)}</span
 						>
 					</a>
 					<nav class="hidden md:flex">
 						<ul class="flex items-center gap-8">
 							<li>
-								<NavLink
+								<TranslatedLink
 									href="/"
-									className="text-sm font-medium transition-colors hover:text-foreground"
-								>
-									{t('nav_home', currentLang)}
-								</NavLink>
+									textKey="nav_home"
+									class="text-sm font-medium transition-colors hover:text-foreground"
+								/>
 							</li>
 							<li>
-								<NavLink
+								<TranslatedLink
 									href="/all-conversions"
-									className="text-sm font-medium transition-colors hover:text-foreground"
-								>
-									{t('nav_all_conversions', currentLang)}
-								</NavLink>
+									textKey="nav_all_conversions"
+									class="text-sm font-medium transition-colors hover:text-foreground"
+								/>
 							</li>
 							<li>
-								<NavLink
+								<TranslatedLink
 									href="/blog"
-									className="text-sm font-medium transition-colors hover:text-foreground"
-								>
-									{t('nav_blog', currentLang)}
-								</NavLink>
+									textKey="nav_blog"
+									class="text-sm font-medium transition-colors hover:text-foreground"
+								/>
 							</li>
 							<li>
-								<NavLink
+								<TranslatedLink
 									href="/about"
-									className="text-sm font-medium transition-colors hover:text-foreground"
-								>
-									{t('nav_about', currentLang)}
-								</NavLink>
+									textKey="nav_about"
+									class="text-sm font-medium transition-colors hover:text-foreground"
+								/>
 							</li>
 							<li>
-								<NavLink
+								<TranslatedLink
 									href="/privacy"
-									className="text-sm font-medium transition-colors hover:text-foreground"
-								>
-									{t('nav_privacy', currentLang)}
-								</NavLink>
+									textKey="nav_privacy"
+									class="text-sm font-medium transition-colors hover:text-foreground"
+								/>
 							</li>
 						</ul>
 					</nav>
 				</div>
 				<div class="flex items-center gap-4">
 					<LanguageSelector currentLang={currentLang} class="mr-2" />
-					<a
+					<TranslatedLink
 						href="/"
+						textKey="home_convert_button"
 						class="hidden items-center rounded-button bg-trustTeal px-6 py-3 text-sm font-medium text-white transition-all hover:bg-trustTeal/90 hover:shadow-md md:inline-flex"
 					>
 						<svg
@@ -239,8 +240,7 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 							<polyline points="7 10 12 15 17 10"></polyline>
 							<line x1="12" y1="15" x2="12" y2="3"></line>
 						</svg>
-						Convert Files
-					</a>
+					</TranslatedLink>
 				</div>
 			</div>
 		</header>
@@ -253,62 +253,69 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 			<div class="trusty-container py-12">
 				<div class="grid grid-cols-1 gap-8 md:grid-cols-3">
 					<div>
-						<a href="/" class="flex items-center space-x-2">
-							<img src="/logo-no-bg.svg" alt="TrustyConvert Logo" class="h-10 w-10" />
-							<span class="text-xl font-bold">TrustyConvert</span>
+						<a href={localizedHomePath} class="flex items-center space-x-2">
+							<img src="/logo-no-bg.svg" alt={t('site_name', currentLang)} class="h-10 w-10" />
+							<span class="text-xl font-bold">{t('site_name', currentLang)}</span>
 						</a>
 						<p class="mt-4 text-sm text-muted-foreground">
-							Fast, secure file conversion with privacy guaranteed. No registration required.
+							{t('site_description', currentLang)}
 						</p>
 					</div>
 					<div class="grid grid-cols-2 gap-8">
 						<div>
-							<h3 class="mb-3 text-sm font-medium">Product</h3>
+							<h3 class="mb-3 text-sm font-medium">{t('footer_product', currentLang) || 'Product'}</h3>
 							<ul class="space-y-2 text-sm">
 								<li>
-									<NavLink href="/" className="text-muted-foreground hover:text-foreground">
-										{t('nav_home', currentLang)}
-									</NavLink>
+									<TranslatedLink 
+										href="/" 
+										textKey="nav_home"
+										class="text-muted-foreground hover:text-foreground"
+									/>
 								</li>
 								<li>
-									<NavLink
+									<TranslatedLink
 										href="/all-conversions"
-										className="text-muted-foreground hover:text-foreground"
-									>
-										{t('nav_all_conversions', currentLang)}
-									</NavLink>
+										textKey="nav_all_conversions"
+										class="text-muted-foreground hover:text-foreground"
+									/>
 								</li>
 								<li>
-									<NavLink href="/blog" className="text-muted-foreground hover:text-foreground">
-										{t('nav_blog', currentLang)}
-									</NavLink>
+									<TranslatedLink 
+										href="/blog" 
+										textKey="nav_blog"
+										class="text-muted-foreground hover:text-foreground"
+									/>
 								</li>
 							</ul>
 						</div>
 						<div>
-							<h3 class="mb-3 text-sm font-medium">Legal</h3>
+							<h3 class="mb-3 text-sm font-medium">{t('footer_legal', currentLang) || 'Legal'}</h3>
 							<ul class="space-y-2 text-sm">
 								<li>
-									<NavLink href="/privacy" className="text-muted-foreground hover:text-foreground">
-										{t('footer_privacy', currentLang)}
-									</NavLink>
+									<TranslatedLink 
+										href="/privacy" 
+										textKey="footer_privacy"
+										class="text-muted-foreground hover:text-foreground"
+									/>
 								</li>
 								<li>
-									<NavLink href="/terms" className="text-muted-foreground hover:text-foreground">
-										{t('footer_terms', currentLang)}
-									</NavLink>
+									<TranslatedLink 
+										href="/terms" 
+										textKey="footer_terms"
+										class="text-muted-foreground hover:text-foreground"
+									/>
 								</li>
 							</ul>
 						</div>
 					</div>
 					<div>
-						<h3 class="mb-3 text-sm font-medium">Language</h3>
+						<h3 class="mb-3 text-sm font-medium">{t('language_selector_label', currentLang)}</h3>
 						<LanguageSelector currentLang={currentLang} />
 					</div>
 				</div>
 				<div class="mt-12 border-t border-border pt-8 text-center">
 					<p class="text-sm text-muted-foreground">
-						&copy; {new Date().getFullYear()} TrustyConvert. All rights reserved.
+						{tFormat('footer_copyright', currentLang, { year: new Date().getFullYear() })}
 					</p>
 				</div>
 			</div>

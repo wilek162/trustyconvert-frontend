@@ -58,6 +58,8 @@ const translations = {
 	footer_terms: 'Terms of Service',
 	footer_privacy: 'Privacy Policy',
 	footer_contact: 'Contact Us',
+	footer_product: 'Product',
+	footer_legal: 'Legal',
 
 	// Error messages
 	error_page_title: 'Error {code}',
@@ -78,6 +80,19 @@ const translations = {
 	// About page
 	about_title: 'About TrustyConvert',
 	about_subtitle: 'Learn about our mission and values',
+	about_mission_title: 'Our Mission',
+	about_mission_text: 'At TrustyConvert, we believe file conversion should be simple, secure, and accessible to everyone. Our mission is to provide the most reliable and user-friendly file conversion service on the web, while maintaining the highest standards of privacy and security.',
+	about_values_title: 'Our Values',
+	about_value_privacy_title: 'Privacy',
+	about_value_privacy_text: 'Your files are yours alone. We automatically delete all uploaded files after conversion and never share your data with third parties.',
+	about_value_security_title: 'Security',
+	about_value_security_text: 'We use bank-level encryption and secure processing environments to ensure your files are protected at all times.',
+	about_value_simplicity_title: 'Simplicity',
+	about_value_simplicity_text: 'We believe powerful tools should be easy to use. Our interface is designed to be intuitive and straightforward.',
+	about_value_quality_title: 'Quality',
+	about_value_quality_text: 'We\'re committed to providing the highest quality conversions with accurate formatting and content preservation.',
+	about_team_title: 'Our Team',
+	about_team_text: 'TrustyConvert was founded by a team of developers and designers passionate about creating tools that make digital work easier. We\'re a small, dedicated team focused on continuous improvement and innovation.',
 
 	// Language selector
 	language_selector_label: 'Select language',
