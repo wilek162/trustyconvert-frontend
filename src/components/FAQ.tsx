@@ -14,7 +14,7 @@ const faqs = [
 	{
 		question: 'What is the maximum file size I can convert?',
 		answer:
-			'Our free plan allows conversions of files up to 15MB in size. For larger files, you may want to consider our premium plans which support files up to 2GB.'
+			'Our free plan allows conversions of files up to 50MB in size. For larger files, you may want to consider our premium plans which support files up to 2GB.'
 	},
 	{
 		question: 'Which file formats does TrustyConvert support?',

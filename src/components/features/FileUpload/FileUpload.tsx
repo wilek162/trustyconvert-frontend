@@ -20,7 +20,7 @@ import type { ConversionFormat } from '@/lib/types'
 import { FILE_UPLOAD } from '@/lib/config/constants'
 
 // Constants
-const MAX_FILE_SIZE = FILE_UPLOAD.MAX_SIZE // 15MB
+const MAX_FILE_SIZE = FILE_UPLOAD.MAX_SIZE
 const ACCEPTED_FILE_TYPES = {
 	'application/pdf': ['.pdf'],
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
