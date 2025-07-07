@@ -1,0 +1,41 @@
+---
+/**
+ * ConversionFeatures Component
+ * 
+ * Displays a list of features for a specific conversion.
+ */
+
+interface Props {
+  features: string[];
+}
+
+const { features } = Astro.props;
+---
+
+<div class="rounded-lg border border-trustTeal/20 bg-card p-6">
+  <h2 class="mb-4 text-xl font-semibold text-deepNavy">Features</h2>
+  <ul class="space-y-3">
+    {
+      features.map((feature) => (
+        <li class="flex items-start">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="mr-2 mt-0.5 text-trustTeal"
+          >
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span>{feature}</span>
+        </li>
+      ))
+    }
+  </ul>
+</div> 

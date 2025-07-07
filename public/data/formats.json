@@ -1,0 +1,111 @@
+{
+  "success": true,
+  "data": {
+    "formats": [
+      {
+        "id": "images",
+        "name": "Images",
+        "description": "Convert between various image formats with optimization features",
+        "inputFormats": [
+          "tiff",
+          "jpg",
+          "webp",
+          "jpeg",
+          "bmp",
+          "gif",
+          "png"
+        ],
+        "outputFormats": [
+          "tiff",
+          "webp",
+          "jpg",
+          "jpeg",
+          "bmp",
+          "gif",
+          "png",
+          "pdf"
+        ],
+        "maxSize": 52428800,
+        "features": [
+          "resize",
+          "optimize",
+          "compress",
+          "quality_control"
+        ]
+      },
+      {
+        "id": "documents",
+        "name": "Documents",
+        "description": "Convert between document formats including Word, PDF, and text files",
+        "inputFormats": [
+          "rtf",
+          "html",
+          "doc",
+          "odt",
+          "md",
+          "txt",
+          "pdf",
+          "docx"
+        ],
+        "outputFormats": [
+          "html",
+          "pdf",
+          "txt",
+          "docx"
+        ],
+        "maxSize": 52428800,
+        "features": [
+          "preserve_layout",
+          "extract_tables",
+          "bookmarks",
+          "metadata"
+        ]
+      },
+      {
+        "id": "presentations",
+        "name": "Presentations",
+        "description": "Convert presentation files between different formats",
+        "inputFormats": [
+          "ppt",
+          "pdf",
+          "odp",
+          "pptx"
+        ],
+        "outputFormats": [
+          "pdf",
+          "pptx"
+        ],
+        "maxSize": 52428800,
+        "features": [
+          "preserve_slides",
+          "extract_images",
+          "metadata"
+        ]
+      },
+      {
+        "id": "spreadsheets",
+        "name": "Spreadsheets",
+        "description": "Convert spreadsheet files and extract data",
+        "inputFormats": [
+          "ods",
+          "xls",
+          "xlsx",
+          "pdf",
+          "csv"
+        ],
+        "outputFormats": [
+          "pdf",
+          "csv",
+          "xlsx"
+        ],
+        "maxSize": 52428800,
+        "features": [
+          "preserve_data",
+          "extract_tables",
+          "format_preservation"
+        ]
+      }
+    ]
+  },
+  "correlation_id": "d284211b-1fb2-4296-814c-0fb30c55ac7f"
+}

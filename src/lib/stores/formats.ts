@@ -13,77 +13,67 @@ import type { FormatInfo } from '@/lib/types/api'
 export const formatsStore = atom<FormatInfo[]>([])
 
 // Derived store for input formats only
-export const inputFormatsStore = createDerivedStore(
-  formatsStore,
-  (formats) => formats.filter((format: FormatInfo) => format.isInput)
+export const inputFormatsStore = createDerivedStore(formatsStore, (formats) =>
+	formats.filter((format: FormatInfo) => format.inputFormats && format.inputFormats.length > 0)
 )
 
 // Derived store for output formats only
-export const outputFormatsStore = createDerivedStore(
-  formatsStore,
-  (formats) => formats.filter((format: FormatInfo) => format.isOutput)
+export const outputFormatsStore = createDerivedStore(formatsStore, (formats) =>
+	formats.filter((format: FormatInfo) => format.outputFormats && format.outputFormats.length > 0)
 )
 
-// Store for format loading state
+// Loading state store
 export const formatsLoadingStore = map({
-  loading: false,
-  error: null as string | null
+	loading: false,
+	error: null as string | null
 })
 
 /**
  * Load formats into the store
- * @param formats Array of format objects from API
+ * @param formats Array of format objects to load
  */
 export function loadFormats(formats: FormatInfo[]) {
-  // Update formats store with new data
-  formatsStore.set(formats)
-  
-  // Update loading state
-  formatsLoadingStore.set({
-    loading: false,
-    error: null
-  })
+	formatsLoadingStore.set({ loading: true, error: null })
+
+	try {
+		// Process formats if needed
+		const processedFormats = formats.map((format) => {
+			// Ensure backward compatibility by mapping new fields to old fields if needed
+			return {
+				...format,
+				// If code is not defined, use id
+				code: format.code || format.id,
+				// If compatibleOutputs is not defined, use outputFormats
+				compatibleOutputs: format.compatibleOutputs || format.outputFormats,
+				// If isInput is not defined, infer from inputFormats
+				isInput:
+					format.isInput !== undefined
+						? format.isInput
+						: format.inputFormats && format.inputFormats.length > 0,
+				// If isOutput is not defined, infer from outputFormats
+				isOutput:
+					format.isOutput !== undefined
+						? format.isOutput
+						: format.outputFormats && format.outputFormats.length > 0
+			}
+		})
+
+		formatsStore.set(processedFormats)
+		formatsLoadingStore.set({ loading: false, error: null })
+	} catch (error) {
+		console.error('Error loading formats:', error)
+		formatsLoadingStore.set({
+			loading: false,
+			error: error instanceof Error ? error.message : 'Unknown error loading formats'
+		})
+	}
 }
 
 /**
- * Set loading state
- * @param isLoading Whether formats are being loaded
+ * Clear the formats store
  */
-export function setFormatsLoading(isLoading: boolean) {
-  formatsLoadingStore.setKey('loading', isLoading)
-}
-
-/**
- * Set error state
- * @param error Error message
- */
-export function setFormatsError(error: string | null) {
-  formatsLoadingStore.set({
-    loading: false,
-    error
-  })
-}
-
-/**
- * Get formats compatible with a specific input format
- * @param inputFormat Input format code
- * @returns Array of compatible output format codes
- */
-export function getCompatibleFormats(inputFormat: string): string[] {
-  const formats = formatsStore.get()
-  const format = formats.find((f: FormatInfo) => f.code === inputFormat)
-  return format?.compatibleOutputs || []
-}
-
-/**
- * Check if a conversion between formats is supported
- * @param inputFormat Input format code
- * @param outputFormat Output format code
- * @returns Boolean indicating if conversion is supported
- */
-export function isConversionSupported(inputFormat: string, outputFormat: string): boolean {
-  const compatibleFormats = getCompatibleFormats(inputFormat)
-  return compatibleFormats.includes(outputFormat)
+export function clearFormats() {
+	formatsStore.set([])
 }
 
 /**
@@ -92,18 +82,15 @@ export function isConversionSupported(inputFormat: string, outputFormat: string)
  * @returns Format information or undefined if not found
  */
 export function getFormatInfo(formatCode: string): FormatInfo | undefined {
-  const formats = formatsStore.get()
-  return formats.find((f: FormatInfo) => f.code === formatCode)
+	const formats = formatsStore.get()
+	return formats.find((f: FormatInfo) => f.id === formatCode || f.code === formatCode)
 }
 
 // Export formats service as an object for consistency
 export const formatsService = {
-  loadFormats,
-  setFormatsLoading,
-  setFormatsError,
-  getCompatibleFormats,
-  isConversionSupported,
-  getFormatInfo
+	loadFormats,
+	clearFormats,
+	getFormatInfo
 }
 
-export default formatsService 
+export default formatsService

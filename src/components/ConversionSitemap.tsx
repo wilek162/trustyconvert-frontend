@@ -1,101 +1,131 @@
-import React from 'react'
-// Format categories with icons matching the original SupportedFormats component
-const formatCategories = [
-	{
-		id: 'document',
-		name: 'Documents',
-		formats: ['pdf', 'docx', 'doc', 'txt', 'rtf', 'odt'],
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="text-trustTeal"
-			>
-				<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-				<polyline points="14 2 14 8 20 8" />
-			</svg>
-		)
-	},
-	{
-		id: 'image',
-		name: 'Images',
-		formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'],
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="text-trustTeal"
-			>
-				<rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-				<circle cx="8.5" cy="8.5" r="1.5" />
-				<polyline points="21 15 16 10 5 21" />
-			</svg>
-		)
-	},
-	{
-		id: 'spreadsheet',
-		name: 'Spreadsheets',
-		formats: ['xlsx', 'xls', 'csv', 'ods'],
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="text-trustTeal"
-			>
-				<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-				<polyline points="14 2 14 8 20 8" />
-				<line x1="8" y1="13" x2="16" y2="13" />
-				<line x1="8" y1="17" x2="16" y2="17" />
-				<line x1="10" y1="9" x2="12" y2="9" />
-			</svg>
-		)
-	},
-	{
-		id: 'presentation',
-		name: 'Presentations',
-		formats: ['pptx', 'ppt', 'odp'],
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="text-trustTeal"
-			>
-				<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-				<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-			</svg>
-		)
-	}
-]
+import React, { useEffect, useState } from 'react'
+import formatService, { FORMAT_CATEGORIES } from '@/lib/services/formatService'
+import type { ConversionFormat } from '@/lib/types/api'
 
 export function ConversionSitemap() {
+	const [formatCategories, setFormatCategories] = useState<any[]>([])
+	
+	// Load format data on component mount
+	useEffect(() => {
+		async function loadFormatData() {
+			const formats = await formatService.getAllFormats()
+			
+			// Create category data with icons
+			const categories = Object.entries(FORMAT_CATEGORIES).map(([categoryId, category]) => {
+				return {
+					id: categoryId,
+					name: category.name,
+					formats: category.formats,
+					icon: getCategoryIcon(categoryId)
+				}
+			})
+			
+			setFormatCategories(categories)
+		}
+		
+		loadFormatData()
+	}, [])
+	
+	// Get icon for a category
+	function getCategoryIcon(categoryId: string) {
+		switch(categoryId) {
+			case 'document':
+				return (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						className="text-trustTeal"
+					>
+						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+						<polyline points="14 2 14 8 20 8" />
+					</svg>
+				)
+			case 'image':
+				return (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						className="text-trustTeal"
+					>
+						<rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+						<circle cx="8.5" cy="8.5" r="1.5" />
+						<polyline points="21 15 16 10 5 21" />
+					</svg>
+				)
+			case 'spreadsheet':
+				return (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						className="text-trustTeal"
+					>
+						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+						<polyline points="14 2 14 8 20 8" />
+						<line x1="8" y1="13" x2="16" y2="13" />
+						<line x1="8" y1="17" x2="16" y2="17" />
+						<line x1="10" y1="9" x2="12" y2="9" />
+					</svg>
+				)
+			case 'presentation':
+				return (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						className="text-trustTeal"
+					>
+						<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+						<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+					</svg>
+				)
+			default:
+				return (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						className="text-trustTeal"
+					>
+						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+						<polyline points="14 2 14 8 20 8" />
+					</svg>
+				)
+		}
+	}
+
 	return (
 		<section className="bg-white py-20">
 			<div className="trusty-container">
@@ -123,7 +153,7 @@ export function ConversionSitemap() {
 							</div>
 
 							<div className="flex flex-wrap gap-2">
-								{category.formats.map((formatId) => {
+								{category.formats.map((formatId: string) => {
 									return (
 										<a
 											key={formatId}

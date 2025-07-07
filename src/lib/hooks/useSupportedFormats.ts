@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import  client  from '@/lib/api/client'
+import client from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { 
-	formatsStore, 
-	inputFormatsStore, 
-	outputFormatsStore, 
+import {
+	formatsStore,
+	inputFormatsStore,
+	outputFormatsStore,
 	loadFormats,
 	formatsLoadingStore
 } from '@/lib/stores/formats'
@@ -29,15 +29,18 @@ export function useSupportedFormats() {
 			try {
 				debugLog('Fetching supported formats')
 				const response = await client.getSupportedFormats()
-				
-				if (!response.formats) {
+
+				// Check for the new API response format
+				if (!response.success || !response.data || !response.data.formats) {
 					throw new Error('No formats returned from API')
 				}
-				
+
+				const formats = response.data.formats
+
 				// Update the formats store
-				loadFormats(response.formats)
-				
-				return response.formats
+				loadFormats(formats)
+
+				return formats
 			} catch (error) {
 				debugError('Error fetching formats:', error)
 				throw error
@@ -70,16 +73,16 @@ export function useSupportedFormats() {
  */
 export function useCompatibleFormats(inputFormat: string | null) {
 	const { formats } = useSupportedFormats()
-	
+
 	if (!inputFormat || formats.length === 0) {
 		return []
 	}
-	
+
 	// Find the input format object
-	const format = formats.find(f => f.code === inputFormat)
-	
+	const format = formats.find((f) => f.id === inputFormat)
+
 	// Return compatible output formats
-	return format?.compatibleOutputs || []
+	return format?.outputFormats || []
 }
 
 /**
@@ -91,12 +94,12 @@ export function useCompatibleFormats(inputFormat: string | null) {
 export function isConversionSupported(inputFormat: string, outputFormat: string): boolean {
 	// Get formats from store
 	const formats = formatsStore.get()
-	
+
 	// Find the input format
-	const format = formats.find(f => f.code === inputFormat)
-	
+	const format = formats.find((f) => f.id === inputFormat)
+
 	// Check if output format is in compatible outputs
-	return !!format && format.compatibleOutputs.includes(outputFormat)
+	return !!format && format.outputFormats.includes(outputFormat)
 }
 
 /**
@@ -106,7 +109,7 @@ export function isConversionSupported(inputFormat: string, outputFormat: string)
  */
 export function getFormatInfo(formatCode: string): FormatInfo | undefined {
 	const formats = formatsStore.get()
-	return formats.find(f => f.code === formatCode)
+	return formats.find((f) => f.id === formatCode)
 }
 
 export default useSupportedFormats

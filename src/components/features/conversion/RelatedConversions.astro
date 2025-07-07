@@ -1,0 +1,44 @@
+---
+/**
+ * RelatedConversions Component
+ * 
+ * Displays a list of related conversions for a specific target format.
+ */
+
+import type { ConversionFormat } from '@/lib/types/api';
+
+interface Props {
+  relatedFormats: ConversionFormat[];
+  targetFormat: string;
+  targetFormatName?: string;
+}
+
+const { relatedFormats, targetFormat, targetFormatName } = Astro.props;
+
+// Use provided name or default to uppercase format ID
+const targetFormatDisplay = targetFormatName || targetFormat.toUpperCase();
+
+// Only render if we have related conversions
+const hasRelatedConversions = relatedFormats && relatedFormats.length > 0;
+---
+
+{hasRelatedConversions && (
+  <div class="rounded-lg border border-border bg-card p-6">
+    <h2 class="mb-4 text-xl font-semibold text-deepNavy">Related Conversions</h2>
+    <ul class="space-y-2">
+      {relatedFormats.map((format) => (
+        <li>
+          <a
+            href={`/convert/${format.id}-to-${targetFormat}`}
+            class="flex items-center rounded-md p-2 text-sm transition-colors hover:bg-muted"
+          >
+            <span class="mr-2">{format.icon || '🔄'}</span>
+            <span>
+              {format.name} to {targetFormatDisplay}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+)} 

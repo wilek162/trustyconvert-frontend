@@ -4,6 +4,7 @@ import react from '@astrojs/react';
 import tailwind from '@astrojs/tailwind';
 import sitemap from '@astrojs/sitemap';
 import { fileURLToPath } from 'node:url';
+import formatsIntegration from './src/integrations/formats-integration.js';
 
 // ✅ Load .env only in local development
 if (process.env.NODE_ENV !== 'production') {
@@ -56,6 +57,8 @@ export default defineConfig({
   },
 
   integrations: [
+    // Add our custom formats integration
+    formatsIntegration(),
     react({
       include: ['**/features/**/*', '**/ui/**/*', '**/providers/**/*', '**/Hero.tsx', '**/ConversionForm.tsx'],
       exclude: ['**/common/**/*', '**/seo/**/*', '**/*.stories.*'],

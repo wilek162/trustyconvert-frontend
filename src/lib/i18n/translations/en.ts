@@ -81,7 +81,25 @@ const translations = {
 
 	// Language selector
 	language_selector_label: 'Select language',
-	current_language: 'Current language: {language}'
+	current_language: 'Current language: {language}',
+
+	// Conversion pages
+	convert: 'Convert',
+	to: 'to',
+	free_online_converter: 'Free Online Converter',
+	convert_your: 'Convert your',
+	files_to: 'files to',
+	format_online: 'format online',
+	fast_secure_free: 'Fast, secure, and free file conversion with TrustyConvert.',
+	secure_conversion: '100% secure and private conversion',
+	no_registration: 'No registration required',
+	download_immediately: 'Download converted files immediately',
+	instantly: 'instantly',
+	how_to_convert: 'How to Convert',
+	upload_your: 'Upload Your',
+	convert_to: 'Convert to',
+	download_your: 'Download Your',
+	related_conversions: 'Related Conversions'
 }
 
 export default translations

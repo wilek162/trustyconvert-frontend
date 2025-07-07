@@ -22,6 +22,7 @@ interface ExtendedClient {
 	getConversionStatus(jobId: string): Promise<StandardResponse>
 	getDownloadToken(jobId: string): Promise<StandardResponse>
 	getDownloadUrl(token: string): string
+	getSupportedFormats(): Promise<StandardResponse>
 	closeSession(): Promise<StandardResponse>
 	_apiClient?: typeof _apiClient
 }
@@ -59,7 +60,7 @@ function standardizeResponse(data: any): StandardResponse {
 
 /**
  * High-level API client
- */  
+ */
 const RETRY_CONFIG = RETRY_STRATEGIES.API_REQUEST
 
 const client = {
@@ -299,6 +300,27 @@ const client = {
 			} catch (error) {
 				throw handleError(error, {
 					context: { action: 'getConversionStatus', jobId }
+				})
+			}
+		}, RETRY_CONFIG)
+	},
+
+	/**
+	 * Get supported file formats
+	 */
+	getSupportedFormats: async (): Promise<StandardResponse> => {
+		return withRetry(async () => {
+			try {
+				const response = await _apiClient.getSupportedFormats()
+				// The API returns data in the format { success: true, data: { formats: [...] }, correlation_id: "..." }
+				// We want to preserve this structure for consistency
+				return {
+					success: response.success,
+					data: response.data
+				}
+			} catch (error) {
+				throw handleError(error, {
+					context: { action: 'getSupportedFormats' }
 				})
 			}
 		}, RETRY_CONFIG)

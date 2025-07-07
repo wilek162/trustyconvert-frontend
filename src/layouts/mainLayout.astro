@@ -78,7 +78,7 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" type="image/svg+xml" href="/favicon_v1.svg" />
 		<meta name="generator" content={Astro.generator} />
 
 		<!-- Primary Meta Tags -->
@@ -92,14 +92,14 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 
 		<!-- Alternate language links -->
 		{
-			 alternateLanguages &&
-        		alternateLanguages.map((lang: { code: string; name: string; url?: string }) => (
-            			<link
-                	rel="alternate"
-                	hreflang={lang.code}
-                	href={lang.url || `/${lang.code !== 'en' ? lang.code : ''}`}
-           		/>
-        ))
+			alternateLanguages &&
+				alternateLanguages.map((lang: { code: string; name: string; url?: string }) => (
+					<link
+						rel="alternate"
+						hreflang={lang.code}
+						href={lang.url || `/${lang.code !== 'en' ? lang.code : ''}`}
+					/>
+				))
 		}
 
 		<!-- Open Graph / Facebook -->
@@ -144,7 +144,7 @@ const languageDetectionScript = isStaticMode ? getLanguageDetectionScript() : ''
 
 		<!-- Preload critical assets -->
 		<link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
-		
+
 		<!-- Client-side language detection for static mode -->
 		{isStaticMode && <Fragment set:html={languageDetectionScript} />}
 	</head>

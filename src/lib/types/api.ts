@@ -1,6 +1,6 @@
 /**
  * API Type Definitions
- * 
+ *
  * Centralized type definitions for all API-related functionality.
  * This file is organized into sections by domain (Common, Session, Conversion, etc.)
  */
@@ -37,20 +37,20 @@ export interface ApiErrorInfo {
 /**
  * Job status values used across the API
  */
-export type JobStatus = 
+export type JobStatus =
 	| 'idle'
 	| 'pending'
-	| 'uploading' 
-	| 'uploaded' 
+	| 'uploading'
+	| 'uploaded'
 	| 'queued'
-	| 'processing' 
-	| 'completed' 
+	| 'processing'
+	| 'completed'
 	| 'failed'
 
 /**
  * Conversion status (client-side representation of JobStatus)
  */
-export type ConversionStatus = 
+export type ConversionStatus =
 	| 'idle'
 	| 'pending'
 	| 'uploading'
@@ -226,19 +226,25 @@ export interface DownloadOptions {
  * Format information
  */
 export interface FormatInfo {
-	code: string
+	id: string
 	name: string
-	extension: string
-	mimeType: string
-	mime_type?: string // For API compatibility
-	category?: string
 	description?: string
-	compatibleOutputs: string[]
-	compatible_outputs?: string[] // For API compatibility
-	isInput: boolean
-	is_input?: boolean // For API compatibility
-	isOutput: boolean
-	is_output?: boolean // For API compatibility
+	inputFormats: string[]
+	outputFormats: string[]
+	maxSize?: number
+	features?: string[]
+	// Legacy fields for backward compatibility
+	code?: string
+	extension?: string
+	mimeType?: string
+	mime_type?: string
+	category?: string
+	compatibleOutputs?: string[]
+	compatible_outputs?: string[]
+	isInput?: boolean
+	is_input?: boolean
+	isOutput?: boolean
+	is_output?: boolean
 	icon?: string
 }
 
@@ -246,9 +252,13 @@ export interface FormatInfo {
  * Formats listing response
  */
 export interface FormatsResponse {
-	formats: FormatInfo[]
+	formats?: FormatInfo[]
 	success?: boolean
 	message?: string
+	data?: {
+		formats: FormatInfo[]
+	}
+	correlation_id?: string
 }
 
 /**
@@ -274,7 +284,11 @@ export interface ConversionFormat {
 export interface ApiClientInterface {
 	initSession(): Promise<ApiResponse<SessionInitResponse>>
 	uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>>
-	convertFile(jobId: string, targetFormat: string, sourceFormat?: string): Promise<ApiResponse<ConvertResponse>>
+	convertFile(
+		jobId: string,
+		targetFormat: string,
+		sourceFormat?: string
+	): Promise<ApiResponse<ConvertResponse>>
 	startConversion(file: File, targetFormat: string): Promise<ApiResponse<ConvertResponse>>
 	getConversionStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>>
 	getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>>
@@ -283,8 +297,8 @@ export interface ApiClientInterface {
 	getDownloadUrl(downloadToken: string): string
 	// Direct access to low-level API client
 	apiClient?: {
-		getJobStatus: (jobId: string) => Promise<ApiResponse<JobStatusResponse>>;
-		[key: string]: any;
+		getJobStatus: (jobId: string) => Promise<ApiResponse<JobStatusResponse>>
+		[key: string]: any
 	}
 }
 
