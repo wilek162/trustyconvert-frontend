@@ -14,7 +14,7 @@ interface FileDropzoneProps {
 export function FileDropzone({
 	onFileAccepted,
 	onFileRejected,
-	maxSize = FILE_UPLOAD.MAX_SIZE
+	maxSize = FILE_UPLOAD.MAX_SIZE,
 	accept = {
 		'application/pdf': ['.pdf'],
 		'image/jpeg': ['.jpg', '.jpeg'],
