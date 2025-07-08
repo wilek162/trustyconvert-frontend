@@ -20,14 +20,14 @@ export function CallToAction({
 			<div className="trusty-container">
 				<div className="flex flex-col items-center justify-between gap-8 md:flex-row">
 					<div className="max-w-xl">
-						<h2 className="relative mb-6 inline-block font-heading text-3xl font-semibold tracking-tight md:text-4xl">
+						<h2 className="relative mb-6 inline-block font-heading text-3xl font-medium tracking-tight md:text-4xl">
 							{title}
 							<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
 						</h2>
 						<p className="mb-8 text-lg text-gray-200">{description}</p>
 						<a
 							href={buttonHref}
-							className="inline-flex items-center justify-center rounded-lg bg-trustTeal px-8 py-3 text-base font-medium text-white shadow-md transition-all hover:bg-trustTeal/90 hover:shadow-lg focus:ring-2 focus:ring-trustTeal/50 focus:ring-offset-2 focus:ring-offset-deepNavy"
+							className="inline-flex items-center justify-center rounded-button bg-trustTeal px-6 py-3 text-base font-medium text-white shadow-DEFAULT transition-all duration-200 ease-in-out hover:bg-trustTeal/90 hover:shadow-md focus:ring-2 focus:ring-trustTeal/50 focus:ring-offset-2 focus:ring-offset-deepNavy"
 						>
 							{buttonText}
 							<svg
@@ -46,7 +46,7 @@ export function CallToAction({
 					</div>
 
 					{showFeatures && (
-						<div className="group relative overflow-hidden rounded-xl border border-trustTeal/20 bg-deepNavy/50 p-8 shadow-lg backdrop-blur-sm">
+						<div className="group relative overflow-hidden rounded-card border border-trustTeal/20 bg-deepNavy/50 p-8 shadow-DEFAULT backdrop-blur-sm">
 							<div className="absolute -right-16 -top-16 h-32 w-32 rounded-full bg-trustTeal/5 transition-transform duration-500 group-hover:scale-150"></div>
 
 							<div className="relative z-10 flex flex-col gap-5">

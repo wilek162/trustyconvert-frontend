@@ -7,23 +7,23 @@
         "name": "Images",
         "description": "Convert between various image formats with optimization features",
         "inputFormats": [
-          "jpeg",
-          "png",
           "bmp",
-          "jpg",
-          "tiff",
+          "gif",
           "webp",
-          "gif"
+          "png",
+          "jpeg",
+          "tiff",
+          "jpg"
         ],
         "outputFormats": [
-          "jpeg",
+          "bmp",
+          "gif",
+          "webp",
           "png",
           "pdf",
           "tiff",
-          "bmp",
-          "jpg",
-          "webp",
-          "gif"
+          "jpeg",
+          "jpg"
         ],
         "maxSize": 52428800,
         "features": [
@@ -39,19 +39,19 @@
         "description": "Convert between document formats including Word, PDF, and text files",
         "inputFormats": [
           "docx",
+          "md",
+          "html",
           "odt",
           "pdf",
           "doc",
           "txt",
-          "md",
-          "html",
           "rtf"
         ],
         "outputFormats": [
           "txt",
-          "pdf",
           "docx",
-          "html"
+          "html",
+          "pdf"
         ],
         "maxSize": 52428800,
         "features": [
@@ -67,13 +67,13 @@
         "description": "Convert presentation files between different formats",
         "inputFormats": [
           "odp",
-          "pdf",
-          "pptx",
-          "ppt"
-        ],
-        "outputFormats": [
+          "ppt",
           "pdf",
           "pptx"
+        ],
+        "outputFormats": [
+          "pptx",
+          "pdf"
         ],
         "maxSize": 52428800,
         "features": [
@@ -87,16 +87,16 @@
         "name": "Spreadsheets",
         "description": "Convert spreadsheet files and extract data",
         "inputFormats": [
-          "csv",
+          "xls",
+          "ods",
           "xlsx",
           "pdf",
-          "xls",
-          "ods"
+          "csv"
         ],
         "outputFormats": [
-          "csv",
           "xlsx",
-          "pdf"
+          "pdf",
+          "csv"
         ],
         "maxSize": 52428800,
         "features": [
@@ -107,5 +107,5 @@
       }
     ]
   },
-  "correlation_id": "b68ba3ec-2c25-4fe7-8456-6d6b0e275257"
+  "correlation_id": "de25714c-b189-49ec-87eb-c2533f6ab9fe"
 }

@@ -193,7 +193,7 @@ export function Features({ sourceFormat, targetFormat, compact = false }: Featur
 		<section className="bg-gradient-to-b from-white to-lightGray/30 py-20">
 			<div className="trusty-container">
 				<div className="mb-14 text-center">
-					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold text-deepNavy md:text-4xl">
+					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-medium tracking-tight text-deepNavy md:text-4xl">
 						Why Choose TrustyConvert
 						<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
 					</h2>
@@ -207,7 +207,7 @@ export function Features({ sourceFormat, targetFormat, compact = false }: Featur
 					{features.map((feature, index) => (
 						<div
 							key={index}
-							className="group relative overflow-hidden rounded-xl border border-trustTeal/20 bg-white p-8 shadow-lg transition-all hover:shadow-xl"
+							className="group relative overflow-hidden rounded-xl border border-trustTeal/20 bg-white p-8 shadow-DEFAULT transition-all hover:shadow-lg"
 						>
 							<div className="absolute -right-16 -top-16 h-32 w-32 rounded-full bg-trustTeal/5 transition-transform duration-500 group-hover:scale-150"></div>
 
@@ -215,7 +215,7 @@ export function Features({ sourceFormat, targetFormat, compact = false }: Featur
 								<div className="mb-6 flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-trustTeal/20 to-trustTeal/30 shadow-inner">
 									{feature.icon}
 								</div>
-								<h3 className="mb-4 text-xl font-semibold text-deepNavy">{feature.title}</h3>
+								<h3 className="mb-4 text-xl font-medium text-deepNavy">{feature.title}</h3>
 								<p className="text-base text-deepNavy/80">{feature.description}</p>
 							</div>
 						</div>

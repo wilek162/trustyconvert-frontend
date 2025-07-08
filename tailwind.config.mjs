@@ -14,6 +14,7 @@ export default {
                             xl: '5rem',
                             '2xl': '6rem',
                      },
+                     maxWidth: '1200px', // Brand guideline max-width
               },
               extend: {
                      colors: {
@@ -75,23 +76,41 @@ export default {
                      },
                      spacing: tokens.spacing,
                      fontFamily: {
-                            ...tokens.typography.fonts,
+                            sans: tokens.typography.fonts.sans,
                             heading: tokens.typography.fonts.heading,
+                            mono: tokens.typography.fonts.mono,
                      },
-                     fontSize: tokens.typography.sizes,
+                     fontSize: {
+                            xs: ['0.75rem', { lineHeight: '1rem' }], // 12px - Caption
+                            sm: ['0.875rem', { lineHeight: '1.25rem' }], // 14px - Small
+                            base: ['1rem', { lineHeight: '1.5rem' }], // 16px - Body
+                            lg: ['1.125rem', { lineHeight: '1.75rem' }], // 18px
+                            xl: ['1.25rem', { lineHeight: '1.75rem' }], // 20px
+                            '2xl': ['1.5rem', { lineHeight: '2rem' }], // 24px - H3
+                            '3xl': ['1.875rem', { lineHeight: '2.25rem' }], // 30px
+                            '4xl': ['2.25rem', { lineHeight: '2.5rem' }], // 36px - H2
+                            '5xl': ['3rem', { lineHeight: '1' }], // 48px - H1
+                     },
                      fontWeight: tokens.typography.weights,
                      lineHeight: tokens.typography.lineHeights,
-                     boxShadow: tokens.shadows,
-                     borderRadius: tokens.radii,
+                     boxShadow: {
+                            ...tokens.shadows,
+                            DEFAULT: '0 4px 6px rgba(0,0,0,0.1)', // Brand guideline shadow
+                     },
+                     borderRadius: {
+                            ...tokens.radii,
+                            card: '0.75rem', // 12px for cards per brand guidelines
+                            button: '0.5rem', // 8px for buttons per brand guidelines
+                     },
                      transitionDuration: {
-                            DEFAULT: tokens.transitions.DEFAULT.split(' ')[0],
-                            fast: tokens.transitions.fast.split(' ')[0],
-                            slow: tokens.transitions.slow.split(' ')[0],
+                            DEFAULT: '200ms', // Brand guideline transition
+                            fast: '100ms',
+                            slow: '300ms',
                      },
                      transitionTimingFunction: {
-                            DEFAULT: tokens.transitions.DEFAULT.split(' ')[1],
-                            fast: tokens.transitions.fast.split(' ')[1],
-                            slow: tokens.transitions.slow.split(' ')[1],
+                            DEFAULT: 'ease-in-out', // Brand guideline transition
+                            fast: 'ease-in-out',
+                            slow: 'ease-in-out',
                      },
                      zIndex: tokens.zIndices,
                      animation: {
@@ -151,14 +170,20 @@ export default {
                                           h1: {
                                                  color: 'hsl(var(--foreground))',
                                                  fontFamily: tokens.typography.fonts.heading,
+                                                 fontWeight: '600', // Semi-bold per brand guidelines
+                                                 fontSize: '3rem', // 48px per brand guidelines
                                           },
                                           h2: {
                                                  color: 'hsl(var(--foreground))',
                                                  fontFamily: tokens.typography.fonts.heading,
+                                                 fontWeight: '500', // Medium per brand guidelines
+                                                 fontSize: '2.25rem', // 36px per brand guidelines
                                           },
                                           h3: {
                                                  color: 'hsl(var(--foreground))',
                                                  fontFamily: tokens.typography.fonts.heading,
+                                                 fontWeight: '500', // Medium per brand guidelines
+                                                 fontSize: '1.5rem', // 24px per brand guidelines
                                           },
                                           h4: {
                                                  color: 'hsl(var(--foreground))',

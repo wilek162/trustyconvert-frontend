@@ -55,7 +55,7 @@ export function Testimonials({
 		<section className="bg-gradient-to-b from-lightGray/30 to-white py-20">
 			<div className="trusty-container">
 				<div className="mb-14 text-center">
-					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold text-deepNavy md:text-4xl">
+					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-medium text-deepNavy md:text-4xl">
 						{title}
 						<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
 					</h2>
@@ -66,7 +66,7 @@ export function Testimonials({
 					{testimonials.map((testimonial) => (
 						<div
 							key={testimonial.id}
-							className="group relative overflow-hidden rounded-xl border border-trustTeal/20 bg-white p-8 shadow-lg transition-all hover:shadow-xl"
+							className="group relative overflow-hidden rounded-card border border-trustTeal/20 bg-white p-8 shadow-DEFAULT transition-all hover:shadow-lg"
 						>
 							<div className="absolute -right-16 -top-16 h-32 w-32 rounded-full bg-trustTeal/5 transition-transform duration-500 group-hover:scale-150"></div>
 
@@ -102,7 +102,7 @@ export function Testimonials({
 										)}
 									</div>
 									<div className="ml-3">
-										<p className="font-semibold text-deepNavy">{testimonial.name}</p>
+										<p className="font-medium text-deepNavy">{testimonial.name}</p>
 										{(testimonial.title || testimonial.company) && (
 											<p className="text-sm text-deepNavy/70">
 												{testimonial.title}

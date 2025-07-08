@@ -44,7 +44,7 @@ export function FAQ() {
 		<section className="bg-gradient-to-b from-white to-lightGray/30 py-20">
 			<div className="trusty-container">
 				<div className="mb-14 text-center">
-					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold text-deepNavy md:text-4xl">
+					<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-medium text-deepNavy md:text-4xl">
 						Frequently Asked Questions
 						<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
 					</h2>

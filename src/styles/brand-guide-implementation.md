@@ -1,201 +1,81 @@
-# TrustyConvert Brand Guidelines Implementation
+# TrustyConvert Brand Guide Implementation
 
-This document outlines how the TrustyConvert brand guidelines have been implemented throughout the codebase.
+This document outlines how the TrustyConvert brand guidelines have been implemented across the frontend codebase.
 
 ## Color System
 
-The TrustyConvert brand colors are defined in `src/styles/design-tokens.ts` and mapped to Tailwind in `tailwind.config.mjs`:
+The brand colors have been implemented using a combination of Tailwind CSS custom colors and CSS variables:
 
-```js
-// Primary Brand Colors
-trustTeal: '#4ECDC4',      // Main brand color
-deepNavy: '#2C3E50',       // Authority and reliability
-pureWhite: '#FFFFFF',      // Clean, transparent
+### Primary Colors
+- **Trust Teal**: `#4ECDC4` - Main brand color (trustworthy, professional)
+- **Deep Navy**: `#2C3E50` - Authority and reliability
+- **Pure White**: `#FFFFFF` - Clean, transparent
 
-// Secondary Colors
-accentOrange: '#FF8C42',   // Energy and speed (use sparingly)
-lightGray: '#F8F9FA',      // Backgrounds and subtle elements
-mediumGray: '#6C757D',     // Secondary text
-successGreen: '#28A745',   // Positive actions/confirmations
-warningRed: '#DC3545',     // Alerts/errors (minimal use)
-```
-
-These colors are also available as CSS variables in `src/styles/global.css`:
-
-```css
-:root {
-  --trust-teal: 174 78% 55%;    /* #4ECDC4 in HSL */
-  --deep-navy: 210 40% 24%;     /* #2C3E50 in HSL */
-  --accent-orange: 25 100% 63%; /* #FF8C42 in HSL */
-  --light-gray: 210 17% 98%;    /* #F8F9FA in HSL */
-  --medium-gray: 210 7% 46%;    /* #6C757D in HSL */
-  --success-green: 134 61% 41%; /* #28A745 in HSL */
-  --warning-red: 354 70% 54%;   /* #DC3545 in HSL */
-}
-```
+### Secondary Colors
+- **Accent Orange**: `#FF8C42` - Energy and speed (used sparingly)
+- **Light Gray**: `#F8F9FA` - Backgrounds and subtle elements
+- **Medium Gray**: `#6C757D` - Secondary text
+- **Success Green**: `#28A745` - Positive actions/confirmations
+- **Warning Red**: `#DC3545` - Alerts/errors (minimal use)
 
 ## Typography
 
-The typography system uses the following font stacks:
+### Font Stacks
+- **Primary Font**: 'Inter' - Used for body text and general UI
+- **Heading Font**: 'Poppins' - Used for headings and titles
 
-```js
-fonts: {
-  sans: [
-    'Inter',
-    'Poppins',
-    'ui-sans-serif',
-    'system-ui',
-    /* fallbacks */
-  ].join(','),
-  heading: ['Poppins', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'].join(','),
-  mono: [
-    'JetBrains Mono',
-    'ui-monospace',
-    /* fallbacks */
-  ].join(',')
-}
-```
+### Font Weights & Sizes
+- **H1**: 48px (3rem), Semi-bold (600)
+- **H2**: 36px (2.25rem), Medium (500)
+- **H3**: 24px (1.5rem), Medium (500)
+- **Body**: 16px (1rem), Regular (400)
+- **Small**: 14px (0.875rem), Regular (400)
+- **Caption**: 12px (0.75rem), Medium (500)
 
-Font sizes follow a consistent scale:
-
-```js
-sizes: {
-  xs: '0.75rem',  // 12px
-  sm: '0.875rem', // 14px
-  base: '1rem',   // 16px
-  lg: '1.125rem', // 18px
-  xl: '1.25rem',  // 20px
-  '2xl': '1.5rem', // 24px
-  '3xl': '1.875rem', // 30px
-  '4xl': '2.25rem', // 36px
-  '5xl': '3rem' // 48px
-}
-```
-
-## Component Design Patterns
-
-### Headings
-
-Headings use a consistent pattern with an underline accent:
-
-```jsx
-<h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold text-deepNavy md:text-4xl">
-  Heading Text
-  <span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
-</h2>
-```
-
-### Cards
-
-Cards follow a consistent design pattern:
-
-```jsx
-<div className="trusty-card rounded-card border border-trustTeal/20 bg-white p-8 shadow-DEFAULT transition-all hover:shadow-lg">
-  {/* Card content */}
-</div>
-```
+## UI Elements
 
 ### Buttons
+- **Primary Button**: Trust Teal background, white text, 8px border-radius
+- **Secondary Button**: Transparent background, Deep Navy border and text, 8px border-radius
 
-Primary buttons:
+### Cards
+- **Border Radius**: 12px for cards, 8px for smaller elements
+- **Shadows**: Subtle, soft shadows (0 4px 6px rgba(0,0,0,0.1))
+- **Borders**: 1px solid #E9ECEF when needed
+- **Padding**: 24px or 32px internal spacing
 
-```jsx
-<button className="btn-primary rounded-button bg-trustTeal px-6 py-3 text-sm font-medium text-white transition-all hover:bg-trustTeal/90 hover:shadow-md">
-  Button Text
-</button>
-```
+## Iconography
+- **Style**: Outline style with 2px stroke weight
+- **Sizes**: 16px, 24px, 32px, 48px
+- **Color**: Primarily Trust Teal for accents
 
-Secondary buttons:
+## Implementation Details
 
-```jsx
-<button className="btn-secondary rounded-button border-2 border-deepNavy bg-transparent px-6 py-3 text-sm font-medium text-deepNavy transition-all hover:bg-deepNavy/10">
-  Button Text
-</button>
-```
+### Design Tokens
+All brand values are stored as design tokens in `src/styles/design-tokens.ts` for consistent reference across the application.
 
-### Icons
+### Tailwind Configuration
+The Tailwind configuration in `tailwind.config.mjs` extends the base theme with our brand colors, typography, spacing, and other design elements.
 
-Icons use a consistent outline style with 2px stroke width:
+### CSS Variables
+CSS variables in `src/styles/global.css` provide theme support and ensure consistent usage of brand colors across the application, including dark mode support.
 
-```jsx
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  width="24"
-  height="24"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  strokeWidth="2"
-  strokeLinecap="round"
-  strokeLinejoin="round"
-  className="text-trustTeal"
->
-  {/* SVG paths */}
-</svg>
-```
+### Component Implementation
+Components have been updated to use the brand guidelines:
+- **Features Component**: Card styling, typography, and iconography
+- **Hero Component**: Typography, buttons, and spacing
+- **Button Component**: Border-radius, padding, and transitions
 
-## Layout Patterns
+## Usage Guidelines
 
-### Section Structure
+When developing new components or modifying existing ones:
 
-Sections follow a consistent pattern:
+1. **Colors**: Use the Tailwind classes (e.g., `text-trustTeal`, `bg-deepNavy`) or CSS variables
+2. **Typography**: Use the appropriate font weights and sizes
+3. **Spacing**: Follow the 8px grid system (0.5rem increments)
+4. **Components**: Reuse existing components where possible
+5. **Accessibility**: Ensure all components meet WCAG AA standards
 
-```jsx
-<section className="py-16 bg-white">
-  <div className="trusty-container">
-    <div className="mb-12 text-center">
-      <h2 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold text-deepNavy md:text-4xl">
-        Section Title
-        <span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
-      </h2>
-      <p className="mx-auto max-w-2xl text-lg text-deepNavy/80">
-        Section description text
-      </p>
-    </div>
-    
-    {/* Section content */}
-  </div>
-</section>
-```
+## Maintenance
 
-### Container
-
-The standard container class:
-
-```css
-.trusty-container {
-  @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
-}
-```
-
-## Reusable Components
-
-The following components have been created to ensure consistent brand application:
-
-1. `ConversionSitemap` - Displays file format categories with consistent styling
-2. `DetailedConversionOptions` - Shows detailed conversion options following brand guidelines
-3. `BenefitsSection` - Highlights product benefits with consistent card styling
-4. `FAQ` - Displays FAQs with consistent styling and interaction
-
-## Accessibility Considerations
-
-- Color contrast meets WCAG AA standards (4.5:1 for normal text)
-- Interactive elements have clear focus states
-- SVG icons include appropriate attributes for screen readers
-- Text sizes are responsive and readable on all devices
-
-## Responsive Design
-
-The design is fully responsive with breakpoints at:
-
-- Mobile: Default (< 768px)
-- Tablet: md (≥ 768px)
-- Desktop: lg (≥ 1024px)
-
-Grid layouts adjust columns based on screen size:
-
-```jsx
-<div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-  {/* Grid items */}
-</div>
-``` 
+The brand implementation should be reviewed periodically to ensure consistency and adherence to guidelines. Any deviations should be documented and justified. 

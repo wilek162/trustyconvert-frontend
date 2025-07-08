@@ -11,7 +11,7 @@ export function Hero() {
 	}, [])
 
 	return (
-		<section className="relative bg-gradient-to-b from-lightGray/30 to-white py-10">
+		<section className="relative bg-gradient-to-b from-lightGray/30 to-white py-16">
 			{/* Background elements */}
 			<div className="absolute inset-0 -z-10 overflow-hidden">
 				<div className="absolute -left-[10%] -top-[10%] h-[500px] w-[500px] rounded-full bg-trustTeal/5 blur-3xl"></div>
@@ -20,8 +20,8 @@ export function Hero() {
 			</div>
 
 			<div className="trusty-container flex flex-col">
-				<div className="mb-14 text-center">
-					<h1 className="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold tracking-tight text-deepNavy md:text-4xl">
+				<div className="mb-16 text-center">
+					<h1 className="relative mx-auto mb-6 inline-block font-heading text-4xl font-semibold tracking-tight text-deepNavy md:text-5xl">
 						<span className="relative inline-block">
 							Fast, Secure
 							<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
@@ -33,15 +33,15 @@ export function Hero() {
 					</p>
 				</div>
 
-				<div className="relative mb-14 flex justify-center">
+				<div className="relative mb-16 flex justify-center">
 					<div className="flex w-full max-w-2xl justify-center">
 						{/* Only render ConversionFlow on client-side to prevent hydration issues */}
 						{isClient ? (
 							<ConversionFlow title="Convert Your File" />
 						) : (
-							<div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border-0 bg-white shadow-lg">
+							<div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border-0 bg-white shadow-DEFAULT">
 								<div className="border-b border-border/50 bg-gradient-to-r from-trustTeal/20 to-transparent pb-4 pt-5">
-									<h2 className="text-center text-xl font-semibold text-deepNavy">
+									<h2 className="text-center text-xl font-medium text-deepNavy">
 										Convert Your File
 									</h2>
 								</div>
@@ -54,7 +54,7 @@ export function Hero() {
 								<div className="flex justify-center border-t border-border/50 bg-gradient-to-b from-lightGray/10 to-lightGray/20 px-8 py-7">
 									<button
 										disabled
-										className="w-full max-w-xs rounded-md bg-trustTeal/50 px-4 py-2 text-white"
+										className="w-full max-w-xs rounded-button bg-trustTeal/50 px-6 py-2 text-white"
 									>
 										Loading...
 									</button>
@@ -65,8 +65,8 @@ export function Hero() {
 				</div>
 
 				{/* Feature badges with improved contrast */}
-				<div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-5">
-					<div className="flex items-center rounded-full bg-white px-5 py-3 shadow">
+				<div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-6">
+					<div className="flex items-center rounded-full bg-white px-5 py-3 shadow-DEFAULT">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="20"
@@ -84,7 +84,7 @@ export function Hero() {
 						<span className="text-base font-medium text-deepNavy">Lightning-fast</span>
 					</div>
 
-					<div className="flex items-center rounded-full bg-white px-5 py-3 shadow">
+					<div className="flex items-center rounded-full bg-white px-5 py-3 shadow-DEFAULT">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="20"
@@ -103,7 +103,7 @@ export function Hero() {
 						<span className="text-base font-medium text-deepNavy">100% Secure</span>
 					</div>
 
-					<div className="flex items-center rounded-full bg-white px-5 py-3 shadow">
+					<div className="flex items-center rounded-full bg-white px-5 py-3 shadow-DEFAULT">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="20"
