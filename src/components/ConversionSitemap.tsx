@@ -1,34 +1,120 @@
 import React, { useEffect, useState } from 'react'
-import formatService, { FORMAT_CATEGORIES } from '@/lib/services/formatService'
-import type { ConversionFormat } from '@/lib/types/api'
+import { getAllFormats, FORMAT_CATEGORIES } from '@/lib/services/formatService'
+
+interface FormatCategory {
+	id: string
+	name: string
+	formats: string[]
+	icon: React.ReactNode
+}
 
 export function ConversionSitemap() {
-	const [formatCategories, setFormatCategories] = useState<any[]>([])
-	
+	const [formatCategories, setFormatCategories] = useState<FormatCategory[]>([])
+	const [isLoading, setIsLoading] = useState(true)
+	const [error, setError] = useState<string | null>(null)
+
 	// Load format data on component mount
 	useEffect(() => {
 		async function loadFormatData() {
-			const formats = await formatService.getAllFormats()
-			
-			// Create category data with icons
-			const categories = Object.entries(FORMAT_CATEGORIES).map(([categoryId, category]) => {
-				return {
-					id: categoryId,
-					name: category.name,
-					formats: category.formats,
-					icon: getCategoryIcon(categoryId)
+			try {
+				console.log('ConversionSitemap: Loading formats...');
+				setIsLoading(true)
+				setError(null)
+
+				// Load formats from the static JSON file
+				const formats = await getAllFormats()
+				console.log('ConversionSitemap: Formats loaded:', formats.length, 'formats');
+				
+				// Use mock data if no formats were loaded
+				if (!formats || formats.length === 0) {
+					console.error('ConversionSitemap: No formats loaded, using hardcoded categories');
+					// Use hardcoded format categories as fallback
+					const hardcodedCategories = Object.entries(FORMAT_CATEGORIES).map(([categoryId, category]) => {
+						return {
+							id: categoryId,
+							name: category.name,
+							formats: category.formats,
+							icon: getCategoryIcon(categoryId)
+						}
+					});
+					
+					setFormatCategories(hardcodedCategories);
+					setIsLoading(false);
+					return;
 				}
-			})
-			
-			setFormatCategories(categories)
+
+				// Group formats by category
+				const formatsByCategory: Record<string, string[]> = {}
+
+				// Initialize categories from FORMAT_CATEGORIES
+				Object.entries(FORMAT_CATEGORIES).forEach(([categoryId, category]) => {
+					formatsByCategory[categoryId] = []
+				})
+
+				// Group the formats by category
+				formats.forEach((format) => {
+					// Find which category this format belongs to
+					let foundCategory = false;
+					for (const [categoryId, category] of Object.entries(FORMAT_CATEGORIES)) {
+						if (category.formats.includes(format.id)) {
+							if (!formatsByCategory[categoryId]) {
+								formatsByCategory[categoryId] = []
+							}
+							if (!formatsByCategory[categoryId].includes(format.id)) {
+								formatsByCategory[categoryId].push(format.id)
+							}
+							foundCategory = true;
+							break
+						}
+					}
+					
+					if (!foundCategory) {
+						console.log('ConversionSitemap: Format not categorized:', format.id);
+					}
+				})
+				
+				console.log('ConversionSitemap: Formats grouped by category:', formatsByCategory);
+
+				// Create the categories array with icons
+				const categories = Object.entries(FORMAT_CATEGORIES)
+					.map(([categoryId, category]) => {
+						return {
+							id: categoryId,
+							name: category.name,
+							formats: formatsByCategory[categoryId] || [],
+							icon: getCategoryIcon(categoryId)
+						}
+					})
+					.filter((category) => category.formats.length > 0)
+				
+				console.log('ConversionSitemap: Final categories:', categories.length, 'categories');
+				setFormatCategories(categories)
+			} catch (err) {
+				console.error('ConversionSitemap: Error loading format data:', err)
+				setError('Failed to load format data. Please try again later.')
+				
+				// Use hardcoded format categories as fallback
+				const hardcodedCategories = Object.entries(FORMAT_CATEGORIES).map(([categoryId, category]) => {
+					return {
+						id: categoryId,
+						name: category.name,
+						formats: category.formats,
+						icon: getCategoryIcon(categoryId)
+					}
+				});
+				
+				setFormatCategories(hardcodedCategories);
+			} finally {
+				setIsLoading(false)
+			}
 		}
-		
+
 		loadFormatData()
 	}, [])
-	
+
 	// Get icon for a category
 	function getCategoryIcon(categoryId: string) {
-		switch(categoryId) {
+		switch (categoryId) {
 			case 'document':
 				return (
 					<svg
@@ -126,6 +212,49 @@ export function ConversionSitemap() {
 		}
 	}
 
+	// Show loading state
+	if (isLoading) {
+		return (
+			<section className="bg-white py-20">
+				<div className="trusty-container text-center">
+					<p className="text-lg text-deepNavy/80">Loading supported formats...</p>
+				</div>
+			</section>
+		)
+	}
+
+	// Show error state
+	if (error && formatCategories.length === 0) {
+		return (
+			<section className="bg-white py-20">
+				<div className="trusty-container text-center">
+					<p className="text-lg text-red-600">{error}</p>
+					<button
+						onClick={() => window.location.reload()}
+						className="mt-4 rounded-md bg-trustTeal px-4 py-2 text-white hover:bg-trustTeal/90"
+					>
+						Retry
+					</button>
+				</div>
+			</section>
+		)
+	}
+	
+	// Ensure we have categories to display
+	if (formatCategories.length === 0) {
+		// Use hardcoded format categories as fallback
+		const hardcodedCategories = Object.entries(FORMAT_CATEGORIES).map(([categoryId, category]) => {
+			return {
+				id: categoryId,
+				name: category.name,
+				formats: category.formats,
+				icon: getCategoryIcon(categoryId)
+			}
+		});
+		
+		setFormatCategories(hardcodedCategories);
+	}
+
 	return (
 		<section className="bg-white py-20">
 			<div className="trusty-container">
@@ -135,49 +264,50 @@ export function ConversionSitemap() {
 						<span className="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
 					</h2>
 					<p className="mx-auto max-w-2xl text-lg text-deepNavy/80">
-						TrustyConvert supports a wide range of file formats for all your conversion needs.
+						Browse all available file conversion options by category
 					</p>
 				</div>
 
-				<div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-					{formatCategories.map((category) => (
-						<div
-							key={category.id}
-							className="group rounded-xl border border-trustTeal/20 bg-white p-6 shadow-md transition-all hover:shadow-lg"
-						>
-							<div className="mb-5 flex items-center">
-								<div className="mr-3 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-trustTeal/20 to-trustTeal/30 shadow-inner group-hover:bg-trustTeal/30">
-									{category.icon}
-								</div>
-								<h3 className="text-xl font-semibold text-deepNavy">{category.name}</h3>
+				{formatCategories.map((category) => (
+					<div key={category.id} className="mb-16">
+						<div className="mb-6 flex items-center">
+							<div className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-trustTeal/20 to-trustTeal/30">
+								{category.icon}
 							</div>
-
-							<div className="flex flex-wrap gap-2">
-								{category.formats.map((formatId: string) => {
-									return (
-										<a
-											key={formatId}
-											href={`/all-conversions#${formatId}`}
-											className="rounded-md bg-lightGray px-2.5 py-1 text-sm font-medium text-deepNavy/80 hover:bg-trustTeal/10 hover:text-deepNavy"
-										>
-											.{formatId}
-										</a>
-									)
-								})}
-							</div>
+							<h3 className="text-2xl font-semibold text-deepNavy">{category.name}</h3>
 						</div>
-					))}
-				</div>
 
-				<div className="mt-10 text-center">
-					<p className="text-base text-deepNavy/70">
-						Don't see the format you need?{' '}
-						<a href="#" className="text-trustTeal hover:underline">
-							Contact us
-						</a>{' '}
-						to request additional formats.
-					</p>
-				</div>
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+							{category.formats.map((sourceFormat) => (
+								<div
+									key={sourceFormat}
+									className="rounded-lg border border-trustTeal/10 bg-white p-4 shadow-sm transition-all hover:shadow-md"
+								>
+									<h4 className="mb-3 flex items-center text-lg font-medium text-deepNavy">
+										<span className="mr-2 rounded-md bg-trustTeal/10 px-2 py-1 text-sm font-bold text-trustTeal">
+											.{sourceFormat}
+										</span>
+										Conversions
+									</h4>
+
+									<div className="flex flex-wrap gap-2">
+										{category.formats
+											.filter((targetFormat) => targetFormat !== sourceFormat)
+											.map((targetFormat) => (
+												<a
+													key={`${sourceFormat}-${targetFormat}`}
+													href={`/convert/${sourceFormat}-to-${targetFormat}`}
+													className="rounded-md bg-lightGray px-2.5 py-1 text-sm font-medium text-deepNavy/80 hover:bg-trustTeal/10 hover:text-trustTeal"
+												>
+													.{targetFormat}
+												</a>
+											))}
+									</div>
+								</div>
+							))}
+						</div>
+					</div>
+				))}
 			</div>
 		</section>
 	)

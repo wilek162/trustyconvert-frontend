@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { FORMAT_CATEGORIES } from '@/lib/services/formatService'
 import type { ConversionFormat } from '@/lib/types'
 
 interface FormatSelectorProps {
@@ -16,18 +17,10 @@ export function FormatSelector({
 	onFormatChange,
 	disabled = false
 }: FormatSelectorProps) {
-	// Group formats by type for better organization
-	const formatGroups = {
-		document: ['pdf', 'docx', 'doc', 'txt', 'rtf', 'odt'],
-		image: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'],
-		spreadsheet: ['xlsx', 'xls', 'csv'],
-		presentation: ['pptx', 'ppt']
-	}
-
 	// Find which group the formats belong to
 	const getFormatGroup = (format: string): string => {
-		for (const [group, formats] of Object.entries(formatGroups)) {
-			if (formats.includes(format.toLowerCase())) {
+		for (const [group, category] of Object.entries(FORMAT_CATEGORIES)) {
+			if (category.formats.includes(format.toLowerCase())) {
 				return group
 			}
 		}

@@ -1,13 +1,11 @@
 ---
 import MainLayout from '@/layouts/mainLayout.astro'
-import {
-	ConversionFlow,
-	ConversionPageFeatures,
-	RelatedConversionsPanel
-} from '@/components/features/conversion'
+import { ConversionFlow } from '@/components/features/conversion'
+import { RelatedConversionsPanel } from '@/components/features/conversion'
+import { Features } from '@/components/Features'
 import { SupportedFormats } from '@/components/SupportedFormats'
 import { FAQ } from '@/components/FAQ'
-import ConversionSteps from '@/components/features/conversion/ConversionSteps.astro'
+import { HowToConvert } from '@/components/HowToConvert'
 
 // Import format service and SEO utilities
 import formatService, {
@@ -184,58 +182,130 @@ const relatedConversions = getRelatedConversions(targetFormat, sourceFormat, 4, 
 	extraStructuredData={structuredData}
 	lang={currentLang}
 >
-	<div class="bg-gradient-to-b from-white to-lightGray/20 py-8 md:py-12">
-		<div class="container mx-auto px-4">
-			<div class="mb-8 text-center">
-				<h1 class="text-3xl font-bold text-deepNavy md:text-4xl">
-					{t('convert', currentLang)}
-					{sourceFormatInfo?.name || source?.toUpperCase()}
-					{t('to', currentLang)}
-					{targetFormatInfo?.name || target?.toUpperCase()}
+	<div class="relative bg-gradient-to-b from-lightGray/30 to-white">
+		<!-- Background elements similar to Hero component -->
+		<div class="absolute inset-0 -z-10 overflow-hidden">
+			<div
+				class="absolute -left-[10%] -top-[10%] h-[500px] w-[500px] rounded-full bg-trustTeal/5 blur-3xl"
+			>
+			</div>
+			<div
+				class="absolute -bottom-[10%] -right-[10%] h-[400px] w-[400px] rounded-full bg-trustTeal/5 blur-3xl"
+			>
+			</div>
+			<div
+				class="absolute right-[5%] top-[30%] h-[300px] w-[300px] rounded-full bg-accentOrange/5 blur-3xl"
+			>
+			</div>
+
+			<!-- Subtle background pattern -->
+			<div class="bg-grid-pattern bg-grid absolute inset-0 opacity-[0.015]"></div>
+		</div>
+
+		<!-- Conversion section with header -->
+		<div class="trusty-container py-10">
+			<div class="mb-14 text-center">
+				<h1
+					class="relative mx-auto mb-6 inline-block font-heading text-3xl font-semibold tracking-tight text-deepNavy md:text-4xl"
+				>
+					<span class="relative inline-block">
+						{t('convert', currentLang)}
+						{sourceFormatInfo?.name || source?.toUpperCase()}
+						<span
+							class="absolute -bottom-2 left-0 h-1 w-full bg-gradient-to-r from-trustTeal to-trustTeal/30"
+						></span>
+					</span>{' '}
+					<span class="text-deepNavy"
+						>{t('to', currentLang)} {targetFormatInfo?.name || target?.toUpperCase()}</span
+					>
 				</h1>
-				<p class="mt-3 text-lg text-muted-foreground">
+				<p class="mx-auto max-w-2xl text-lg text-deepNavy/80">
 					{t('fast_secure_free', currentLang)}
 				</p>
 			</div>
 
-			<div class="mx-auto max-w-screen-xl">
-				<div class="grid gap-6 md:grid-cols-12">
-					<!-- Sidebar with features - shown only on larger screens -->
-					<div class="hidden md:col-span-3 md:block lg:col-span-3">
-						<ConversionPageFeatures
-							client:load
-							sourceFormat={sourceFormat}
-							targetFormat={targetFormat}
-						/>
-					</div>
-
-					<!-- Main conversion area - centered and prominent -->
-					<div class="md:col-span-6 lg:col-span-6">
-						<div class="rounded-xl border border-border bg-white p-6 shadow-md">
+			<!-- Main content layout - centered conversion tool with slim sidebar -->
+			<div class="mx-auto flex max-w-5xl flex-col gap-8 md:flex-row">
+				<!-- Main conversion area - centered and taking most of the space -->
+				<div id="convert" class="flex-1 scroll-mt-24">
+					<div
+						class="mx-auto max-w-xl overflow-hidden rounded-xl border border-trustTeal/20 bg-white shadow-lg transition-all hover:shadow-xl"
+					>
+						<div class="bg-gradient-to-b from-white to-lightGray/10 p-6">
 							<ConversionFlow
 								client:load
 								initialSourceFormat={sourceFormat}
 								initialTargetFormat={targetFormat}
+								title={`Convert ${sourceFormatInfo?.name || source?.toUpperCase()} to ${targetFormatInfo?.name || target?.toUpperCase()}`}
+								hideTitle={true}
 							/>
 						</div>
 					</div>
 
-					<!-- Related conversions sidebar -->
-					<div class="md:col-span-3 lg:col-span-3">
-						<RelatedConversionsPanel
-							client:load
-							relatedFormats={relatedConversions}
-							targetFormat={targetFormat}
-							targetFormatName={targetFormatInfo?.name}
-						/>
+					<!-- Feature badges with improved contrast -->
+					<div class="mx-auto mt-8 flex flex-wrap items-center justify-center gap-5">
+						<div
+							class="flex items-center rounded-full bg-white px-5 py-3 shadow transition-all hover:bg-trustTeal/5 hover:shadow-md"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="20"
+								height="20"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="mr-2 text-trustTeal"
+							>
+								<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+							</svg>
+							<span class="text-base font-medium text-deepNavy">Lightning-fast</span>
+						</div>
 
-						<!-- Features shown on mobile only -->
-						<div class="mt-6 md:hidden">
-							<ConversionPageFeatures
-								client:load
-								sourceFormat={sourceFormat}
-								targetFormat={targetFormat}
-							/>
+						<div
+							class="flex items-center rounded-full bg-white px-5 py-3 shadow transition-all hover:bg-trustTeal/5 hover:shadow-md"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="20"
+								height="20"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="mr-2 text-trustTeal"
+							>
+								<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+								<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+							</svg>
+							<span class="text-base font-medium text-deepNavy">100% Secure</span>
+						</div>
+
+						<div
+							class="flex items-center rounded-full bg-white px-5 py-3 shadow transition-all hover:bg-trustTeal/5 hover:shadow-md"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="20"
+								height="20"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="mr-2 text-trustTeal"
+							>
+								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+								<circle cx="9" cy="7" r="4"></circle>
+								<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+							</svg>
+							<span class="text-base font-medium text-deepNavy">No File Storage</span>
 						</div>
 					</div>
 				</div>
@@ -243,28 +313,19 @@ const relatedConversions = getRelatedConversions(targetFormat, sourceFormat, 4, 
 		</div>
 	</div>
 
-	<!-- Conversion steps section -->
-	<div class="bg-white py-12">
-		<div class="container mx-auto px-4">
-			<ConversionSteps
-				sourceFormat={sourceFormat}
-				targetFormat={targetFormat}
-				sourceName={sourceFormatInfo?.name}
-				targetName={targetFormatInfo?.name}
-			/>
-		</div>
-	</div>
+	<!-- How to convert section -->
+	<HowToConvert
+		client:load
+		sourceFormat={sourceFormat}
+		targetFormat={targetFormat}
+		sourceName={sourceFormatInfo?.name}
+		targetName={targetFormatInfo?.name}
+	/>
 
-	<!-- Additional sections -->
-	<div class="bg-lightGray/20 py-12">
-		<div class="container mx-auto px-4">
-			<SupportedFormats />
-		</div>
-	</div>
+	<!-- Full features section - same as index.astro -->
+	<Features client:load sourceFormat={sourceFormat} targetFormat={targetFormat} compact={false} />
 
-	<div class="bg-white py-12">
-		<div class="container mx-auto px-4">
-			<FAQ />
-		</div>
-	</div>
+	<SupportedFormats />
+
+	<FAQ />
 </MainLayout>

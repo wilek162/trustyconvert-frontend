@@ -1,9 +1,22 @@
 import React from 'react'
 
-export function Features() {
+interface FeaturesProps {
+	sourceFormat?: string
+	targetFormat?: string
+	compact?: boolean
+}
+
+export function Features({ sourceFormat, targetFormat, compact = false }: FeaturesProps) {
+	// Default format names if not provided
+	const sourceFormatDisplay = sourceFormat?.toUpperCase() || 'FILES'
+	const targetFormatDisplay = targetFormat?.toUpperCase() || 'FORMAT'
+
 	const features = [
 		{
-			title: 'Lightning-Fast Conversions',
+			title:
+				sourceFormat && targetFormat
+					? `Lightning-Fast ${sourceFormatDisplay} to ${targetFormatDisplay} Conversion`
+					: 'Lightning-Fast Conversions',
 			description: 'Our optimized conversion engine processes your files in seconds, not minutes.',
 			icon: (
 				<svg
@@ -66,28 +79,6 @@ export function Features() {
 			)
 		},
 		{
-			title: 'Wide Format Support',
-			description:
-				'Convert between popular document, image, spreadsheet, and presentation formats.',
-			icon: (
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					strokeWidth="2"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					className="text-trustTeal"
-				>
-					<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-					<polyline points="14 2 14 8 20 8" />
-				</svg>
-			)
-		},
-		{
 			title: 'No Registration Required',
 			description:
 				'Start converting immediately without creating an account or providing personal information.',
@@ -111,34 +102,93 @@ export function Features() {
 				</svg>
 			)
 		},
-		{
-			title: 'Cross-Platform Compatibility',
-			description:
-				'Works seamlessly on all devices and browsers without requiring any software installation.',
-			icon: (
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					strokeWidth="2"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					className="text-trustTeal"
-				>
-					<rect width="16" height="16" x="4" y="4" rx="2" />
-					<rect width="6" height="6" x="9" y="9" rx="1" />
-					<path d="M15 2v2" />
-					<path d="M15 20v2" />
-					<path d="M2 15h2" />
-					<path d="M20 15h2" />
-				</svg>
-			)
-		}
+		// Only show these features in full mode (not compact)
+		...(compact
+			? []
+			: [
+					{
+						title: 'Wide Format Support',
+						description:
+							'Convert between popular document, image, spreadsheet, and presentation formats.',
+						icon: (
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="text-trustTeal"
+							>
+								<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+								<polyline points="14 2 14 8 20 8" />
+							</svg>
+						)
+					},
+					{
+						title: 'Cross-Platform Compatibility',
+						description:
+							'Works seamlessly on all devices and browsers without requiring any software installation.',
+						icon: (
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="text-trustTeal"
+							>
+								<rect width="16" height="16" x="4" y="4" rx="2" />
+								<rect width="6" height="6" x="9" y="9" rx="1" />
+								<path d="M15 2v2" />
+								<path d="M15 20v2" />
+								<path d="M2 15h2" />
+								<path d="M20 15h2" />
+							</svg>
+						)
+					}
+				])
 	]
 
+	// For compact mode (sidebar usage), use a more compact layout
+	if (compact) {
+		return (
+			<div className="space-y-4">
+				<div className="mb-3">
+					<h3 className="mb-2 text-sm font-medium text-deepNavy">
+						Why Choose TrustyConvert
+						<span className="mt-1 block h-0.5 w-16 bg-gradient-to-r from-trustTeal to-trustTeal/30"></span>
+					</h3>
+				</div>
+
+				{features.map((feature, index) => (
+					<div
+						key={index}
+						className="group relative overflow-hidden rounded-lg border border-trustTeal/10 bg-white p-3 shadow-sm transition-all hover:shadow-md"
+					>
+						<div className="absolute -right-12 -top-12 h-24 w-24 rounded-full bg-trustTeal/5 transition-transform duration-500 group-hover:scale-150"></div>
+
+						<div className="relative z-10">
+							<div className="mb-2 flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-trustTeal/20 to-trustTeal/30 shadow-inner">
+								{feature.icon}
+							</div>
+							<h4 className="mb-1 text-xs font-semibold text-deepNavy">{feature.title}</h4>
+							<p className="text-xs text-deepNavy/70">{feature.description}</p>
+						</div>
+					</div>
+				))}
+			</div>
+		)
+	}
+
+	// Full-width section layout (default)
 	return (
 		<section className="bg-gradient-to-b from-white to-lightGray/30 py-20">
 			<div className="trusty-container">

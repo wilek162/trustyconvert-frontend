@@ -187,6 +187,10 @@ export default {
                      backgroundImage: {
                             'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
                             'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+                            'grid-pattern': 'linear-gradient(to right, rgba(44, 62, 80, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(44, 62, 80, 0.05) 1px, transparent 1px)',
+                     },
+                     backgroundSize: {
+                            'grid': '20px 20px',
                      },
               },
        },

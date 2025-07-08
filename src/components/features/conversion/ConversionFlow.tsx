@@ -42,12 +42,14 @@ interface ConversionFlowProps {
 	initialSourceFormat?: string
 	initialTargetFormat?: string
 	title?: string
+	hideTitle?: boolean
 }
 
 export function ConversionFlow({
 	initialSourceFormat,
 	initialTargetFormat,
-	title = 'Convert Your File'
+	title = 'Convert Your File',
+	hideTitle = false
 }: ConversionFlowProps) {
 	// Use conversion store
 	const [conversionState, setConversionState] = useAtomStore(conversionStore)
@@ -56,12 +58,7 @@ export function ConversionFlow({
 	const [isClient, setIsClient] = useState(false)
 
 	// Get session context
-	const {
-		isSessionInitialized,
-		isInitializing,
-		initSession,
-		resetSession
-	} = useSession()
+	const { isSessionInitialized, isInitializing, initSession, resetSession } = useSession()
 
 	// Session error state
 	const [sessionError, setSessionError] = useState<string | null>(null)
@@ -87,11 +84,11 @@ export function ConversionFlow({
 	// Initialize client-side rendering and session
 	useEffect(() => {
 		setIsClient(true)
-		
+
 		// Initialize session on component mount only if not already initialized or initializing
 		if (!isSessionInitialized && !isInitializing && !sessionManager.isInitializationInProgress()) {
 			debugLog('ConversionFlow: Initializing session on mount')
-			initSession().catch(err => {
+			initSession().catch((err) => {
 				debugError('Failed to initialize session on mount:', err)
 				setSessionError('Failed to initialize session. Please try again.')
 				setDetailedError(err)
@@ -108,9 +105,9 @@ export function ConversionFlow({
 		setError(null)
 		setSessionError(null)
 		setDetailedError(null)
-		
+
 		// Reset session if needed
-		resetSession().catch(err => {
+		resetSession().catch((err) => {
 			debugError('Error resetting session:', err)
 		})
 
@@ -162,18 +159,18 @@ export function ConversionFlow({
 		try {
 			// Force a new session initialization
 			const success = await sessionManager.initSession(true)
-			
+
 			if (success) {
-				showSuccess("Session initialized successfully")
+				showSuccess('Session initialized successfully')
 			} else {
 				const sessionState = sessionManager.getSessionState()
 				setDetailedError(sessionState.lastInitError || 'No detailed error available')
-				showError("Session initialization failed")
+				showError('Session initialization failed')
 			}
 		} catch (err) {
 			debugError('Error during forced session init:', err)
 			setDetailedError(err)
-			showError("Session initialization error")
+			showError('Session initialization error')
 		}
 	}, [])
 
@@ -251,10 +248,10 @@ export function ConversionFlow({
 			// so it's appropriate to initialize a session here if needed
 			try {
 				debugLog('No valid session exists - initializing before conversion')
-				
+
 				// Force a new session initialization to ensure we have a fresh token
 				const success = await sessionManager.initSession(true)
-				
+
 				if (!success) {
 					// In development mode, show more detailed error
 					if (import.meta.env.DEV) {
@@ -268,7 +265,7 @@ export function ConversionFlow({
 						console.groupEnd()
 
 						// Show a more informative error message in development
-						const errorMsg = sessionState.lastInitError 
+						const errorMsg = sessionState.lastInitError
 							? `Session initialization failed: ${JSON.stringify(sessionState.lastInitError)}`
 							: 'Session initialization failed. Check console for details.'
 						showError(errorMsg)
@@ -280,7 +277,7 @@ export function ConversionFlow({
 					setIsConverting(false)
 					return
 				}
-				
+
 				// Double-check that we have a CSRF token after initialization
 				if (!sessionManager.hasCsrfToken()) {
 					debugError('Session initialization completed but no CSRF token was received')
@@ -333,26 +330,26 @@ export function ConversionFlow({
 			// Enhanced error handling for upload responses
 			if (!uploadResponse || !uploadResponse.success) {
 				// Check if we have detailed error information
-				const errorMsg = uploadResponse?.data?.message || MESSAGE_TEMPLATES.upload.failed;
-				throw new Error(errorMsg);
+				const errorMsg = uploadResponse?.data?.message || MESSAGE_TEMPLATES.upload.failed
+				throw new Error(errorMsg)
 			}
-			
+
 			// Check for expected response data
 			if (!uploadResponse.data || (!uploadResponse.data.jobId && !uploadResponse.data.job_id)) {
 				// Log the response for debugging but try to continue anyway
-				debugError('Upload response missing expected job_id', uploadResponse);
-				
+				debugError('Upload response missing expected job_id', uploadResponse)
+
 				// Try to continue with our locally generated jobId
-				debugLog('Continuing with locally generated job ID:', currentJobId);
+				debugLog('Continuing with locally generated job ID:', currentJobId)
 			}
-			
+
 			// Get the job ID from the response if available, otherwise use our local one
-			const responseJobId = uploadResponse.data.jobId || uploadResponse.data.job_id || currentJobId;
-			
+			const responseJobId = uploadResponse.data.jobId || uploadResponse.data.job_id || currentJobId
+
 			// Update the job ID if needed
 			if (responseJobId !== currentJobId) {
-				setJobId(responseJobId);
-				debugLog('Updated job ID from response:', responseJobId);
+				setJobId(responseJobId)
+				debugLog('Updated job ID from response:', responseJobId)
 			}
 
 			setUploadProgress(100)
@@ -368,12 +365,12 @@ export function ConversionFlow({
 			const convertResponse = await client.convertFile(responseJobId, targetFormat, sourceFormat)
 
 			if (!convertResponse || !convertResponse.success) {
-				const errorMsg = convertResponse?.data?.message || MESSAGE_TEMPLATES.conversion.failed;
-				throw new Error(errorMsg);
+				const errorMsg = convertResponse?.data?.message || MESSAGE_TEMPLATES.conversion.failed
+				throw new Error(errorMsg)
 			}
-			
+
 			// Extract the job ID from the conversion response, or use what we have
-			const conversionJobId = convertResponse.data.job_id || responseJobId;
+			const conversionJobId = convertResponse.data.job_id || responseJobId
 
 			// Initialize conversion in store
 			startConversion(conversionJobId, selectedFile.name, targetFormat, selectedFile.size)
@@ -387,11 +384,11 @@ export function ConversionFlow({
 					try {
 						// Get download token
 						const downloadResult = await downloadService.getDownloadToken(jobId)
-						
+
 						if (downloadResult.success && downloadResult.token) {
 							// Update conversion state with the download token and URL
 							completeConversion(downloadResult.url || '', downloadResult.token)
-							
+
 							// Transition to download state
 							setIsConverting(false)
 							setCurrentStep('download')
@@ -425,7 +422,7 @@ export function ConversionFlow({
 						setConversionState({
 							...conversionState,
 							progress: progress
-						});
+						})
 					}
 				},
 				// Pass file size for adaptive polling
@@ -437,11 +434,11 @@ export function ConversionFlow({
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			setError(errorMessage)
 			showError(errorMessage)
-			
+
 			// Log detailed error in development mode
 			if (import.meta.env.DEV) {
-				console.error('Conversion flow error:', error);
-				setDetailedError(error);
+				console.error('Conversion flow error:', error)
+				setDetailedError(error)
 			}
 		}
 	})
@@ -521,19 +518,22 @@ export function ConversionFlow({
 										<strong>Has CSRF Token:</strong> {String(sessionManager.hasCsrfToken())}
 									</p>
 									<p>
-										<strong>CSRF Token in Store:</strong> {String(sessionManager.checkTokenInStore())}
+										<strong>CSRF Token in Store:</strong>{' '}
+										{String(sessionManager.checkTokenInStore())}
 									</p>
 								</div>
 								<h4 className="mb-2 text-sm font-semibold">Session State:</h4>
 								<pre className="overflow-auto text-xs text-gray-700">{getFormattedDebugInfo()}</pre>
-								
+
 								{detailedError && (
 									<div className="mt-2">
 										<h4 className="mb-2 text-sm font-semibold">Error Information:</h4>
-										<pre className="overflow-auto text-xs text-red-600">{getFormattedErrorDetails()}</pre>
+										<pre className="overflow-auto text-xs text-red-600">
+											{getFormattedErrorDetails()}
+										</pre>
 									</div>
 								)}
-								
+
 								<div className="mt-3 flex justify-center">
 									<button
 										onClick={forceSessionInit}
@@ -578,17 +578,14 @@ export function ConversionFlow({
 								>
 									{isInitializing ? 'Initializing...' : 'Convert Now'}
 								</Button>
-								
+
 								{/* Debug button in development mode */}
 								{import.meta.env.DEV && (
 									<div className="mt-4 flex justify-center">
-										<button 
-											onClick={toggleDebugInfo} 
-											className="text-xs text-blue-600 underline"
-										>
+										<button onClick={toggleDebugInfo} className="text-xs text-blue-600 underline">
 											{showDebugInfo ? 'Hide Debug Info' : 'Show Session Debug Info'}
 										</button>
-										
+
 										{showDebugInfo && (
 											<div className="absolute mt-8 w-full max-w-md rounded-md bg-gray-100 p-3 shadow-lg">
 												<h4 className="mb-2 text-sm font-semibold">Session Debug Info:</h4>
@@ -603,7 +600,8 @@ export function ConversionFlow({
 														<strong>Has CSRF Token:</strong> {String(sessionManager.hasCsrfToken())}
 													</p>
 													<p>
-														<strong>CSRF Token in Store:</strong> {String(sessionManager.checkTokenInStore())}
+														<strong>CSRF Token in Store:</strong>{' '}
+														{String(sessionManager.checkTokenInStore())}
 													</p>
 												</div>
 												<div className="flex justify-center">
@@ -660,12 +658,12 @@ export function ConversionFlow({
 						{selectedFile?.name} to {targetFormat.toUpperCase()}
 					</p>
 					{selectedFile && (
-						<p className="text-xs text-gray-500 mt-1">
+						<p className="mt-1 text-xs text-gray-500">
 							File size: {formatFileSize(selectedFile.size)}
 						</p>
 					)}
 				</div>
-				
+
 				{/* Progress indicator for larger files */}
 				{conversionState.progress > 0 ? (
 					<div className="space-y-2">
@@ -681,7 +679,7 @@ export function ConversionFlow({
 						<div className="h-12 w-12 animate-spin rounded-full border-4 border-trustTeal border-t-transparent"></div>
 					</div>
 				)}
-				
+
 				<div className="text-center">
 					<p className="text-sm text-gray-600">Converting your file securely...</p>
 					<p className="mt-2 text-xs text-gray-500">
@@ -692,11 +690,9 @@ export function ConversionFlow({
 						)}
 					</p>
 				</div>
-				
+
 				<div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">
-					<p>
-						Your file is being processed securely. Please don't close this window.
-					</p>
+					<p>Your file is being processed securely. Please don't close this window.</p>
 				</div>
 			</div>
 		)
@@ -709,8 +705,8 @@ export function ConversionFlow({
 						{selectedFile?.name} has been converted to {targetFormat.toUpperCase()}
 					</p>
 				</div>
-				<DownloadManager 
-					jobId={conversionState.jobId as string} 
+				<DownloadManager
+					jobId={conversionState.jobId as string}
 					initialToken={conversionState.downloadToken}
 					onDownloadComplete={() => {
 						// After successful download, show the convert another button
@@ -718,23 +714,21 @@ export function ConversionFlow({
 					}}
 				/>
 				<div className="flex justify-center">
-					<Button
-						variant="outline"
-						className="mt-2 w-full max-w-xs"
-						onClick={handleRestart}
-					>
+					<Button variant="outline" className="mt-2 w-full max-w-xs" onClick={handleRestart}>
 						Convert Another File
 					</Button>
 				</div>
 			</div>
-		)	
+		)
 	}
 
 	return (
-		<Card className="w-full max-w-2xl">
-			<CardHeader>
-				<CardTitle className="text-center">{title}</CardTitle>
-			</CardHeader>
+		<Card className={`mx-auto w-full ${hideTitle ? 'border-0 shadow-none' : ''}`}>
+			{!hideTitle && (
+				<CardHeader>
+					<CardTitle className="text-center">{title}</CardTitle>
+				</CardHeader>
+			)}
 			<CardContent>{content}</CardContent>
 			{import.meta.env.DEV && (
 				<CardFooter className="flex justify-center border-t pt-4">

@@ -5,11 +5,10 @@
  * Provides functions for fetching, caching, and querying format information.
  */
 
-import client from '@/lib/api/client'
-import { debugLog } from '@/lib/utils/debug'
+import { debugLog, debugError } from '@/lib/utils/debug'
 import type { FormatInfo, ConversionFormat } from '@/lib/types/api'
 
-// Mock data for static builds or when API is unavailable
+// Mock data for static builds or when static file is unavailable
 const MOCK_FORMATS: ConversionFormat[] = [
 	{
 		id: 'pdf',
@@ -113,44 +112,125 @@ export const FORMAT_CATEGORIES = {
 	}
 }
 
-// Cache for format data to avoid repeated API calls
+// Mapping between JSON category IDs and our internal category IDs
+const CATEGORY_MAPPING = {
+	documents: 'document',
+	images: 'image',
+	spreadsheets: 'spreadsheet',
+	presentations: 'presentation'
+}
+
+// Cache for format data to avoid repeated file loading
 let formatCache: ConversionFormat[] | null = null
-let lastFetchTime = 0
-const CACHE_TTL = 1000 * 60 * 5 // 5 minutes
 
 /**
- * Try to load formats from the static JSON file
+ * Process the formats from the JSON file into our internal format structure
+ * @param jsonData The raw data from the formats.json file
+ * @returns Processed array of ConversionFormat objects
+ */
+function processJsonFormats(jsonData: any): ConversionFormat[] {
+	try {
+		console.log('Processing JSON formats data:', jsonData)
+
+		if (!jsonData?.data?.formats || !Array.isArray(jsonData.data.formats)) {
+			debugError('Invalid JSON format data structure:', jsonData)
+			return MOCK_FORMATS
+		}
+
+		// Extract all individual formats from the category-based JSON structure
+		const processedFormats: ConversionFormat[] = []
+
+		// Process each category from the JSON
+		jsonData.data.formats.forEach((category: any) => {
+			console.log('Processing category:', category.id, 'with input formats:', category.inputFormats)
+
+			// For each input format in this category
+			if (!Array.isArray(category.inputFormats)) {
+				debugError('Category has invalid inputFormats:', category)
+				return
+			}
+
+			category.inputFormats.forEach((formatId: string) => {
+				// Create a format object for each input format
+				const format: ConversionFormat = {
+					id: formatId,
+					name: formatId.toUpperCase(),
+					description: `${formatId.toUpperCase()} Format`,
+					inputFormats: [],
+					outputFormats: Array.isArray(category.outputFormats) ? category.outputFormats : [],
+					icon: getCategoryIcon(CATEGORY_MAPPING[category.id] || 'other')
+				}
+
+				// Add to our processed formats array
+				processedFormats.push(format)
+			})
+		})
+
+		console.log('Processed formats:', processedFormats.length, 'formats')
+		return processedFormats
+	} catch (error) {
+		debugError('Error processing JSON formats:', error)
+		console.error('Error processing JSON formats:', error)
+		return MOCK_FORMATS
+	}
+}
+
+/**
+ * Get an icon character for a category
+ */
+function getCategoryIcon(category: string): string {
+	switch (category) {
+		case 'document':
+			return '📄'
+		case 'image':
+			return '🖼️'
+		case 'spreadsheet':
+			return '📊'
+		case 'presentation':
+			return '📊'
+		default:
+			return '📁'
+	}
+}
+
+/**
+ * Load formats from the static JSON file
  * @returns Array of format objects or null if not available
  */
 async function loadStaticFormats(): Promise<ConversionFormat[] | null> {
 	// Only run in browser environment
 	if (typeof window === 'undefined') {
+		console.log('Not in browser environment, skipping static formats load')
 		return null
 	}
 
 	try {
+		console.log('Attempting to load formats from static JSON file')
+
 		// Try to fetch the static JSON file
 		const response = await fetch('/data/formats.json')
 
 		if (!response.ok) {
+			debugError('Static formats file not available, status:', response.status)
+			console.error('Static formats file not available, status:', response.status)
 			return null
 		}
 
 		const data = await response.json()
+		console.log('Loaded formats.json data:', data)
 
-		// Handle the new API response format
-		if (
-			data &&
-			data.success &&
-			data.data &&
-			data.data.formats &&
-			Array.isArray(data.data.formats)
-		) {
-			debugLog('Loaded formats from static JSON file', data.data.formats.length)
-			return data.data.formats
+		// Process the JSON data into our format structure
+		if (data && data.success) {
+			const processedFormats = processJsonFormats(data)
+			debugLog('Loaded and processed formats from static JSON file', processedFormats.length)
+			console.log('Successfully processed formats:', processedFormats.length)
+			return processedFormats
+		} else {
+			console.error('Invalid format data structure:', data)
 		}
 	} catch (error) {
-		debugLog('Failed to load static formats JSON:', error)
+		debugError('Failed to load static formats JSON:', error)
+		console.error('Failed to load static formats JSON:', error)
 	}
 
 	return null
@@ -166,70 +246,62 @@ export async function getAllFormats(
 	forceRefresh = false,
 	isStaticMode = false
 ): Promise<ConversionFormat[]> {
-	// In static mode, try to load from the static JSON file first
-	if (isStaticMode) {
-		try {
-			// In Node.js environment during build, read the file directly
-			if (typeof window === 'undefined') {
-				try {
-					// Try to dynamically import the fs module
-					const fs = await import('fs')
-					const path = await import('path')
+	console.log('getAllFormats called, forceRefresh:', forceRefresh, 'isStaticMode:', isStaticMode)
 
-					// Get the path to the static JSON file
-					const dataPath = path.join(process.cwd(), 'public', 'data', 'formats.json')
-
-					// Check if the file exists
-					if (fs.existsSync(dataPath)) {
-						const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'))
-
-						// Handle the new API response format
-						if (data && data.success && data.data && data.data.formats) {
-							return data.data.formats
-						}
-					}
-				} catch (error) {
-					console.warn('Failed to load static formats during build:', error)
-				}
-			}
-
-			// Fall back to mock data
-			return MOCK_FORMATS
-		} catch (error) {
-			console.warn('Error loading static formats in static mode:', error)
-			return MOCK_FORMATS
-		}
-	}
-
-	// Check if cache is valid
-	const now = Date.now()
-	if (!forceRefresh && formatCache && now - lastFetchTime < CACHE_TTL) {
+	// If we already have cached formats and don't need to refresh, return them
+	if (!forceRefresh && formatCache) {
+		console.log('Returning cached formats:', formatCache.length)
 		return formatCache
 	}
 
-	// First try to load from static JSON file
+	// In static mode (during build), try to load from the file system
+	if (isStaticMode && typeof window === 'undefined') {
+		console.log('Static mode detected, loading from file system')
+		try {
+			// Try to dynamically import the fs module
+			const fs = await import('fs')
+			const path = await import('path')
+
+			// Get the path to the static JSON file
+			const dataPath = path.join(process.cwd(), 'public', 'data', 'formats.json')
+			console.log('Loading formats from path:', dataPath)
+
+			// Check if the file exists
+			if (fs.existsSync(dataPath)) {
+				const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'))
+				console.log('Loaded formats from file system:', data)
+
+				// Process the JSON data
+				if (data && data.success) {
+					formatCache = processJsonFormats(data)
+					return formatCache
+				} else {
+					console.error('Invalid format data structure in file system:', data)
+				}
+			} else {
+				console.error('Formats file does not exist at path:', dataPath)
+			}
+		} catch (error) {
+			console.warn('Failed to load static formats during build:', error)
+		}
+
+		// Fall back to mock data during build if file can't be loaded
+		console.log('Using mock formats in static mode')
+		return MOCK_FORMATS
+	}
+
+	// For client-side, load from static JSON file
+	console.log('Attempting to load formats from static file')
 	const staticFormats = await loadStaticFormats()
 	if (staticFormats) {
+		console.log('Successfully loaded formats from static file:', staticFormats.length)
 		formatCache = staticFormats
-		lastFetchTime = now
 		return staticFormats
 	}
 
-	try {
-		// If static file not available, fetch from API
-		const response = await client.getSupportedFormats()
-
-		// Handle the new API response format
-		if (response.success && response.data?.data?.formats) {
-			formatCache = response.data.data.formats
-			lastFetchTime = now
-			return formatCache || []
-		}
-	} catch (error) {
-		debugLog('Failed to fetch formats from API, using mock data:', error)
-	}
-
-	// Fall back to mock data if both static file and API call failed
+	// If all else fails, use mock data
+	debugLog('Using mock format data as fallback')
+	console.log('Using mock format data as fallback')
 	return MOCK_FORMATS
 }
 

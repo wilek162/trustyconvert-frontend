@@ -29,8 +29,7 @@ export function Hero() {
 						<span className="text-deepNavy">File Conversion</span>
 					</h1>
 					<p className="mx-auto max-w-2xl text-lg text-deepNavy/80">
-						Convert your files with lightning speed and professional-grade security. No tracking, no
-						storage - your privacy comes first.
+						Convert your files with lightning speed and professional-grade security.
 					</p>
 				</div>
 

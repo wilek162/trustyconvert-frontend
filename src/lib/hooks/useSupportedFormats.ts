@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import client from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import {
 	formatsStore,
@@ -11,6 +10,7 @@ import {
 } from '@/lib/stores/formats'
 import { useStore } from './useStore'
 import type { FormatInfo } from '@/lib/types/api'
+import { getAllFormats } from '@/lib/services/formatService'
 
 /**
  * Hook to fetch and manage supported file formats
@@ -22,27 +22,20 @@ export function useSupportedFormats() {
 	const outputFormats = useStore(outputFormatsStore)
 	const loadingState = useStore(formatsLoadingStore)
 
-	// Use React Query to fetch formats
+	// Use React Query to fetch formats from static file
 	const query = useQuery({
 		queryKey: ['supported-formats'],
 		queryFn: async () => {
 			try {
-				debugLog('Fetching supported formats')
-				const response = await client.getSupportedFormats()
-
-				// Check for the new API response format
-				if (!response.success || !response.data || !response.data.formats) {
-					throw new Error('No formats returned from API')
-				}
-
-				const formats = response.data.formats
+				debugLog('Loading supported formats from static file')
+				const formats = await getAllFormats()
 
 				// Update the formats store
 				loadFormats(formats)
 
 				return formats
 			} catch (error) {
-				debugError('Error fetching formats:', error)
+				debugError('Error loading formats:', error)
 				throw error
 			}
 		},
