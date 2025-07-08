@@ -32,20 +32,33 @@ export interface RetryConfig {
 }
 
 // Default configuration
+import { handleError } from '@/lib/utils/errorHandling'
+
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	maxRetries: 3,
 	initialDelay: 300,
 	maxDelay: 10000,
 	backoffFactor: 2,
 	jitter: 0.25,
-	isRetryable: () => true, // By default, retry all errors
-	onRetry: (error, attempt) => {
+	isRetryable: isRetryableError, // Use the dedicated function to determine if an error is retryable
+	onRetry: (error, attempt, delay) => {
 		if (import.meta.env.DEV) {
 			console.warn(
-				`Retry attempt ${attempt} after error:`,
-				error instanceof Error ? error.message : String(error)
+				`Retry attempt ${attempt} for error:`,
+				error instanceof Error ? error.message : String(error),
+				`Next attempt in ${delay}ms`
 			)
 		}
+	},
+	onExhausted: (error, attempts) => {
+		// Show a toast notification when all retries are exhausted
+		handleError(error, {
+			showToast: true,
+			context: {
+				message: `Failed after ${attempts} attempts.`,
+				errorType: error instanceof Error ? error.name : 'UnknownError'
+			}
+		})
 	}
 }
 
@@ -197,22 +210,28 @@ export function isRetryableError(error: unknown): boolean {
 		if (
 			error.name === 'NetworkError' ||
 			error.name === 'AbortError' ||
-			error.name === 'TimeoutError' ||
+			error.name === 'TimeoutError' ||			
 			error.message.includes('network') ||
 			error.message.includes('timeout') ||
 			error.message.includes('connection')
 		) {
 			return true
 		}
-
 	}
 
 	// Check for HTTP status codes that are typically retryable
 	if (error && typeof error === 'object' && 'status' in error) {
 		const status = (error as { status: number }).status
 
-		// 408 Request Timeout, 429 Too Many Requests, 5xx Server Errors
-		return status === 408 || status === 429 || (status >= 500 && status < 600)
+		// 408 Request Timeout, 429 Too Many Requests, 5xx Server Errors, 503 Service Unavailable
+		if (status === 408 || status === 429 || (status >= 500 && status < 600) || status === 503) {
+			return true
+		}
+
+		// Non-retryable HTTP status codes (client errors, authentication, validation)
+		if ([400, 401, 403, 404, 422].includes(status)) {
+			return false
+		}
 	}
 
 	// By default, don't retry

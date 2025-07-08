@@ -1,111 +1,115 @@
 {
-  "success": true,
-  "data": {
-    "formats": [
-      {
-        "id": "images",
-        "name": "Images",
-        "description": "Convert between various image formats with optimization features",
-        "inputFormats": [
-          "bmp",
-          "gif",
-          "webp",
-          "png",
-          "jpeg",
-          "tiff",
-          "jpg"
-        ],
-        "outputFormats": [
-          "bmp",
-          "gif",
-          "webp",
-          "png",
-          "pdf",
-          "tiff",
-          "jpeg",
-          "jpg"
-        ],
-        "maxSize": 52428800,
-        "features": [
-          "resize",
-          "optimize",
-          "compress",
-          "quality_control"
-        ]
-      },
-      {
-        "id": "documents",
-        "name": "Documents",
-        "description": "Convert between document formats including Word, PDF, and text files",
-        "inputFormats": [
-          "docx",
-          "md",
-          "html",
-          "odt",
-          "pdf",
-          "doc",
-          "txt",
-          "rtf"
-        ],
-        "outputFormats": [
-          "txt",
-          "docx",
-          "html",
-          "pdf"
-        ],
-        "maxSize": 52428800,
-        "features": [
-          "preserve_layout",
-          "extract_tables",
-          "bookmarks",
-          "metadata"
-        ]
-      },
-      {
-        "id": "presentations",
-        "name": "Presentations",
-        "description": "Convert presentation files between different formats",
-        "inputFormats": [
-          "odp",
-          "ppt",
-          "pdf",
-          "pptx"
-        ],
-        "outputFormats": [
-          "pptx",
-          "pdf"
-        ],
-        "maxSize": 52428800,
-        "features": [
-          "preserve_slides",
-          "extract_images",
-          "metadata"
-        ]
-      },
-      {
-        "id": "spreadsheets",
-        "name": "Spreadsheets",
-        "description": "Convert spreadsheet files and extract data",
-        "inputFormats": [
-          "xls",
-          "ods",
-          "xlsx",
-          "pdf",
-          "csv"
-        ],
-        "outputFormats": [
-          "xlsx",
-          "pdf",
-          "csv"
-        ],
-        "maxSize": 52428800,
-        "features": [
-          "preserve_data",
-          "extract_tables",
-          "format_preservation"
-        ]
-      }
-    ]
-  },
-  "correlation_id": "de25714c-b189-49ec-87eb-c2533f6ab9fe"
+  "jpg": [
+    "bmp",
+    "gif",
+    "jpeg",
+    "pdf",
+    "png",
+    "tiff",
+    "webp"
+  ],
+  "jpeg": [
+    "bmp",
+    "gif",
+    "jpg",
+    "pdf",
+    "png",
+    "tiff",
+    "webp"
+  ],
+  "png": [
+    "bmp",
+    "gif",
+    "jpeg",
+    "jpg",
+    "pdf",
+    "tiff",
+    "webp"
+  ],
+  "gif": [
+    "bmp",
+    "jpeg",
+    "jpg",
+    "pdf",
+    "png",
+    "tiff",
+    "webp"
+  ],
+  "bmp": [
+    "gif",
+    "jpeg",
+    "jpg",
+    "pdf",
+    "png",
+    "tiff",
+    "webp"
+  ],
+  "tiff": [
+    "bmp",
+    "gif",
+    "jpeg",
+    "jpg",
+    "pdf",
+    "png",
+    "webp"
+  ],
+  "webp": [
+    "bmp",
+    "gif",
+    "jpeg",
+    "jpg",
+    "pdf",
+    "png",
+    "tiff"
+  ],
+  "docx": [
+    "pdf"
+  ],
+  "doc": [
+    "pdf"
+  ],
+  "odt": [
+    "pdf"
+  ],
+  "rtf": [
+    "pdf"
+  ],
+  "txt": [
+    "pdf"
+  ],
+  "pptx": [
+    "pdf"
+  ],
+  "ppt": [
+    "pdf"
+  ],
+  "odp": [
+    "pdf"
+  ],
+  "xlsx": [
+    "pdf"
+  ],
+  "xls": [
+    "pdf"
+  ],
+  "ods": [
+    "pdf"
+  ],
+  "html": [
+    "pdf"
+  ],
+  "md": [
+    "pdf"
+  ],
+  "csv": [
+    "pdf"
+  ],
+  "pdf": [
+    "docx",
+    "html",
+    "jpeg",
+    "jpg",
+    "png",
+    "txt"
+  ]
 }

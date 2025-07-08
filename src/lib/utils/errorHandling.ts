@@ -316,23 +316,23 @@ function getDetailedErrorMessage(error: unknown, defaultMessage: string): string
  */
 export function getErrorMessageTemplate(error: unknown): string {
 	if (error instanceof ApiError) {
-		return MESSAGE_TEMPLATES.generic.serverError
+		return error.message || MESSAGE_TEMPLATES.generic.serverError
 	}
 
 	if (error instanceof NetworkError) {
-		return MESSAGE_TEMPLATES.generic.networkError
+		return error.message || MESSAGE_TEMPLATES.generic.networkError
 	}
 
 	if (error instanceof ValidationError) {
-		return MESSAGE_TEMPLATES.upload.invalidType
+		return error.message || MESSAGE_TEMPLATES.upload.invalidType
 	}
 
 	if (error instanceof ConversionError) {
-		return MESSAGE_TEMPLATES.conversion.failed
+		return error.message || MESSAGE_TEMPLATES.conversion.failed
 	}
 
 	if (error instanceof SessionError) {
-		return MESSAGE_TEMPLATES.session.invalid
+		return error.message || MESSAGE_TEMPLATES.session.invalid
 	}
 
 	return MESSAGE_TEMPLATES.generic.error

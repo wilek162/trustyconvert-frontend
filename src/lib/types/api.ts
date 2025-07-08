@@ -10,28 +10,13 @@
 // ==========================================
 
 /**
- * Generic API response wrapper
- * All API responses follow this structure
+ * Generic API response wrapper for successful responses
+ * For successful API calls, the data will be directly available.
+ * Errors are now thrown as exceptions, not returned in this structure.
  */
 export interface ApiResponse<T = any> {
-	success: boolean
-	data: T
-	correlation_id?: string
-	message?: string
-}
-
-/**
- * Common error fields that can be present in any API response
- */
-export interface ApiErrorInfo {
-	error?: string
-	error_message?: string
-	message?: string
-	validation_errors?: Record<string, string>
-	field_errors?: Record<string, string>
-	session_expired?: boolean
-	csrf_error?: boolean
-	error_type?: string
+	data: T;
+	correlation_id?: string;
 }
 
 /**
@@ -218,49 +203,6 @@ export interface DownloadOptions {
 	signal?: AbortSignal
 }
 
-// ==========================================
-// Formats
-// ==========================================
-
-/**
- * Format information
- */
-export interface FormatInfo {
-	id: string
-	name: string
-	description?: string
-	inputFormats: string[]
-	outputFormats: string[]
-	maxSize?: number
-	features?: string[]
-	// Legacy fields for backward compatibility
-	code?: string
-	extension?: string
-	mimeType?: string
-	mime_type?: string
-	category?: string
-	compatibleOutputs?: string[]
-	compatible_outputs?: string[]
-	isInput?: boolean
-	is_input?: boolean
-	isOutput?: boolean
-	is_output?: boolean
-	icon?: string
-}
-
-/**
- * Formats listing response
- */
-export interface FormatsResponse {
-	formats?: FormatInfo[]
-	success?: boolean
-	message?: string
-	data?: {
-		formats: FormatInfo[]
-	}
-	correlation_id?: string
-}
-
 /**
  * Conversion format (higher-level abstraction)
  */
@@ -282,22 +224,22 @@ export interface ConversionFormat {
  * Defines the methods that should be implemented by any API client
  */
 export interface ApiClientInterface {
-	initSession(): Promise<ApiResponse<SessionInitResponse>>
-	uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>>
+	initSession(): Promise<SessionInitResponse>
+	uploadFile(file: File, jobId?: string): Promise<UploadResponse>
 	convertFile(
 		jobId: string,
 		targetFormat: string,
 		sourceFormat?: string
-	): Promise<ApiResponse<ConvertResponse>>
-	startConversion(file: File, targetFormat: string): Promise<ApiResponse<ConvertResponse>>
-	getConversionStatus(jobId: string): Promise<ApiResponse<JobStatusResponse>>
-	getDownloadToken(jobId: string): Promise<ApiResponse<DownloadTokenResponse>>
-	closeSession(): Promise<ApiResponse<SessionCloseResponse>>
-	getSupportedFormats(): Promise<ApiResponse<FormatsResponse>>
+	): Promise<ConvertResponse>
+	startConversion(file: File, targetFormat: string): Promise<ConvertResponse & { job_id: string }>
+	getConversionStatus(jobId: string): Promise<JobStatusResponse>
+	getDownloadToken(jobId: string): Promise<DownloadTokenResponse>
+	closeSession(): Promise<SessionCloseResponse>
+	getSupportedFormats(): Promise<{ [key: string]: string[] }>
 	getDownloadUrl(downloadToken: string): string
 	// Direct access to low-level API client
 	apiClient?: {
-		getJobStatus: (jobId: string) => Promise<ApiResponse<JobStatusResponse>>
+		getJobStatus: (jobId: string) => Promise<JobStatusResponse>
 		[key: string]: any
 	}
 }
