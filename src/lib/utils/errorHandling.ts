@@ -1,4 +1,5 @@
 /**
+ * DEPRECATED SERVICE. DO NOT USE
  * Centralized Error Handling Utilities
  *
  * Provides a unified approach to error handling across the application,
