@@ -54,3 +54,86 @@ export class SessionError extends Error {
 		this.context = context
 	}
 }
+
+/**
+ * Explicitly retryable error
+ * Use this to mark errors that should be retried
+ */
+export class RetryableError extends Error {
+	context: Record<string, any>
+	
+	constructor(
+		message: string, 
+		public originalError?: Error,
+		context: Record<string, any> = {}
+	) {
+		super(message)
+		this.name = 'RetryableError'
+		this.context = {
+			...context,
+			originalError: originalError?.toString()
+		}
+	}
+}
+
+/**
+ * Client-side errors (not server related)
+ * These are typically not retryable
+ */
+export class ClientError extends Error {
+	context: Record<string, any>
+
+	constructor(message: string, context: Record<string, any> = {}) {
+		super(message)
+		this.name = 'ClientError'
+		this.context = context
+	}
+}
+
+/**
+ * A utility function to check if an error is retryable
+ * This centralizes retry logic to be consistent
+ */
+export function isRetryableError(error: unknown): boolean {
+	// RetryableError is always retryable
+	if (error instanceof RetryableError) {
+		return true
+	}
+	
+	// Network errors are generally retryable
+	if (error instanceof NetworkError) {
+		return true
+	}
+	
+	// Some API errors are retryable based on status code
+	if (error instanceof ApiError) {
+		// 408 Request Timeout, 429 Too Many Requests, 5xx Server Errors
+		const retryableStatusCodes = [408, 429, 500, 502, 503, 504]
+		return retryableStatusCodes.includes(error.statusCode)
+	}
+	
+	// Session errors might be retryable if they're due to expiration
+	if (error instanceof SessionError) {
+		return error.message.includes('expired') || 
+			   error.message.includes('invalid') || 
+			   error.message.includes('timeout')
+	}
+	
+	// Check for fetch/network-like errors (DOMExceptions, etc.)
+	if (error instanceof Error) {
+		// Check for network-related errors
+		if (
+			error.name === 'NetworkError' ||
+			error.name === 'AbortError' ||
+			error.name === 'TimeoutError' ||
+			error.message.includes('network') ||
+			error.message.includes('timeout') ||
+			error.message.includes('connection')
+		) {
+			return true
+		}
+	}
+	
+	// By default, don't retry
+	return false
+}

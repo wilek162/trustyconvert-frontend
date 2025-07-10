@@ -3,20 +3,24 @@
  *
  * React hook for tracking conversion job status with automatic polling.
  * Uses the centralized jobPollingService for consistent polling behavior.
+ * Enhanced with improved error handling and recovery.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { toastService } from '@/lib/services/toastService'
+import { handleError } from '@/lib/errors/ErrorHandlingService'
 import type { JobStatusResponse, ConversionStatus } from '@/lib/types/api'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { handleError } from '@/lib/utils/errorHandling'
 import { startPolling, stopPolling } from '@/lib/services/jobPollingService'
 
 interface UseConversionStatusOptions {
 	jobId: string | null
 	onError?: (error: string) => void
-	pollingInterval?: number
+	onStatusChange?: (status: ConversionStatus) => void
+	onComplete?: (jobId: string) => void
 	maxRetries?: number
 	fileSize?: number
+	showErrorToasts?: boolean
 }
 
 /**
@@ -29,9 +33,11 @@ interface UseConversionStatusOptions {
 export function useConversionStatus({
 	jobId,
 	onError,
-	pollingInterval,
-	maxRetries,
-	fileSize
+	onStatusChange,
+	onComplete,
+	maxRetries = 3,
+	fileSize,
+	showErrorToasts = true
 }: UseConversionStatusOptions) {
 	// State for tracking conversion status
 	const [status, setStatus] = useState<ConversionStatus>('idle')
@@ -45,6 +51,64 @@ export function useConversionStatus({
 	
 	// Ref to store the stop polling function
 	const stopPollingRef = useRef<(() => void) | null>(null)
+	
+	// Handle status change
+	const handleStatusChange = useCallback((newStatus: string) => {
+		setStatus(newStatus as ConversionStatus)
+		setIsLoading(newStatus !== 'completed' && newStatus !== 'failed')
+		
+		// Call external status change handler if provided
+		if (onStatusChange) {
+			onStatusChange(newStatus as ConversionStatus)
+		}
+		
+		debugLog('[useConversionStatus] Status changed', { jobId, status: newStatus })
+	}, [jobId, onStatusChange])
+	
+	// Handle progress update
+	const handleProgressUpdate = useCallback((newProgress: number) => {
+		setProgress(newProgress)
+	}, [])
+	
+	// Handle completed conversion
+	const handleCompleted = useCallback((completedJobId: string) => {
+		debugLog('[useConversionStatus] Job completed', { completedJobId })
+		setStatus('completed')
+		setProgress(100)
+		setIsLoading(false)
+		
+		// Call external completion handler if provided
+		if (onComplete) {
+			onComplete(completedJobId)
+		}
+		
+		// Show success toast only if we don't expect the parent to handle it
+		if (!onComplete && showErrorToasts) {
+			toastService.success('Conversion completed successfully!', {
+				duration: 5000
+			})
+		}
+	}, [onComplete, showErrorToasts])
+	
+	// Handle failed conversion
+	const handleFailed = useCallback((errorMessage: string) => {
+		debugError('[useConversionStatus] Job failed', errorMessage)
+		setStatus('failed')
+		setError(errorMessage)
+		setIsLoading(false)
+		
+		// Notify parent component
+		if (onError) {
+			onError(errorMessage)
+		}
+		
+		// Show error toast only if we don't expect the parent to handle it
+		if (!onError && showErrorToasts) {
+			toastService.error(errorMessage, {
+				duration: 10000
+			})
+		}
+	}, [onError, showErrorToasts])
 	
 	// Set up polling when jobId changes
 	useEffect(() => {
@@ -66,27 +130,10 @@ export function useConversionStatus({
 			
 			// Start polling with callbacks
 			const stopFn = startPolling(jobId, {
-				onCompleted: (completedJobId) => {
-					debugLog('[useConversionStatus] Job completed', { completedJobId })
-					setStatus('completed')
-					setProgress(100)
-					setIsLoading(false)
-				},
-				onFailed: (errorMessage) => {
-					debugError('[useConversionStatus] Job failed', errorMessage)
-					setStatus('failed')
-					setError(errorMessage)
-					setIsLoading(false)
-					if (onError) onError(errorMessage)
-				},
-				onStatusChange: (newStatus) => {
-					debugLog('[useConversionStatus] Status changed', { jobId, status: newStatus })
-					setStatus(newStatus as ConversionStatus)
-					setIsLoading(newStatus !== 'completed' && newStatus !== 'failed')
-				},
-				onProgress: (newProgress) => {
-					setProgress(newProgress)
-				},
+				onCompleted: handleCompleted,
+				onFailed: handleFailed,
+				onStatusChange: handleStatusChange,
+				onProgress: handleProgressUpdate,
 				fileSize
 			})
 			
@@ -102,10 +149,10 @@ export function useConversionStatus({
 				}
 			}
 		}
-	}, [jobId, onError, fileSize])
+	}, [jobId, fileSize, handleStatusChange, handleProgressUpdate, handleCompleted, handleFailed])
 	
-	// Cancel method for future implementation
-	const cancel = () => {
+	// Cancel method
+	const cancel = useCallback(() => {
 		if (jobId && stopPollingRef.current) {
 			stopPollingRef.current()
 			stopPollingRef.current = null
@@ -113,10 +160,40 @@ export function useConversionStatus({
 			setProgress(0)
 			setIsLoading(false)
 			debugLog('[useConversionStatus] Conversion cancelled', { jobId })
-		} else {
-			console.warn('Conversion cancellation not implemented or no active job')
 		}
-	}
+	}, [jobId])
+
+	// Retry method for user-initiated retries
+	const retry = useCallback(() => {
+		if (!jobId) return
+		
+		// Increment retry count
+		setRetryCount(prev => prev + 1)
+		
+		// Stop current polling
+		if (stopPollingRef.current) {
+			stopPollingRef.current()
+			stopPollingRef.current = null
+		}
+		
+		// Reset error state
+		setError(null)
+		setIsLoading(true)
+		
+		// Start polling again
+		const stopFn = startPolling(jobId, {
+			onCompleted: handleCompleted,
+			onFailed: handleFailed,
+			onStatusChange: handleStatusChange,
+			onProgress: handleProgressUpdate,
+			fileSize
+		})
+		
+		// Store the new stop function
+		stopPollingRef.current = stopFn
+		
+		debugLog('[useConversionStatus] Retrying conversion', { jobId, retryCount: retryCount + 1 })
+	}, [jobId, fileSize, handleCompleted, handleFailed, handleStatusChange, handleProgressUpdate, retryCount])
 
 	return {
 		status,
@@ -127,6 +204,7 @@ export function useConversionStatus({
 		isLoading,
 		error,
 		retryCount,
-		cancel
+		cancel,
+		retry
 	}
 }

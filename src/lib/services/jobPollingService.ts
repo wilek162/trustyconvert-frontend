@@ -1,18 +1,20 @@
 /**
  * Job Polling Service
  *
- * A simplified service for polling job status with proper cleanup and error handling.
+ * A robust service for polling job status with proper cleanup and error handling.
  * This service ensures that we don't have multiple polling intervals for the same job
  * and that polling is properly cleaned up when no longer needed.
- * Enhanced to better handle large file conversions with adaptive polling.
+ * Enhanced with adaptive polling, circuit breakers, and proper error handling.
  */
 
 import { debugLog, debugError } from '@/lib/utils/debug'
 import client from '@/lib/api/client'
-import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
+import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/RetryService'
+import { handleError } from '@/lib/errors/ErrorHandlingService'
 import { updateJobStatus } from '@/lib/stores/upload'
 import type { JobStatus as ApiJobStatus } from '@/lib/types/api'
 import { FILE_UPLOAD } from '@/lib/config/constants'
+import { toastService } from '@/lib/services/toastService'
 
 // Map API job status to upload store job status
 export function mapApiStatusToUploadStatus(
@@ -40,7 +42,7 @@ export function mapApiStatusToUploadStatus(
 const BASE_POLLING_INTERVAL = 1000 // 1 second (base interval)
 const MAX_POLLING_INTERVAL = 10000 // 10 seconds (maximum interval)
 const MIN_POLLING_INTERVAL = 1000 // 1 second (minimum interval)
-const MAX_POLLING_DURATION = 30 * 60 * 1000 // 30 minutes (increased from 10 minutes)
+const MAX_POLLING_DURATION = 15 * 60 * 1000 // 15 minutes (reduced from 30 minutes)
 const MAX_CONSECUTIVE_ERRORS = 5 // Maximum number of consecutive errors before stopping polling
 
 // File size thresholds for adaptive polling (in bytes)
@@ -93,11 +95,15 @@ interface PollingJob {
 	jobId: string
 	intervalId: NodeJS.Timeout
 	startTime: number
+	lastPollTime: number
+	nextPollTime?: number
 	consecutiveErrorCount: number
 	isCompleting: boolean // Flag to prevent multiple completion handling
 	fileSize?: number // Added file size for adaptive polling
 	lastStatus?: string // Track last known status
-	lastPollTime?: number // Track when we last polled
+	lastProgress?: number // Track last known progress
+	isSuspended: boolean // Flag to indicate if polling is suspended due to errors
+	recoveryTimeout?: NodeJS.Timeout // Timeout for recovery after suspension
 	callbacks: {
 		onCompleted?: (jobId: string) => void
 		onFailed?: (errorMessage: string) => void
@@ -141,11 +147,24 @@ export function startPolling(
 
 	// Create a new polling job
 	const startTime = Date.now()
-	let consecutiveErrorCount = 0
+	const lastPollTime = 0
 	let currentInterval = calculatePollingInterval(fileSize);
 
 	debugLog(`Starting polling for job ${jobId} with initial interval ${currentInterval}ms${fileSize ? ` (file size: ${fileSize} bytes)` : ''}`)
 
+	// Set up the job object
+	const job: PollingJob = {
+		jobId,
+		startTime,
+		lastPollTime,
+		consecutiveErrorCount: 0,
+		isCompleting: false,
+		fileSize,
+		callbacks,
+		isSuspended: false,
+		intervalId: 0 as unknown as NodeJS.Timeout // Will be set below
+	}
+	
 	// Create the polling function
 	const pollFunction = async () => {
 		const now = Date.now()
@@ -153,6 +172,11 @@ export function startPolling(
 
 		if (!job) return // Job was stopped
 		if (job.isCompleting) return // Skip if already handling completion
+		if (job.isSuspended) return // Skip if polling is suspended
+		
+		// Calculate the next poll time
+		const nextPoll = now + currentInterval
+		job.nextPollTime = nextPoll
 
 		// Update last poll time
 		job.lastPollTime = now;
@@ -165,26 +189,23 @@ export function startPolling(
 			debugError(`Polling for job ${jobId} exceeded maximum duration (${MAX_POLLING_DURATION}ms), stopping`)
 			stopPolling(jobId)
 			if (job.callbacks.onFailed) {
-				job.callbacks.onFailed('Conversion timed out. This may be due to the file size being too large for processing. Please try again with a smaller file or contact support.')
+				job.callbacks.onFailed('Conversion timed out. This may be due to the file size being too large for processing.')
 			}
+			
+			// Show a toast to the user
+			toastService.error('The conversion is taking longer than expected. Please try again with a smaller file or contact support.', {
+				duration: 10000
+			})
+			
 			return
 		}
 
 		try {
-			// Use withRetry for robust API calls with adaptive timeout based on file size
-			const statusResponse = await withRetry(
-				async () => client.getConversionStatus(jobId),
-				{
-					...RETRY_STRATEGIES.POLLING,
-					maxRetries: 2, // Limit retries for each poll attempt
-					onRetry: (error, attempt) => {
-						debugLog(`Retrying job status poll (attempt ${attempt}) for job ${jobId}`)
-					}
-				}
-			)
+			// Make the status request using the client which has built-in retry and error handling
+			const statusResponse = await client.getConversionStatus(jobId)
 
 			// Reset consecutive error count on success
-			consecutiveErrorCount = 0
+			job.consecutiveErrorCount = 0
 			
 			// Check if the response is valid
 			if (!statusResponse || !statusResponse.success || !statusResponse.data) {
@@ -195,20 +216,21 @@ export function startPolling(
 			const status = statusResponse.data.status || 'unknown'
 			const progress = statusResponse.data.progress || 0
 			
-			// Update job's last known status
+			// Update job's last known status and progress
 			job.lastStatus = status;
+			job.lastProgress = progress;
 
 			// Update job status in store
 			const uploadStatus = mapApiStatusToUploadStatus(status as ApiJobStatus)
 			updateJobStatus(jobId, uploadStatus, { uploadProgress: progress })
 
-			// Call status change callback
-			if (job.callbacks.onStatusChange) {
+			// Call status change callback if status has changed
+			if (job.callbacks.onStatusChange && status !== job.lastStatus) {
 				job.callbacks.onStatusChange(status)
 			}
 			
-			// Call progress callback if available
-			if (job.callbacks.onProgress && typeof progress === 'number') {
+			// Call progress callback if available and progress has changed
+			if (job.callbacks.onProgress && typeof progress === 'number' && progress !== job.lastProgress) {
 				job.callbacks.onProgress(progress)
 			}
 
@@ -219,7 +241,7 @@ export function startPolling(
 				debugLog(`Job ${jobId} is completed`)
 
 				// Stop polling immediately
-				clearInterval(job.intervalId)
+				stopPolling(jobId)
 				
 				// Call completion callback with the job ID
 				if (job.callbacks.onCompleted) {
@@ -230,10 +252,6 @@ export function startPolling(
 						debugError(`Error in completion callback for job ${jobId}:`, callbackError)
 					}
 				}
-				
-				// Clean up the job
-				activePollingJobs.delete(jobId)
-				debugLog(`Job ${jobId} polling cleaned up`)
 			}
 			// Handle job failure
 			else if (status === 'failed') {
@@ -250,95 +268,181 @@ export function startPolling(
 					job.callbacks.onFailed(errorMessage)
 				}
 			}
-			// For processing jobs, recalculate the polling interval based on file size and status
-			else {
-				// Calculate new interval based on file size, status and elapsed time
-				const newInterval = calculatePollingInterval(job.fileSize, status, elapsedTime);
-				
-				// If the interval has changed significantly, update the polling interval
-				if (Math.abs(newInterval - currentInterval) > 500) {
-					debugLog(`Adjusting polling interval for job ${jobId} from ${currentInterval}ms to ${newInterval}ms (status: ${status}, elapsed: ${Math.round(elapsedTime / 1000)}s)`)
-					
-					// Clear the existing interval
-					clearInterval(job.intervalId)
-					
-					// Create a new interval with the updated timing
-					const newIntervalId = setInterval(pollFunction, newInterval)
-					
-					// Update the job with the new interval ID
-					job.intervalId = newIntervalId
-					
-					// Update the current interval
-					currentInterval = newInterval
-				}
-			}
-		} catch (error) {
-			// Increment consecutive error count
-			consecutiveErrorCount++
 			
-			debugError(`Error polling job status for ${jobId} (consecutive error #${consecutiveErrorCount}):`, error)
-
-			// If too many consecutive errors, stop polling
-			if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
-				debugError(`Too many consecutive errors for job ${jobId}, stopping polling`)
-				stopPolling(jobId)
-				
-				// Call failure callback
-				const job = activePollingJobs.get(jobId)
-				if (job && job.callbacks.onFailed) {
-					job.callbacks.onFailed('Connection issues detected. Please try again.')
-				}
+			// Recalculate the interval for next poll based on updated information
+			currentInterval = calculatePollingInterval(job.fileSize, status, elapsedTime);
+		} catch (error) {
+			// Increment error counter
+			job.consecutiveErrorCount++;
+			
+			// Handle the error
+			const result = await handleError(error, {
+				context: { 
+					action: 'jobPolling',
+					jobId,
+					consecutiveErrors: job.consecutiveErrorCount
+				},
+				showToast: job.consecutiveErrorCount >= 3, // Only show toasts after multiple failures
+				severity: 'warning',
+				endpoint: 'conversion/status'
+			})
+			
+			// If we've had too many consecutive errors, suspend polling temporarily
+			if (job.consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
+				suspendPolling(jobId);
+				return;
 			}
+			
+			// Increase the polling interval on errors to avoid overwhelming the server
+			currentInterval = Math.min(currentInterval * 1.5, MAX_POLLING_INTERVAL);
 		}
 	}
 
-	// Create the initial interval
-	const intervalId = setInterval(pollFunction, currentInterval)
-
-	// Store the polling job
-	activePollingJobs.set(jobId, {
-		jobId,
-		intervalId,
-		startTime,
-		consecutiveErrorCount,
-		isCompleting: false,
-		fileSize,
-		lastPollTime: Date.now(),
-		callbacks
-	})
-
-	// Execute first poll immediately
+	// Start the polling interval and save the ID
+	job.intervalId = setInterval(pollFunction, currentInterval) as unknown as NodeJS.Timeout
+	
+	// Save the job
+	activePollingJobs.set(jobId, job)
+	
+	// Execute immediately to get initial status
 	pollFunction().catch(error => {
-		debugError(`Error in initial poll for job ${jobId}:`, error)
+		debugError(`Initial poll for job ${jobId} failed:`, error)
 	})
-
-	// Return function to stop polling
+	
+	// Return a function to stop polling
 	return () => stopPolling(jobId)
 }
 
 /**
- * Stop polling for a job's status
- * 
- * @param jobId The job ID to stop polling for
+ * Temporarily suspend polling due to errors
+ * Will automatically resume after a timeout
+ */
+function suspendPolling(jobId: string): void {
+	const job = activePollingJobs.get(jobId)
+	if (!job) return
+	
+	debugLog(`Suspending polling for job ${jobId} due to consecutive errors`)
+	
+	// Mark the job as suspended
+	job.isSuspended = true
+	
+	// Set a recovery timeout (30 seconds)
+	job.recoveryTimeout = setTimeout(() => {
+		if (!activePollingJobs.has(jobId)) return
+		
+		debugLog(`Resuming polling for job ${jobId} after suspension`)
+		
+		// Reset error counter and suspension flag
+		job.consecutiveErrorCount = 0
+		job.isSuspended = false
+		
+		// Execute immediately to get current status
+		pollJobStatus(jobId).catch(error => {
+			debugError(`Resume poll for job ${jobId} failed:`, error)
+		})
+	}, 30000) as unknown as NodeJS.Timeout
+}
+
+/**
+ * Poll a job's status manually (used for resume after suspension)
+ */
+async function pollJobStatus(jobId: string): Promise<void> {
+	const job = activePollingJobs.get(jobId)
+	if (!job || job.isCompleting) return
+	
+	try {
+		// Make the status request using the client which has built-in retry and error handling
+		const statusResponse = await client.getConversionStatus(jobId)
+		
+		// Reset consecutive error count on success
+		job.consecutiveErrorCount = 0
+		
+		// Extract the status information from the response
+		const status = statusResponse.data?.status || 'unknown'
+		const progress = statusResponse.data?.progress || 0
+		
+		// Update job's last known status and progress
+		job.lastStatus = status;
+		job.lastProgress = progress;
+		
+		// Update job status in store
+		const uploadStatus = mapApiStatusToUploadStatus(status as ApiJobStatus)
+		updateJobStatus(jobId, uploadStatus, { uploadProgress: progress })
+		
+		// Call status change callback if status has changed
+		if (job.callbacks.onStatusChange) {
+			job.callbacks.onStatusChange(status)
+		}
+		
+		// Call progress callback if available
+		if (job.callbacks.onProgress && typeof progress === 'number') {
+			job.callbacks.onProgress(progress)
+		}
+		
+		// Handle job completion
+		if (status === 'completed') {
+			// Set completing flag to prevent multiple callbacks
+			job.isCompleting = true
+			debugLog(`Job ${jobId} is completed (detected during manual poll)`)
+			
+			// Stop polling immediately
+			stopPolling(jobId)
+			
+			// Call completion callback with the job ID
+			if (job.callbacks.onCompleted) {
+				job.callbacks.onCompleted(jobId)
+			}
+		}
+		// Handle job failure
+		else if (status === 'failed') {
+			// Stop polling
+			stopPolling(jobId)
+			
+			// Call failure callback
+			if (job.callbacks.onFailed) {
+				// Get error message from response if available
+				const errorMessage = statusResponse.data?.error_message || 
+					statusResponse.data?.message || 
+					'Conversion failed. Please try again.'
+				
+				job.callbacks.onFailed(errorMessage)
+			}
+		}
+	} catch (error) {
+		// Just log the error, don't increment counter
+		debugError(`Manual poll for job ${jobId} failed:`, error)
+	}
+}
+
+/**
+ * Stop polling for a job
  */
 export function stopPolling(jobId: string): void {
 	const job = activePollingJobs.get(jobId)
-	if (job) {
-		clearInterval(job.intervalId)
-		activePollingJobs.delete(jobId)
-		debugLog(`Stopped polling for job ${jobId}`)
+	if (!job) return
+	
+	// Clear the polling interval
+	clearInterval(job.intervalId)
+	
+	// Clear recovery timeout if set
+	if (job.recoveryTimeout) {
+		clearTimeout(job.recoveryTimeout)
 	}
+	
+	// Remove the job
+	activePollingJobs.delete(jobId)
+	
+	debugLog(`Stopped polling for job ${jobId}`)
 }
 
 /**
  * Stop all active polling jobs
  */
 export function stopAllPolling(): void {
-	activePollingJobs.forEach((job) => {
-		clearInterval(job.intervalId)
-	})
-	activePollingJobs.clear()
-	debugLog(`Stopped all polling jobs (${activePollingJobs.size})`)
+	const jobIds = Array.from(activePollingJobs.keys())
+	jobIds.forEach(jobId => stopPolling(jobId))
+	
+	debugLog(`Stopped all polling (${jobIds.length} jobs)`)
 }
 
 /**
@@ -350,13 +454,17 @@ export function getActivePollingJobs(): Array<{
 	fileSize?: number
 	lastStatus?: string
 	lastPollTime?: number
+	consecutiveErrorCount: number
+	isSuspended: boolean
 }> {
 	const now = Date.now()
-	return Array.from(activePollingJobs.values()).map((job) => ({
+	return Array.from(activePollingJobs.values()).map(job => ({
 		jobId: job.jobId,
 		duration: now - job.startTime,
 		fileSize: job.fileSize,
 		lastStatus: job.lastStatus,
-		lastPollTime: job.lastPollTime
+		lastPollTime: job.lastPollTime,
+		consecutiveErrorCount: job.consecutiveErrorCount,
+		isSuspended: job.isSuspended
 	}))
 }

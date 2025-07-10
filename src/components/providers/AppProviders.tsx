@@ -1,33 +1,46 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import React from 'react'
+import React, { useEffect } from 'react'
+import { QueryProvider } from './QueryProvider'
+import { LanguageProvider } from './LanguageProvider'
+import ToastListener from './ToastListener'
+import { initializeMonitoring } from '@/lib/monitoring/init'
+import { initErrorHandling } from '@/lib/errors/initErrorHandling'
+import { debugLog } from '@/lib/utils/debug'
 
-const queryClient = new QueryClient()
-
-export const AppProviders = ({ children }: { children: React.ReactNode }) => {
-	return (
-		<QueryClientProvider client={queryClient}>
-			{children}
-			{import.meta.env.DEV && <LazyDevtools />}
-		</QueryClientProvider>
-	)
+interface AppProvidersProps {
+  children: React.ReactNode
 }
 
-const LazyDevtools = () => {
-	// Avoid loading the module in production
-	if (!import.meta.env.DEV) return null
-
-	// React.lazy should only be called when actually used
-	const Devtools = React.useMemo(() => {
-		return React.lazy(() =>
-			import('@tanstack/react-query-devtools').then((mod) => ({
-				default: mod.ReactQueryDevtools
-			}))
-		)
-	}, [])
-
-	return (
-		<React.Suspense fallback={null}>
-			<Devtools initialIsOpen={false} />
-		</React.Suspense>
-	)
+/**
+ * Application Providers
+ * 
+ * Centralizes all application providers and initializes services
+ */
+export default function AppProviders({ children }: AppProvidersProps) {
+  // Initialize monitoring, error handling, and other services
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        // Initialize monitoring first for error tracking
+        await initializeMonitoring()
+        
+        // Initialize error handling system
+        initErrorHandling()
+        
+        debugLog('Application services initialized')
+      } catch (error) {
+        console.error('Failed to initialize application services:', error)
+      }
+    }
+    
+    initialize()
+  }, [])
+  
+  return (
+    <QueryProvider>
+      <LanguageProvider>
+        {children}
+        <ToastListener />
+      </LanguageProvider>
+    </QueryProvider>
+  )
 }

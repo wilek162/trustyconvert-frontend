@@ -8,8 +8,8 @@
 import { _apiClient } from './_apiClient'
 import sessionManager from '@/lib/services/sessionManager'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { handleError } from '@/lib/utils/errorHandling'
-import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
+import { handleError } from '@/lib/errors/ErrorHandlingService'
+import { retryService, withRetry, RETRY_STRATEGIES } from '@/lib/utils/RetryService'
 import type { SessionInitResponse } from '@/lib/types/api'
 
 // Define the extended client type with the _apiClient property
@@ -60,8 +60,6 @@ function standardizeResponse(data: any): StandardResponse {
 /**
  * High-level API client
  */
-const RETRY_CONFIG = RETRY_STRATEGIES.API_REQUEST
-
 const client = {
 	/**
 	 * Initialize a session with the API
@@ -82,11 +80,23 @@ const client = {
 
 				return null
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'initSession' }
+				const result = await handleError(error, {
+					context: { action: 'initSession' },
+					endpoint: 'session/init'
 				})
+				
+				if (!result.recovered) {
+					throw error
+				}
+				
+				// If error was recovered, try again
+				return await sessionManager.initSession(forceNew) ? {} as SessionInitResponse : null
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.API_REQUEST,
+			endpoint: 'session/init',
+			context: { action: 'initSession' }
+		})
 	},
 
 	/**
@@ -98,10 +108,17 @@ const client = {
 			try {
 				return await sessionManager.ensureSession()
 			} catch (error) {
-				debugError('Error in client.ensureSession:', error)
+				await handleError(error, {
+					context: { action: 'ensureSession' },
+					endpoint: 'session/ensure'
+				})
 				return false
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.API_REQUEST,
+			endpoint: 'session/ensure',
+			context: { action: 'ensureSession' }
+		})
 	},
 
 	/**
@@ -153,11 +170,23 @@ const client = {
 
 				return standardizeResponse(response.data)
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'uploadFile', fileSize: file.size }
+				const result = await handleError(error, {
+					context: { action: 'uploadFile', fileSize: file.size },
+					endpoint: 'files/upload'
 				})
+				
+				if (!result.recovered) {
+					throw error
+				}
+				
+				// If error was recovered, try the upload again
+				return await client.uploadFile(file, fileJobId)
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.CRITICAL, // Use CRITICAL strategy for uploads
+			endpoint: 'files/upload',
+			context: { action: 'uploadFile', fileSize: file.size }
+		})
 	},
 
 	/**
@@ -192,11 +221,23 @@ const client = {
 
 				return standardizeResponse(response.data)
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'convertFile', jobId, targetFormat, sourceFormat }
+				const result = await handleError(error, {
+					context: { action: 'convertFile', jobId, targetFormat, sourceFormat },
+					endpoint: 'conversion/start'
 				})
+				
+				if (!result.recovered) {
+					throw error
+				}
+				
+				// If error was recovered, try the conversion again
+				return await client.convertFile(jobId, targetFormat, sourceFormat)
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.CRITICAL,
+			endpoint: 'conversion/start',
+			context: { action: 'convertFile', jobId, targetFormat, sourceFormat }
+		})
 	},
 
 	/**
@@ -227,11 +268,23 @@ const client = {
 
 				return standardizeResponse(response.data)
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'startConversion', fileSize: file.size, targetFormat }
+				const result = await handleError(error, {
+					context: { action: 'startConversion', fileSize: file.size, targetFormat },
+					endpoint: 'conversion/direct'
 				})
+				
+				if (!result.recovered) {
+					throw error
+				}
+				
+				// If error was recovered, try the conversion again
+				return await client.startConversion(file, targetFormat)
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.CRITICAL,
+			endpoint: 'conversion/direct',
+			context: { action: 'startConversion', fileSize: file.size, targetFormat }
+		})
 	},
 
 	/**
@@ -262,28 +315,31 @@ const client = {
 
 				return standardizeResponse(response.data)
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'getDownloadToken', jobId }
+				const result = await handleError(error, {
+					context: { action: 'getDownloadToken', jobId },
+					endpoint: 'conversion/download-token'
 				})
+				
+				if (!result.recovered) {
+					throw error
+				}
+				
+				// If error was recovered, try to get download token again
+				return await client.getDownloadToken(jobId)
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.API_REQUEST,
+			endpoint: 'conversion/download-token',
+			context: { action: 'getDownloadToken', jobId }
+		})
 	},
 
 	/**
-	 * Get the status of a conversion job
+	 * Get conversion status for a job
 	 */
 	getConversionStatus: async (jobId: string): Promise<StandardResponse> => {
 		return withRetry(async () => {
 			try {
-				// Check if we have a valid session
-				if (!sessionManager.hasCsrfToken()) {
-					// Only call ensureSession if we don't have a valid session
-					debugLog('No valid session for job status check - initializing session')
-					await sessionManager.ensureSession()
-				} else {
-					debugLog('Using existing session for job status check - no session API call needed')
-				}
-
 				// Make the API call
 				const response = await _apiClient.getJobStatus(jobId)
 
@@ -297,18 +353,27 @@ const client = {
 
 				return standardizeResponse(response.data)
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'getConversionStatus', jobId }
+				const result = await handleError(error, {
+					context: { action: 'getConversionStatus', jobId },
+					endpoint: 'conversion/status',
+					// Don't show toast for status checks to avoid spamming the user
+					showToast: false
 				})
+				
+				if (!result.recovered) {
+					throw error
+				}
+				
+				// If error was recovered, try again
+				return await client.getConversionStatus(jobId)
 			}
-		}, RETRY_CONFIG)
-	},
-
-	/**
-	 * Get the download URL for a token
-	 */
-	getDownloadUrl: (token: string): string => {
-		return _apiClient.getDownloadUrl(token)
+		}, {
+			...RETRY_STRATEGIES.POLLING,
+			endpoint: 'conversion/status',
+			context: { action: 'getConversionStatus', jobId },
+			// Don't show toast on retry for polling operations
+			showToastOnRetry: false
+		})
 	},
 
 	/**
@@ -317,33 +382,29 @@ const client = {
 	closeSession: async (): Promise<StandardResponse> => {
 		return withRetry(async () => {
 			try {
-				// Check if we have a valid session
-				if (!sessionManager.hasCsrfToken()) {
-					debugLog('No valid session for closing - initializing session')
-					await sessionManager.ensureSession()
-				}
-
 				// Make the API call
 				const response = await _apiClient.closeSession()
-
-				// Handle CSRF errors by refreshing the token and retrying
-				if (isCsrfError(response)) {
-					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.closeSession()
-					return standardizeResponse(retryResponse.data)
-				}
-
 				return standardizeResponse(response.data)
 			} catch (error) {
-				throw handleError(error, {
-					context: { action: 'closeSession' }
-				})
+				// For session closing, we don't care too much if it fails
+				// Just log it and return success anyway
+				debugError('Error closing session:', error)
+				return { success: true, data: { message: 'Session closed (client-side only)' } }
 			}
-		}, RETRY_CONFIG)
+		}, {
+			...RETRY_STRATEGIES.API_REQUEST,
+			maxRetries: 1, // Only retry once for session closing
+			endpoint: 'session/close',
+			context: { action: 'closeSession' }
+		})
 	},
 
-	// Expose the low-level API client for direct access
-	apiClient: _apiClient
+	/**
+	 * Get download URL for a token
+	 */
+	getDownloadUrl: (token: string): string => {
+		return _apiClient.getDownloadUrl(token)
+	}
 }
 
 export default client
