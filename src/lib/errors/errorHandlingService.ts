@@ -1,22 +1,24 @@
 /**
  * Enhanced Error Handling Service
  *
- * A centralized service for handling errors with recovery strategies and user-friendly messages.
- * This service integrates with the monitoring system and toast notifications.
+ * A centralized service for handling errors with sophisticated recovery strategies
+ * and user-friendly messages. This service integrates with the monitoring system,
+ * toast notifications, and provides consistent error handling across the application.
  */
 
 import { reportError } from '@/lib/monitoring/init'
-import { showToast } from '@/components/providers/ToastListener'
-import { MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { toastService } from '@/lib/services/toastService'
+import { formatMessage, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
 import {
   ApiError,
   ConversionError,
   NetworkError,
   SessionError,
-  ValidationError
+  ValidationError,
+  RetryableError,
+  ClientError
 } from './error-types'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import sessionManager from '@/lib/services/sessionManager'
 
 // Error context interface
 export interface ErrorContext {
@@ -25,24 +27,96 @@ export interface ErrorContext {
   recoverable?: boolean
   retryCount?: number
   maxRetries?: number
+  shouldShowToast?: boolean
+  metadata?: Record<string, any>
   [key: string]: any
 }
 
 // Error recovery strategy type
 export type RecoveryStrategy = (error: Error, context: ErrorContext) => Promise<boolean>
 
-/**
- * Error handling service
- */
+// Error handling result
+export interface ErrorHandlingResult {
+  recovered: boolean
+  message: string
+  errorCode?: string
+  retryable: boolean
+}
+
+// Singleton error handling service
 class ErrorHandlingService {
   private static instance: ErrorHandlingService
   private readonly isDevelopment = import.meta.env.DEV
   private recoveryStrategies: Map<string, RecoveryStrategy> = new Map()
-
+  private errorClassifications: Map<string, { retryable: boolean, userMessage: string }> = new Map()
+  
+  // Circuit breaker state
+  private failedEndpoints: Map<string, { 
+    failCount: number,
+    lastFailTime: number,
+    cooldownUntil?: number
+  }> = new Map()
+  
   private constructor() {
-    // Register default recovery strategies
-    this.registerRecoveryStrategy('SessionError', this.recoverSessionError)
-    this.registerRecoveryStrategy('NetworkError', this.recoverNetworkError)
+    this.initializeErrorClassifications()
+  }
+
+  /**
+   * Initialize error classifications for consistent handling
+   */
+  private initializeErrorClassifications(): void {
+    // Network errors
+    this.classifyError('NetworkError', { 
+      retryable: true, 
+      userMessage: MESSAGE_TEMPLATES.generic.networkError
+    })
+    
+    // Session errors
+    this.classifyError('SessionError', { 
+      retryable: true, 
+      userMessage: MESSAGE_TEMPLATES.session.invalid
+    })
+    
+    // API errors by status code
+    this.classifyError('ApiError:401', { 
+      retryable: false, 
+      userMessage: MESSAGE_TEMPLATES.session.invalid
+    })
+    this.classifyError('ApiError:403', { 
+      retryable: false, 
+      userMessage: MESSAGE_TEMPLATES.session.invalid
+    })
+    this.classifyError('ApiError:404', { 
+      retryable: false, 
+      userMessage: 'The requested resource was not found'
+    })
+    this.classifyError('ApiError:429', { 
+      retryable: true, 
+      userMessage: 'The service is currently experiencing high load. Please try again shortly.'
+    })
+    this.classifyError('ApiError:5xx', { 
+      retryable: true, 
+      userMessage: MESSAGE_TEMPLATES.generic.serverError
+    })
+    
+    // Conversion errors
+    this.classifyError('ConversionError', { 
+      retryable: false, 
+      userMessage: MESSAGE_TEMPLATES.conversion.failed
+    })
+    
+    // Validation errors
+    this.classifyError('ValidationError', { 
+      retryable: false, 
+      userMessage: 'Please check your input and try again'
+    })
+  }
+
+  /**
+   * Classify an error type with handling information
+   */
+  public classifyError(errorType: string, classification: { retryable: boolean, userMessage: string }): void {
+    this.errorClassifications.set(errorType, classification)
   }
 
   /**
@@ -63,7 +137,7 @@ class ErrorHandlingService {
   }
 
   /**
-   * Handle an error with potential recovery
+   * Handle an error with potential recovery and user feedback
    */
   public async handleError(
     error: unknown,
@@ -73,29 +147,43 @@ class ErrorHandlingService {
       rethrow?: boolean
       severity?: 'error' | 'warning' | 'info'
       retryAction?: () => Promise<any>
+      endpoint?: string
     } = {}
-  ): Promise<{
-    recovered: boolean
-    message: string
-    retryResult?: any
-  }> {
+  ): Promise<ErrorHandlingResult> {
     const context = options.context || {}
+    const showToast = options.showToast ?? context.shouldShowToast ?? true
     const errorObj = this.normalizeError(error)
-    const errorType = errorObj.name
     
-    // Log the error
+    // Track the error with the monitoring system
+    this.trackError(errorObj, context)
+    
+    // Log the error for debugging
     this.logError(errorObj, context)
-
+    
+    // Check circuit breaker status for the endpoint
+    if (options.endpoint && this.isCircuitBroken(options.endpoint)) {
+      debugLog(`Circuit breaker open for endpoint: ${options.endpoint}`)
+      return {
+        recovered: false,
+        message: 'The service is temporarily unavailable. Please try again later.',
+        retryable: false
+      }
+    }
+    
+    // Get error classification
+    const errorClassification = this.getErrorClassification(errorObj)
+    const isRetryable = errorClassification.retryable
+    
     // Try to recover from the error
     let recovered = false
     let retryResult
     
-    if (context.recoverable !== false) {
-      const recoveryStrategy = this.recoveryStrategies.get(errorType)
+    if (context.recoverable !== false && isRetryable) {
+      const recoveryStrategy = this.getRecoveryStrategy(errorObj)
       
       if (recoveryStrategy) {
         try {
-          debugLog(`Attempting to recover from ${errorType}`)
+          debugLog(`Attempting to recover from ${errorObj.name}`)
           recovered = await recoveryStrategy.call(this, errorObj, context)
           
           // If recovery was successful and we have a retry action, execute it
@@ -113,20 +201,25 @@ class ErrorHandlingService {
       }
     }
 
+    // Update circuit breaker state for the endpoint if applicable
+    if (options.endpoint && !recovered) {
+      this.recordFailure(options.endpoint)
+    }
+
     // Format user-friendly message
-    const userMessage = this.formatErrorForUser(errorObj)
+    const userMessage = errorClassification.userMessage || this.formatErrorForUser(errorObj)
     
     // Show toast if requested
-    if (options.showToast) {
+    if (showToast) {
       const severity = options.severity || (recovered ? 'info' : 'error')
       const message = recovered 
         ? 'Issue automatically resolved. Please continue.' 
         : userMessage
       
-      showToast(
+      toastService.show(
         message,
         severity,
-        severity === 'error' ? 10000 : 5000
+        { duration: severity === 'error' ? 10000 : 5000 }
       )
     }
 
@@ -138,14 +231,116 @@ class ErrorHandlingService {
     return {
       recovered,
       message: userMessage,
-      retryResult
+      errorCode: errorObj instanceof ApiError ? errorObj.code : errorObj.name,
+      retryable: isRetryable
     }
+  }
+  
+  /**
+   * Get the appropriate recovery strategy for an error
+   */
+  private getRecoveryStrategy(error: Error): RecoveryStrategy | undefined {
+    // Try to get a specific strategy for this error type
+    const strategy = this.recoveryStrategies.get(error.name)
+    if (strategy) return strategy
+    
+    // Check for common error categories
+    if (error instanceof NetworkError) {
+      return this.recoveryStrategies.get('NetworkError')
+    } else if (error instanceof ApiError) {
+      // Try to get a strategy for this specific status code
+      return this.recoveryStrategies.get(`ApiError:${error.statusCode}`)
+    }
+    
+    // No specific strategy found
+    return undefined
+  }
+  
+  /**
+   * Get error classification information
+   */
+  private getErrorClassification(error: Error): { retryable: boolean, userMessage: string } {
+    // Check for specific error type match
+    let classification = this.errorClassifications.get(error.name)
+    
+    // If not found, check for more specific types
+    if (!classification && error instanceof ApiError) {
+      // Try to match by status code
+      classification = this.errorClassifications.get(`ApiError:${error.statusCode}`)
+      
+      // Or by status code range (e.g., 5xx)
+      if (!classification && error.statusCode >= 500) {
+        classification = this.errorClassifications.get('ApiError:5xx')
+      }
+    }
+    
+    // Default classification as fallback
+    return classification || { 
+      retryable: false, 
+      userMessage: MESSAGE_TEMPLATES.generic.error 
+    }
+  }
+
+  /**
+   * Check if circuit breaker is tripped for an endpoint
+   */
+  private isCircuitBroken(endpoint: string): boolean {
+    const state = this.failedEndpoints.get(endpoint)
+    
+    if (!state) return false
+    
+    // Check if we're still in cooldown period
+    if (state.cooldownUntil && Date.now() < state.cooldownUntil) {
+      return true
+    }
+    
+    // If cooldown period has passed, reset the circuit breaker
+    if (state.cooldownUntil && Date.now() >= state.cooldownUntil) {
+      this.failedEndpoints.delete(endpoint)
+      return false
+    }
+    
+    return false
+  }
+  
+  /**
+   * Record a failure for circuit breaker logic
+   */
+  private recordFailure(endpoint: string): void {
+    const now = Date.now()
+    const state = this.failedEndpoints.get(endpoint) || { failCount: 0, lastFailTime: now }
+    
+    // If last failure was more than 1 minute ago, reset counter
+    if (now - state.lastFailTime > 60000) {
+      state.failCount = 1
+    } else {
+      state.failCount += 1
+    }
+    
+    state.lastFailTime = now
+    
+    // If we've had multiple failures in a short period, trip the circuit breaker
+    if (state.failCount >= 5) {
+      // Set a 30-second cooldown period
+      state.cooldownUntil = now + 30000
+      debugLog(`Circuit breaker tripped for endpoint: ${endpoint}, cooldown until: ${new Date(state.cooldownUntil).toISOString()}`)
+    }
+    
+    this.failedEndpoints.set(endpoint, state)
+  }
+
+  /**
+   * Track error with monitoring system
+   */
+  private trackError(error: Error, context: ErrorContext = {}): void {
+    // Report to error monitoring service
+    reportError(error, context)
   }
 
   /**
    * Format an error for user display
    */
-  public formatErrorForUser(error: Error): string {
+  private formatErrorForUser(error: Error): string {
     if (error instanceof ApiError) {
       if (error.statusCode === 401 || error.statusCode === 403) {
         return MESSAGE_TEMPLATES.session.invalid
@@ -193,9 +388,6 @@ class ErrorHandlingService {
 
       console.groupEnd()
     }
-
-    // In production, send to monitoring service
-    reportError(error, context)
   }
 
   /**
@@ -206,109 +398,37 @@ class ErrorHandlingService {
       return error
     }
     
-    return new Error(typeof error === 'string' ? error : 'Unknown error')
+    if (typeof error === 'string') {
+      return new Error(error)
+    }
+    
+    return new Error(JSON.stringify(error))
   }
 
   /**
-   * Recovery strategy for session errors
+   * Create a function wrapper with error handling
    */
-  private async recoverSessionError(error: Error, context: ErrorContext): Promise<boolean> {
-    if (!(error instanceof SessionError)) return false
-    
-    try {
-      debugLog('Attempting to recover from session error by reinitializing session')
-      
-      // Try to reinitialize the session
-      const success = await sessionManager.initSession(true)
-      
-      if (success) {
-        debugLog('Session recovery successful')
-        return true
-      }
-      
-      debugError('Session recovery failed')
-      return false
-    } catch (recoveryError) {
-      debugError('Error during session recovery:', recoveryError)
-      return false
-    }
-  }
-
-  /**
-   * Recovery strategy for network errors
-   */
-  private async recoverNetworkError(error: Error, context: ErrorContext): Promise<boolean> {
-    if (!(error instanceof NetworkError)) return false
-    
-    // Get retry count from context or default to 0
-    const retryCount = context.retryCount || 0
-    const maxRetries = context.maxRetries || 3
-    
-    // Don't retry if we've reached the max retries
-    if (retryCount >= maxRetries) {
-      debugLog(`Network recovery aborted: max retries (${maxRetries}) reached`)
-      return false
-    }
-    
-    try {
-      // Implement exponential backoff
-      const backoffTime = Math.pow(2, retryCount) * 500 // 500ms, 1s, 2s, 4s, etc.
-      
-      debugLog(`Network recovery: waiting ${backoffTime}ms before retry ${retryCount + 1}/${maxRetries}`)
-      
-      // Wait for backoff time
-      await new Promise(resolve => setTimeout(resolve, backoffTime))
-      
-      // We don't actually retry here - we just prepare for the retry
-      // The actual retry will be done by the caller if we return true
-      
-      // Update retry count in context
-      context.retryCount = retryCount + 1
-      
-      return true
-    } catch (recoveryError) {
-      debugError('Error during network recovery:', recoveryError)
-      return false
-    }
-  }
-
-  /**
-   * Wrap a function with error handling
-   */
-  public withErrorHandling<T extends (...args: any[]) => any>(
+  public withErrorHandling<T extends (...args: any[]) => Promise<any>>(
     fn: T,
     options: {
       context?: ErrorContext
       showToast?: boolean
       rethrow?: boolean
       severity?: 'error' | 'warning' | 'info'
+      endpoint?: string
     } = {}
   ): (...args: Parameters<T>) => Promise<ReturnType<T> | undefined> {
     return async (...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
       try {
-        const result = fn(...args)
-
-        // Handle promise results
-        if (result instanceof Promise) {
-          try {
-            return await result
-          } catch (error) {
-            const { recovered, retryResult } = await this.handleError(error, {
-              ...options,
-              retryAction: () => fn(...args)
-            })
-            
-            if (recovered && retryResult !== undefined) {
-              return retryResult as ReturnType<T>
-            }
-            
-            return undefined
-          }
-        }
-
-        return result
+        return await fn(...args)
       } catch (error) {
-        await this.handleError(error, options)
+        const { recovered, retryable } = await this.handleError(error, options)
+        
+        if (recovered) {
+          // Try once more if we recovered
+          return await fn(...args)
+        }
+        
         return undefined
       }
     }
@@ -318,7 +438,7 @@ class ErrorHandlingService {
 // Export singleton instance
 export const errorHandlingService = ErrorHandlingService.getInstance()
 
-// Export a convenience function for handling errors
+// Export convenience function
 export async function handleError(
   error: unknown,
   options: {
@@ -327,23 +447,21 @@ export async function handleError(
     rethrow?: boolean
     severity?: 'error' | 'warning' | 'info'
     retryAction?: () => Promise<any>
+    endpoint?: string
   } = {}
-): Promise<{
-  recovered: boolean
-  message: string
-  retryResult?: any
-}> {
+): Promise<ErrorHandlingResult> {
   return errorHandlingService.handleError(error, options)
 }
 
-// Export a convenience function for wrapping functions with error handling
-export function withErrorHandling<T extends (...args: any[]) => any>(
+// Export wrapped function creator
+export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
   fn: T,
   options: {
     context?: ErrorContext
     showToast?: boolean
     rethrow?: boolean
     severity?: 'error' | 'warning' | 'info'
+    endpoint?: string
   } = {}
 ): (...args: Parameters<T>) => Promise<ReturnType<T> | undefined> {
   return errorHandlingService.withErrorHandling(fn, options)
