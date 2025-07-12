@@ -8,6 +8,7 @@ interface FormatSelectorProps {
 	availableFormats: string[]
 	onFormatChange: (format: string) => void
 	disabled?: boolean
+	isLoading?: boolean
 }
 
 export function FormatSelector({
@@ -15,7 +16,8 @@ export function FormatSelector({
 	selectedFormat,
 	availableFormats,
 	onFormatChange,
-	disabled = false
+	disabled = false,
+	isLoading = false
 }: FormatSelectorProps) {
 	// Find which group the formats belong to
 	const getFormatGroup = (format: string): string => {
@@ -131,45 +133,57 @@ export function FormatSelector({
 			<label className="text-lg font-medium text-deepNavy">
 				{sourceFormat ? `Convert ${sourceFormat.toUpperCase()} to:` : 'Convert to:'}
 			</label>
-			<div className="flex flex-wrap gap-3">
-				{availableFormats.map((format) => (
-					<button
-						key={format}
-						type="button"
-						onClick={() => onFormatChange(format)}
-						disabled={disabled}
-						className={`group relative rounded-lg px-5 py-3 text-base font-medium transition-all duration-200 ${
-							selectedFormat === format
-								? 'bg-trustTeal text-white shadow-md'
-								: 'bg-lightGray text-deepNavy hover:bg-trustTeal/10 hover:shadow-sm'
-						} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-						aria-pressed={selectedFormat === format}
-					>
-						<span className="flex items-center">
+			
+			{isLoading ? (
+				<div className="flex items-center justify-center py-8">
+					<div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-trustTeal"></div>
+					<span className="ml-3 text-gray-600">Loading available formats...</span>
+				</div>
+			) : availableFormats.length === 0 ? (
+				<div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+					No compatible formats found. Please try a different file type.
+				</div>
+			) : (
+				<div className="flex flex-wrap gap-3">
+					{availableFormats.map((format) => (
+						<button
+							key={format}
+							type="button"
+							onClick={() => onFormatChange(format)}
+							disabled={disabled}
+							className={`group relative rounded-lg px-5 py-3 text-base font-medium transition-all duration-200 ${
+								selectedFormat === format
+									? 'bg-trustTeal text-white shadow-md'
+									: 'bg-lightGray text-deepNavy hover:bg-trustTeal/10 hover:shadow-sm'
+							} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+							aria-pressed={selectedFormat === format}
+						>
+							<span className="flex items-center">
+								{selectedFormat === format && (
+									<svg
+										className="mr-1.5 h-4 w-4"
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+									>
+										<path
+											fillRule="evenodd"
+											d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+											clipRule="evenodd"
+										/>
+									</svg>
+								)}
+								<span className="mr-1.5">{getFormatIcon(format)}</span>.{format}
+							</span>
 							{selectedFormat === format && (
-								<svg
-									className="mr-1.5 h-4 w-4"
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-								>
-									<path
-										fillRule="evenodd"
-										d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-										clipRule="evenodd"
-									/>
-								</svg>
+								<span className="absolute inset-0 -z-10 rounded-lg bg-trustTeal/10 blur-sm"></span>
 							)}
-							<span className="mr-1.5">{getFormatIcon(format)}</span>.{format}
-						</span>
-						{selectedFormat === format && (
-							<span className="absolute inset-0 -z-10 rounded-lg bg-trustTeal/10 blur-sm"></span>
-						)}
-					</button>
-				))}
-			</div>
+						</button>
+					))}
+				</div>
+			)}
 		</div>
 	)
 }
-
 export default FormatSelector
+

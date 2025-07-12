@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { getJob } from '@/lib/stores/upload'
+import { uploadStore } from '@/lib/stores/upload'
 import { debugLog, debugError } from '@/lib/utils/debug'
 import { Loader2, DownloadCloud, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
-import downloadService from '@/lib/services/downloadService'
-import client from '@/lib/api/client'
-import { showError } from '@/lib/utils/messageUtils'
+import { downloadService } from '@/lib/services/downloadService'
+import { errorHandlingService } from '@/lib/errors/errorHandlingService'
+import { toastService } from '@/lib/services/toastService'
+import { MESSAGE_TEMPLATES } from '@/lib/constants/messages'
+import { retryService, RETRY_STRATEGIES } from '@/lib/utils/RetryService'
+import { DownloadError } from '@/lib/errors/error-types'
 
 interface DownloadManagerProps {
 	jobId: string
@@ -21,7 +24,6 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 	const [isDownloading, setIsDownloading] = useState(false)
 	const [downloadComplete, setDownloadComplete] = useState(false)
 	const [retryCount, setRetryCount] = useState(0)
-	const [downloadProgress, setDownloadProgress] = useState(0)
 
 	// On mount, check if we have a token or need to fetch one
 	useEffect(() => {
@@ -32,7 +34,10 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 			if (initialToken) {
 				debugLog('Using initial token from props:', initialToken)
 				setDownloadToken(initialToken)
-				setDownloadUrl(client.getDownloadUrl(initialToken))
+				const result = await downloadService.getDownloadToken(jobId)
+				if (result.success && result.url) {
+					setDownloadUrl(result.url)
+				}
 				return
 			}
 
@@ -51,24 +56,35 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 		setError(null)
 
 		try {
-			// Use the download service to get a token without auto-downloading
-			const result = await downloadService.getDownloadToken(jobId)
+			// Use retry service for better reliability
+			const result = await retryService.withRetry(
+				() => downloadService.getDownloadToken(jobId),
+				{
+					...RETRY_STRATEGIES.DOWNLOAD,
+					context: {
+						action: 'fetchDownloadToken',
+						jobId
+					}
+				}
+			)
 
 			if (!result.success) {
-				throw new Error(result.error || 'Failed to get download token')
+				throw new DownloadError(result.error || 'Failed to get download token', { jobId })
 			}
 
-			if (result.token) {
-				// Update component state
-				setDownloadToken(result.token)
-				setDownloadUrl(result.url || null)
-			} else {
-				throw new Error('Failed to get download token')
-			}
+			setDownloadToken(result.token || null)
+			setDownloadUrl(result.url || null)
 		} catch (error) {
-			console.error('Download token error:', error)
-			const errorMessage = error instanceof Error ? error.message : 'Failed to prepare download'
-			setError(errorMessage)
+			const result = await errorHandlingService.handleError(error, {
+				context: {
+					action: 'fetchDownloadToken',
+					jobId,
+					retryCount
+				},
+				showToast: false
+			})
+			
+			setError(result.message)
 		} finally {
 			setIsLoading(false)
 		}
@@ -76,28 +92,51 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 
 	// Handle download click - delegate to download service
 	const handleDownload = async () => {
-		if (!downloadToken) return
+		if (!jobId) return
 		setError(null)
-		setDownloadProgress(0)
 		setIsDownloading(true)
 
 		try {
-			// Use the new initiateDownload method which follows the download_guide.md approach
-			const downloadSuccess = await downloadService.initiateDownload(downloadToken)
-			
-			if (downloadSuccess) {
-				setDownloadComplete(true)
-				setDownloadStarted(true)
-				setIsDownloading(false)
-				if (onDownloadComplete) onDownloadComplete()
-			} else {
-				throw new Error('Failed to initiate download')
+			const result = await downloadService.downloadFile(jobId, {
+				onComplete: () => {
+					setDownloadComplete(true)
+					setDownloadStarted(true)
+					if (onDownloadComplete) onDownloadComplete()
+				},
+				onError: (error) => {
+					setError(error.message)
+				},
+				retryConfig: {
+					...RETRY_STRATEGIES.DOWNLOAD,
+					context: {
+						action: 'downloadFile',
+						jobId,
+						retryCount
+					}
+				}
+			})
+
+			if (!result.success) {
+				throw new DownloadError(result.error || 'Failed to initiate download', { jobId })
 			}
+
+			// Update state with new token/url if they changed
+			if (result.token) setDownloadToken(result.token)
+			if (result.url) setDownloadUrl(result.url)
 		} catch (error) {
-			setIsDownloading(false)
-			const errorMessage = error instanceof Error ? error.message : 'Download failed'
-			setError(errorMessage)
+			const result = await errorHandlingService.handleError(error, {
+				context: {
+					action: 'handleDownload',
+					jobId,
+					retryCount
+				},
+				showToast: false
+			})
+			
+			setError(result.message)
 			debugError('Download failed:', error)
+		} finally {
+			setIsDownloading(false)
 		}
 	}
 
@@ -196,21 +235,14 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 					<p className="text-sm text-gray-600">
 						If your download didn't start automatically,{' '}
 						<button onClick={handleDownload} className="text-blue-600 hover:underline">
-							click here to download again
+							click here
 						</button>
 					</p>
-				</div>
-			)}
-
-			{/* Warning about token expiration */}
-			{downloadToken && !error && (
-				<div className="mt-4 text-center text-xs text-gray-500">
-					For security reasons, this download link will expire in 10 minutes.
 				</div>
 			)}
 		</div>
 	)
 }
 
-export default DownloadManager
 export { DownloadManager }
+

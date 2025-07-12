@@ -255,15 +255,15 @@ export async function startFileConversion(file: File, targetFormat: string): Pro
 		// Start conversion via API
 		const response = await client.startConversion(file, targetFormat)
 		
-		if (!response?.job_id) {
+		if (!response?.data?.job_id) {
 			throw new Error('No job ID returned from server')
 		}
 		
 		// Update store with new conversion
-		startConversion(response.job_id, file.name, targetFormat, file.size)
+		startConversion(response.data.job_id, file.name, targetFormat, file.size)
 		
 		// Return the job ID
-		return response.job_id
+		return response.data.job_id
 	} catch (error) {
 		debugError('Error starting conversion:', error)
 		setConversionError(error instanceof Error ? error.message : 'Unknown error')
@@ -282,23 +282,23 @@ export async function checkConversionStatus(jobId: string): Promise<JobStatusRes
 		const response = await client.getConversionStatus(jobId)
 		
 		// Update store with status
-		updateConversionStatus(response.status as ConversionStatus, {
-			progress: response.progress || 0,
-			error: response.error_message
+		updateConversionStatus(response.data.status as ConversionStatus, {
+			progress: response.data.progress || 0,
+			error: response.data.error_message
 		})
 		
 		// If completed, update with download info
-		if (response.status === 'completed' && response.download_token) {
-			const downloadUrl = client.getDownloadUrl(response.download_token)
-			completeConversion(downloadUrl, response.download_token)
+		if (response.data.status === 'completed' && response.data.download_token) {
+			const downloadUrl = client.getDownloadUrl(response.data.download_token)
+			completeConversion(downloadUrl, response.data.download_token)
 		}
 		
 		// If failed, update with error
-		if (response.status === 'failed') {
-			setConversionError(response.error_message || 'Conversion failed')
+		if (response.data.status === 'failed') {
+			setConversionError(response.data.error_message || 'Conversion failed')
 		}
 		
-		return response
+		return response.data as JobStatusResponse
 	} catch (error) {
 		debugError('Error checking conversion status:', error)
 		setConversionError(error instanceof Error ? error.message : 'Unknown error')
@@ -322,13 +322,13 @@ export async function getConversionDownloadUrl(jobId: string): Promise<string> {
 		// Otherwise get a new token
 		const response = await client.getDownloadToken(jobId)
 		
-		if (!response.download_token) {
+		if (!response.data.download_token) {
 			throw new Error('No download token received')
 		}
 		
 		// Update store with token
-		const downloadUrl = client.getDownloadUrl(response.download_token)
-		completeConversion(downloadUrl, response.download_token)
+		const downloadUrl = client.getDownloadUrl(response.data.download_token)
+		completeConversion(downloadUrl, response.data.download_token)
 		
 		return downloadUrl
 	} catch (error) {

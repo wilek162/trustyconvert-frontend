@@ -21,6 +21,16 @@ export class NetworkError extends Error {
 	}
 }
 
+export class ServerError extends Error {
+	context: Record<string, any>
+
+	constructor(message = 'Server error occurred', context: Record<string, any> = {}) {
+		super(message)
+		this.name = 'ServerError'
+		this.context = context
+	}
+}
+
 export class ValidationError extends Error {
 	constructor(
 		message: string,
@@ -52,6 +62,58 @@ export class SessionError extends Error {
 		super(message)
 		this.name = 'SessionError'
 		this.context = context
+	}
+}
+
+/**
+ * Download-related errors
+ */
+export class DownloadError extends Error {
+	context: Record<string, any>
+
+	constructor(message = 'Download error', context: Record<string, any> = {}) {
+		super(message)
+		this.name = 'DownloadError'
+		this.context = context
+	}
+}
+
+/**
+ * Upload-related errors
+ */
+export class UploadError extends Error {
+	context: Record<string, any>
+
+	constructor(message = 'Upload error', context: Record<string, any> = {}) {
+		super(message)
+		this.name = 'UploadError'
+		this.context = context
+	}
+}
+
+/**
+ * Storage-related errors
+ */
+export class StorageError extends Error {
+	context: Record<string, any>
+
+	constructor(message = 'Storage error', context: Record<string, any> = {}) {
+		super(message)
+		this.name = 'StorageError'
+		this.context = context
+	}
+}
+
+/**
+ * Format-related errors
+ */
+export class FormatError extends Error {
+	constructor(
+		message = 'Format error',
+		public format?: string
+	) {
+		super(message)
+		this.name = 'FormatError'
 	}
 }
 
@@ -117,6 +179,26 @@ export function isRetryableError(error: unknown): boolean {
 		return error.message.includes('expired') || 
 			   error.message.includes('invalid') || 
 			   error.message.includes('timeout')
+	}
+
+	// Download errors are generally retryable
+	if (error instanceof DownloadError) {
+		return true
+	}
+
+	// Upload errors are generally retryable
+	if (error instanceof UploadError) {
+		return true
+	}
+
+	// Storage errors might be retryable
+	if (error instanceof StorageError) {
+		return true
+	}
+
+	// Format errors are not retryable
+	if (error instanceof FormatError) {
+		return false
 	}
 	
 	// Check for fetch/network-like errors (DOMExceptions, etc.)

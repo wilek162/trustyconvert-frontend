@@ -1,3 +1,6 @@
+// Standardize on toastService from src/lib/services/toastService.ts
+// Remove duplicate implementations in useToast.ts
+// Update ToastProvider.tsx to use single
 /**
  * Toast Service
  * 
@@ -6,7 +9,7 @@
  */
 
 import { showToast } from '@/components/providers/ToastListener'
-import { MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { MESSAGE_TEMPLATES } from '@/lib/constants/messages'
 
 // Toast type
 export type ToastType = 'success' | 'error' | 'warning' | 'info'

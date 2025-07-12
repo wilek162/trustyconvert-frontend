@@ -47,17 +47,61 @@ export type JobStatus =
 	| 'completed'
 	| 'failed'
 
-/**
- * Conversion status (client-side representation of JobStatus)
- */
-export type ConversionStatus =
-	| 'idle'
-	| 'pending'
-	| 'uploading'
-	| 'queued'
-	| 'processing'
-	| 'completed'
-	| 'failed'
+// Job status types
+export type BaseJobStatus = 'idle' | 'uploading' | 'uploaded' | 'processing' | 'completed' | 'failed'
+
+// Extended status for conversion jobs
+export type ConversionStatus = BaseJobStatus | 'validating' | 'downloading'
+
+// Job result interface
+export interface JobResult {
+  downloadUrl?: string
+  downloadToken?: string
+  error?: string
+  metadata?: Record<string, any>
+}
+
+// Base job interface
+export interface BaseJob {
+  jobId: string
+  status: BaseJobStatus
+  progress: number
+  filename: string
+  fileSize: number
+  mimeType: string
+  createdAt: string
+  updatedAt: string
+  error?: string
+  metadata?: Record<string, any>
+}
+
+// Conversion job interface
+export interface ConversionJob extends BaseJob {
+  status: ConversionStatus
+  targetFormat: string
+  resultUrl?: string
+  downloadToken?: string
+  startTime?: string
+  endTime?: string
+}
+
+// Upload job interface
+export interface UploadJob extends BaseJob {
+  targetFormat: string
+  uploadProgress: number
+  conversionProgress: number
+  downloadToken?: string
+  completedAt?: string
+}
+
+// Job status response from API
+export interface JobStatusResponse {
+  jobId: string
+  status: ConversionStatus
+  progress: number
+  error?: string
+  result?: JobResult
+}
 
 /**
  * Progress information for uploads/downloads
@@ -134,32 +178,6 @@ export interface ConversionRequest {
 	job_id: string
 	target_format: string
 	options?: Record<string, unknown>
-}
-
-/**
- * Job status response
- */
-export interface JobStatusResponse {
-	job_id: string
-	status: JobStatus
-	progress?: number
-	error_message?: string
-	error_type?: string
-	started_at?: string
-	created_at?: string
-	updated_at?: string
-	completed_at?: string
-	failed_at?: string
-	estimated_time_remaining?: number
-	current_step?: string
-	original_filename?: string
-	converted_path?: string | null
-	output_size?: number | null
-	conversion_time?: number | null
-	download_token?: string | null
-	filename?: string // Alias for original_filename for backward compatibility
-	file_size?: number // Alias for output_size for backward compatibility
-	download_url?: string // Constructed URL for convenience
 }
 
 /**

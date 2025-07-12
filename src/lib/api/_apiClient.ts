@@ -19,17 +19,12 @@ import type {
 	SessionCloseResponse,
 	FormatsResponse
 } from '@/lib/types/api'
-import {
-	NetworkError,
-	SessionError,
-	ValidationError,
-	handleError,
-	getErrorMessageTemplate
-} from '@/lib/utils/errorHandling'
+
 import { apiConfig } from './config'
-import { withRetry, RETRY_STRATEGIES, isRetryableError } from '@/lib/utils/retry'
+import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/RetryService'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { formatMessage } from '@/lib/utils/messageUtils'
+import { NetworkError, SessionError } from '../errors/error-types'
+import { errorHandlingService } from '../errors/errorHandlingService'
 
 // Configuration
 const API_BASE_URL = apiConfig.baseUrl
@@ -537,13 +532,11 @@ async function makeRequest<T>(
 		const response = await fetchWithTimeout(url, fetchOptions)
 		return await processApiResponse<T>(response, endpoint)
 	} catch (error) {
-		// Handle network errors
-		if (error instanceof NetworkError) {
-			throw error
-		}
-
-		// Handle other errors
-		throw new NetworkError('Unknown error during API request', { endpoint })
+		const { message } = await errorHandlingService.handleError(error, {
+			context: { endpoint, method: options.method || 'GET' },
+			showToast: false
+		})
+		throw new Error(message)
 	}
 }
 
@@ -661,43 +654,14 @@ async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<Uploa
 
 		return response
 	} catch (error) {
-		debugError('API: File upload failed', error)
-
-		// Enhanced error handling for large files
-		const errorContext = {
-			component: 'apiClient',
-			action: 'uploadFile',
-			fileName: file.name,
-			fileSize: file.size,
-			jobId
-		}
-
-		// Provide more specific error messages for large files
-		if (file.size > 50 * 1024 * 1024) {
-			// 50MB
-			const errorMessage =
-				'The file exceeds the maximum allowed size. Please try a smaller file or contact support for assistance with large file uploads.'
-			return {
-				success: false,
-				data: {
-					error: 'FileTooLarge',
-					message: errorMessage
-				} as any
-			}
-		}
-
-		// Use centralized error handling
-		handleError(error, {
-			context: errorContext,
+		const { message } = await errorHandlingService.handleError(error, {
+			context: { action: 'uploadFile', jobId, fileName: file.name, fileSize: file.size },
 			showToast: true
 		})
-
 		return {
 			success: false,
-			data: {
-				error: 'NetworkError',
-				message: getErrorMessageTemplate(error)
-			} as any
+			data: {} as UploadResponse,
+			message
 		}
 	}
 }
@@ -742,26 +706,15 @@ async function convertFile(
 			// Let the retry mechanism handle it
 			throw error
 		}
-	}, retryConfig).catch((error) => {
-		// Final error handling after all retries
-		handleError(error, {
-			context: {
-				component: 'apiClient',
-				action: 'convertFile',
-				jobId,
-				targetFormat,
-				sourceFormat
-			},
+	}, retryConfig).catch(async (error) => {
+		const { message } = await errorHandlingService.handleError(error, {
+			context: { action: 'convertFile', jobId, targetFormat, sourceFormat },
 			showToast: true
 		})
-
-		// Return error response
 		return {
 			success: false,
-			data: {
-				error: error instanceof Error ? error.name : 'ConversionError',
-				message: getErrorMessageTemplate(error)
-			} as any
+			data: {} as ConvertResponse,
+			message
 		}
 	})
 }
@@ -880,28 +833,14 @@ async function startConversion(
 			correlation_id: convertResp.correlation_id
 		}
 	} catch (error) {
-		debugError('API: Start conversion failed', error)
-
-		// Handle error
-		handleError(error, {
-			context: {
-				component: 'apiClient',
-				action: 'startConversion',
-				fileName: file.name,
-				fileSize: file.size,
-				targetFormat
-			},
+		const { message } = await errorHandlingService.handleError(error, {
+			context: { action: 'startConversion', targetFormat, fileName: file.name, fileSize: file.size },
 			showToast: true
 		})
-
-		// Return error response
 		return {
 			success: false,
-			data: {
-				error: error instanceof Error ? error.name : 'ConversionError',
-				message: getErrorMessageTemplate(error),
-				job_id: '' // Empty job ID for error case
-			} as any
+			data: {} as ConvertResponse & { job_id: string },
+			message
 		}
 	}
 }

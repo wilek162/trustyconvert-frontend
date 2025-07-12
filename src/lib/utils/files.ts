@@ -109,23 +109,46 @@ export function getMimeType(extension: string): string {
 }
 
 /**
+ * Validation result interface
+ */
+export interface ValidationResult {
+  isValid: boolean
+  error?: string
+}
+
+/**
  * Validate if a file size is within limit
  * @param file File to check
  * @param maxSize Maximum allowed size in bytes
- * @returns Boolean indicating if file is within size limit
+ * @returns Validation result
  */
-export function validateFileSize(file: File, maxSize: number = FILE_UPLOAD.MAX_SIZE): boolean {
-	return file.size <= maxSize
+export function validateFileSize(file: File, maxSize: number = FILE_UPLOAD.MAX_SIZE): ValidationResult {
+  if (file.size <= maxSize) {
+    return { isValid: true }
+  }
+  return {
+    isValid: false,
+    error: `File size exceeds maximum allowed size of ${formatFileSize(maxSize)}`
+  }
 }
 
 /**
  * Validate if a file type is allowed
  * @param file File to check
  * @param allowedTypes Array of allowed MIME types
- * @returns Boolean indicating if file type is allowed
+ * @returns Validation result
  */
-export function validateFileType(file: File, allowedTypes: string[]): boolean {
-	return allowedTypes.includes(file.type)
+export function validateFileType(file: File, allowedTypes: string[]): ValidationResult {
+  const extension = getFileExtension(file.name)
+  const mimeType = getMimeType(extension)
+
+  if (allowedTypes.includes(extension)) {
+    return { isValid: true }
+  }
+  return {
+    isValid: false,
+    error: `File type ${extension.toUpperCase()} is not supported. Supported types: ${allowedTypes.join(', ')}`
+  }
 }
 
 /**

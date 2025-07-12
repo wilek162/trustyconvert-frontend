@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 
-import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/RetryService'
-import { handleError } from '@/lib/errors/ErrorHandlingService'
+import { RETRY_STRATEGIES } from '@/lib/utils/RetryService'
 import { toastService } from '@/lib/services/toastService'
 import { useSupportedFormats } from '@/lib/hooks/useSupportedFormats'
 import { useConversionStatus } from '@/lib/hooks/useConversionStatus'
@@ -14,6 +13,7 @@ import {
 } from '@/lib/stores/conversion'
 import { useStore } from './useStore'
 import type { ConversionStatus } from '@/lib/types/api'
+import type { ToastOptions } from '@/components/providers/ToastListener'
 
 // Statuses that indicate an ongoing conversion on the server side
 const IN_PROGRESS_STATUSES = [
@@ -21,18 +21,58 @@ const IN_PROGRESS_STATUSES = [
 	'uploading',
 	'queued',
 	'processing'
-] as const satisfies ReadonlyArray<ConversionStatus>
+] as const
 
 // A Set for efficient status lookup without TypeScript narrow-union issues
-const IN_PROGRESS_STATUS_SET: ReadonlySet<ConversionStatus> = new Set(
-	IN_PROGRESS_STATUSES as readonly ConversionStatus[]
+const IN_PROGRESS_STATUS_SET: ReadonlySet<string> = new Set(
+	IN_PROGRESS_STATUSES
 )
+
+/**
+ * Check if we're running in a browser environment
+ */
+const isBrowser = typeof window !== 'undefined'
 
 /**
  * Hook for managing file conversion flow
  * Handles file upload, format selection, conversion status, and download
+ * 
+ * This hook is designed to be SSR-compatible and will only perform
+ * client-side operations when running in a browser environment.
  */
 export function useFileConversion() {
+	// Return a minimal implementation during SSR to prevent errors
+	if (!isBrowser) {
+		return {
+			file: null,
+			setFile: () => {},
+			format: '',
+			setFormat: () => {},
+			startConversion: () => {},
+			status: 'idle' as ConversionStatus,
+			progress: 0,
+			downloadUrl: null,
+			fileName: null,
+			fileSize: 0,
+			error: null,
+			isPosting: false,
+			isStatusLoading: false,
+			reset: () => {},
+			retry: () => {},
+			cancelConversion: () => {},
+			conversion: { 
+				isLoading: false, 
+				mutate: () => {},
+				data: undefined
+			},
+			formats: [],
+			isLoadingFormats: false,
+			formatsError: null,
+			retryCount: 0
+		}
+	}
+
+	// Client-side implementation
 	const queryClient = useQueryClient()
 	const [file, setFile] = useState<File | null>(null)
 	const [format, setFormat] = useState<string>('')
@@ -46,35 +86,6 @@ export function useFileConversion() {
 
 	// Get supported formats
 	const { formats, isLoading: isLoadingFormats, error: formatsError } = useSupportedFormats()
-
-	// Handle status changes for better error recovery
-	const handleStatusChange = useCallback((status: ConversionStatus) => {
-		debugLog(`Conversion status changed to ${status}`, { jobId })
-		
-		// If we have an error but the status is actually processing, clear the error
-		if (error && IN_PROGRESS_STATUS_SET.has(status)) {
-			debugLog('Clearing error state because conversion is actually processing')
-			setError(null)
-		}
-	}, [jobId, error])
-	
-	// Handle conversion errors
-	const handleConversionError = useCallback((errorMsg: string) => {
-		debugError(`Conversion error: ${errorMsg}`)
-		setError(new Error(errorMsg))
-		
-		// Show recovery options to the user
-		toastService.error('Conversion encountered a problem', {
-			message: errorMsg,
-			duration: 10000,
-			retryAction: () => {
-				if (file && format) {
-					debugLog('Retrying conversion via retry action')
-					startConversion()
-				}
-			}
-		})
-	}, [file, format])
 
 	// Use status polling hook
 	const {
@@ -90,10 +101,8 @@ export function useFileConversion() {
 		retry: retryConversion
 	} = useConversionStatus({
 		jobId,
-		onError: handleConversionError,
-		onStatusChange: handleStatusChange,
-		fileSize: file?.size, // Pass the file size to enable adaptive polling
-		showErrorToasts: false // We'll handle toasts here for better UX
+		fileSize: file?.size,
+		showErrorToasts: false
 	})
 
 	const conversion = useMutation({
@@ -106,7 +115,6 @@ export function useFileConversion() {
 				status
 			})
 			
-			// Block duplicate requests only if a conversion is actively in progress
 			if (isPosting || isActive) {
 				debugLog('[conversion.mutationFn] Early exit: already posting or job in progress', {
 					isPosting,
@@ -122,37 +130,7 @@ export function useFileConversion() {
 				format: targetFormat
 			})
 
-			// Use withRetry for robust API calls
-			return withRetry(async () => {
-				try {
-					// Use the conversion service to start the conversion
-					return await conversionService.startFileConversion(file, targetFormat)
-				} catch (error) {
-					// Handle error with our error handling service
-					const result = await handleError(error, {
-						context: { 
-							action: 'startFileConversion', 
-							fileSize: file.size,
-							format: targetFormat
-						},
-						endpoint: 'conversion/direct',
-						// Let the onError callback handle the toast
-						showToast: false
-					})
-					
-					// If the error wasn't recovered, throw it
-					if (!result.recovered) {
-						throw error
-					}
-					
-					// If recovered, try again immediately
-					return await conversionService.startFileConversion(file, targetFormat)
-				}
-			}, {
-				...RETRY_STRATEGIES.CRITICAL,
-				endpoint: 'conversion/start',
-				context: { action: 'startFileConversion', fileSize: file.size, format: targetFormat }
-			})
+			return conversionService.startFileConversion(file, targetFormat)
 		},
 		onSuccess: (data) => {
 			debugLog('[conversion.onSuccess] called', data)
@@ -171,18 +149,19 @@ export function useFileConversion() {
 			setError(error)
 			setIsPosting(false)
 			
-			// Show error message with retry option
-			toastService.error('Failed to start conversion', {
-				description: error.message,
+			const toastOptions: ToastOptions = {
 				duration: 10000,
+				description: error.message,
 				retryAction: () => {
 					if (file && format) {
 						debugLog('Retrying conversion via error retry action')
 						startConversion()
 					}
 				}
-			})
-		}
+			}
+			toastService.error('Failed to start conversion', toastOptions)
+		},
+		retry: RETRY_STRATEGIES.CRITICAL.maxRetries
 	})
 
 	const startConversion = useCallback(() => {
@@ -208,9 +187,9 @@ export function useFileConversion() {
 			
 			// If there's an active job but we have an error, offer to retry
 			if (error && jobId) {
-				toastService.warning('Conversion already started', {
-					description: 'Experiencing issues? You can try again.',
+				const toastOptions: ToastOptions = {
 					duration: 8000,
+					description: 'Experiencing issues? You can try again.',
 					retryAction: () => {
 						debugLog('Restarting problematic conversion')
 						// Reset state and try again
@@ -223,7 +202,8 @@ export function useFileConversion() {
 							conversion.mutate({ file, targetFormat: format })
 						}, 100)
 					}
-				})
+				}
+				toastService.warning('Conversion already started', toastOptions)
 				return
 			}
 			

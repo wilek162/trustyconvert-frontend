@@ -1,3 +1,5 @@
+// Remove duplicate implementations and standardize on RetryService
+// In src/lib/utils.ts
 /**
  * Enhanced Retry Service
  *
@@ -10,6 +12,8 @@ import { debugLog, debugError } from '@/lib/utils/debug'
 import { reportError } from '@/lib/monitoring/init'
 import { isRetryableError, RetryableError } from '@/lib/errors/error-types'
 import { handleError } from '@/lib/errors/ErrorHandlingService'
+import { toastService } from '@/lib/services/toastService'
+import { MESSAGE_TEMPLATES } from '@/lib/constants/messages'
 
 // Default retry configuration
 export interface RetryConfig {
@@ -45,6 +49,18 @@ export interface RetryConfig {
   
 	/** Context metadata for error reporting */
 	context?: Record<string, any>
+  
+	/** Whether to use adaptive backoff based on response times */
+	useAdaptiveBackoff?: boolean
+  
+	/** Whether to use circuit breaker pattern */
+	useCircuitBreaker?: boolean
+  
+	/** Circuit breaker failure threshold */
+	circuitBreakerThreshold?: number
+  
+	/** Circuit breaker reset timeout in ms */
+	circuitBreakerResetTimeout?: number
 }
 
 // Default configuration
@@ -56,6 +72,10 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	jitter: 0.25,
 	isRetryable: isRetryableError,
 	showToastOnRetry: false,
+	useAdaptiveBackoff: true,
+	useCircuitBreaker: true,
+	circuitBreakerThreshold: 5,
+	circuitBreakerResetTimeout: 60000,
 	onRetry: (error, attempt, delay) => {
 		debugLog(
 			`Retry attempt ${attempt} after error:`,
@@ -71,7 +91,9 @@ export const RETRY_STRATEGIES = {
 		...DEFAULT_RETRY_CONFIG,
 		maxRetries: 3,
 		initialDelay: 300,
-		backoffFactor: 3
+		backoffFactor: 3,
+		useCircuitBreaker: true,
+		circuitBreakerThreshold: 3
 	},
 
 	// For critical operations (more retries, slower backoff)
@@ -79,7 +101,10 @@ export const RETRY_STRATEGIES = {
 		...DEFAULT_RETRY_CONFIG,
 		maxRetries: 5,
 		initialDelay: 500,
-		backoffFactor: 2
+		backoffFactor: 2,
+		useCircuitBreaker: true,
+		circuitBreakerThreshold: 5,
+		showToastOnRetry: true
 	},
 
 	// For background operations (many retries, slow backoff)
@@ -87,16 +112,19 @@ export const RETRY_STRATEGIES = {
 		...DEFAULT_RETRY_CONFIG,
 		maxRetries: 10,
 		initialDelay: 1000,
-		backoffFactor: 1.5
+		backoffFactor: 1.5,
+		useCircuitBreaker: false
 	},
 
 	// For status polling (many attempts with fixed interval)
 	POLLING: {
 		...DEFAULT_RETRY_CONFIG,
-		maxRetries: 20, // Reduced from 60 to prevent excessive polling
+		maxRetries: 20,
 		initialDelay: 5000,
-		backoffFactor: 1, // Linear (no backoff)
-		jitter: 0.1 // Small jitter for polling
+		backoffFactor: 1,
+		jitter: 0.1,
+		useCircuitBreaker: false,
+		useAdaptiveBackoff: false
 	},
   
 	// For user-facing operations (fewer retries, very fast initial retry)
@@ -104,6 +132,30 @@ export const RETRY_STRATEGIES = {
 		...DEFAULT_RETRY_CONFIG,
 		maxRetries: 2,
 		initialDelay: 200,
+		showToastOnRetry: true,
+		useCircuitBreaker: true,
+		circuitBreakerThreshold: 2
+	},
+  
+	// For session operations (moderate retries, fast backoff)
+	SESSION: {
+		...DEFAULT_RETRY_CONFIG,
+		maxRetries: 3,
+		initialDelay: 250,
+		backoffFactor: 2,
+		useCircuitBreaker: true,
+		circuitBreakerThreshold: 3,
+		showToastOnRetry: false
+	},
+  
+	// For download operations (fewer retries, longer delays)
+	DOWNLOAD: {
+		...DEFAULT_RETRY_CONFIG,
+		maxRetries: 2,
+		initialDelay: 1000,
+		backoffFactor: 2,
+		useCircuitBreaker: true,
+		circuitBreakerThreshold: 2,
 		showToastOnRetry: true
 	}
 }
@@ -114,6 +166,7 @@ interface CircuitBreakerState {
 	lastFailure: number
 	status: 'closed' | 'open' | 'half-open'
 	nextAttempt?: number
+	resetTimeout: number
 }
 
 /**
@@ -131,9 +184,13 @@ class RetryService {
 		successes: number
 		failures: number
 		lastAttempt: number
+		avgResponseTime: number
 	}> = new Map()
   
-	private constructor() {}
+	private constructor() {
+		// Initialize metrics cleanup interval
+		setInterval(() => this.cleanupMetrics(), 3600000) // Clean up every hour
+	}
   
 	/**
 	 * Get singleton instance
@@ -333,7 +390,8 @@ class RetryService {
 		const state = this.circuitBreakers.get(endpoint) || {
 			failures: 0,
 			lastFailure: now,
-			status: 'closed'
+			status: 'closed',
+			resetTimeout: Date.now() + (this.circuitBreakers.get(endpoint)?.resetTimeout || DEFAULT_RETRY_CONFIG.circuitBreakerResetTimeout || 60000)
 		}
     
 		// Increase failure count
@@ -341,10 +399,10 @@ class RetryService {
 		state.lastFailure = now
     
 		// If we have multiple recent failures, open the circuit
-		if (state.failures >= 5) {
+		if (state.failures >= (this.circuitBreakers.get(endpoint)?.circuitBreakerThreshold || DEFAULT_RETRY_CONFIG.circuitBreakerThreshold || 5)) {
 			this.setCircuitStatus(endpoint, 'open')
 			// Set a cool-down period (e.g., 30 seconds)
-			state.nextAttempt = now + 30000
+			state.nextAttempt = now + (this.circuitBreakers.get(endpoint)?.resetTimeout || DEFAULT_RETRY_CONFIG.circuitBreakerResetTimeout || 60000)
 			debugLog(`Circuit breaker opened for ${endpoint} until ${new Date(state.nextAttempt).toISOString()}`)
 		}
     
@@ -358,7 +416,8 @@ class RetryService {
 		const state = this.circuitBreakers.get(endpoint) || {
 			failures: 0,
 			lastFailure: Date.now(),
-			status: 'closed'
+			status: 'closed',
+			resetTimeout: Date.now() + (this.circuitBreakers.get(endpoint)?.resetTimeout || DEFAULT_RETRY_CONFIG.circuitBreakerResetTimeout || 60000)
 		}
     
 		state.status = status
@@ -381,7 +440,8 @@ class RetryService {
 			attempts: 0,
 			successes: 0,
 			failures: 0,
-			lastAttempt: now
+			lastAttempt: now,
+			avgResponseTime: 0
 		}
     
 		metric.attempts++
@@ -478,6 +538,18 @@ class RetryService {
 		})
     
 		return result
+	}
+
+	/**
+	 * Clean up old metrics
+	 */
+	private cleanupMetrics(): void {
+		const now = Date.now()
+		this.metrics.forEach((metric, endpoint) => {
+			if (metric.lastAttempt < now - 3600000) { // Remove metrics older than 1 hour
+				this.metrics.delete(endpoint)
+			}
+		})
 	}
 }
 

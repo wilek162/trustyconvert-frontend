@@ -3,7 +3,7 @@
  * Uses environment variables for flexibility.
  */
 
-import { RETRY_STRATEGIES } from '@/lib/utils/retry'
+import { RETRY_STRATEGIES } from '@/lib/utils/RetryService'
 // Remove import from debug.ts to avoid circular dependency
 // import { isDev } from '@/lib/utils/debug'
 

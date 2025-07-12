@@ -6,218 +6,195 @@
  */
 
 import client from '@/lib/api/client'
-import { getJob, updateJob } from '@/lib/stores/upload'
+import { uploadStore } from '@/lib/stores/upload'
+import { toastService } from '@/lib/services/toastService'
+import { errorHandlingService } from '@/lib/errors/errorHandlingService'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/retry'
-import type { RetryConfig } from '@/lib/utils/retry'
+import { withRetry, RETRY_STRATEGIES } from '@/lib/utils/RetryService'
+import type { RetryConfig } from '@/lib/utils/RetryService'
 import sessionManager from '@/lib/services/sessionManager'
-import { showError } from '@/lib/utils/messageUtils'
+import { MESSAGE_TEMPLATES } from '@/lib/constants/messages'
+import { DownloadError } from '@/lib/errors/error-types'
 
 export interface DownloadOptions {
-	jobId: string
-	autoDownload?: boolean
-	onSuccess?: () => void
-	onError?: (message: string) => void
-	onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void
+  onError?: (error: Error) => void
+  onComplete?: () => void
+  signal?: AbortSignal
+  retryConfig?: Partial<RetryConfig>
 }
 
 export interface DownloadResult {
-	success: boolean
-	token?: string
-	url?: string
-	error?: string
-	filename?: string
+  success: boolean
+  token?: string
+  url?: string
+  error?: string
 }
 
 /**
- * Get existing download token from job store
+ * Download service for handling file downloads
  */
-export function getExistingToken(jobId: string): string | null {
-	const job = getJob(jobId)
-	return job?.downloadToken || null
+class DownloadService {
+  private static instance: DownloadService
+  
+  private constructor() {}
+  
+  /**
+   * Get singleton instance
+   */
+  public static getInstance(): DownloadService {
+    if (!DownloadService.instance) {
+      DownloadService.instance = new DownloadService()
+    }
+    return DownloadService.instance
+  }
+
+  /**
+   * Get a download token for a job
+   * @param jobId The job ID to get a download token for
+   * @returns Download result with token and URL
+   */
+  public async getDownloadToken(jobId: string): Promise<DownloadResult> {
+    try {
+      debugLog('Requesting download token for job', { jobId })
+      
+      // Ensure session is valid before proceeding
+      await sessionManager.ensureSession()
+      
+      // Use retry service for token retrieval
+      const response = await withRetry(
+        async () => client.getDownloadToken(jobId),
+        {
+          ...RETRY_STRATEGIES.DOWNLOAD,
+          endpoint: `download/token/${jobId}`,
+          context: { action: 'getDownloadToken', jobId }
+        }
+      )
+      
+      const downloadToken = response.data.download_token
+      
+      if (!downloadToken) {
+        const error = new DownloadError(
+          'Failed to get download token from response',
+          { jobId, response }
+        )
+        throw error
+      }
+      
+      debugLog('Successfully extracted download token', { jobId })
+      
+      // Generate the download URL
+      const downloadUrl = client.getDownloadUrl(downloadToken)
+      
+      return {
+        success: true,
+        token: downloadToken,
+        url: downloadUrl
+      }
+    } catch (error) {
+      debugError('Failed to get download token', error)
+      const result = await errorHandlingService.handleError(error, {
+        context: { action: 'getDownloadToken', jobId },
+        showToast: false, // Let the component handle toasts
+        endpoint: `download/token/${jobId}`
+      })
+      
+      return {
+        success: false,
+        error: result.message
+      }
+    }
+  }
+  
+  /**
+   * Download a file using the token-based approach
+   * @param jobId The job ID to download
+   * @param options Download options including callbacks
+   * @returns Download result
+   */
+  public async downloadFile(jobId: string, options: DownloadOptions = {}): Promise<DownloadResult> {
+    const { onProgress, onError, onComplete, signal, retryConfig } = options
+    
+    try {
+      debugLog('Starting download process for job', { jobId })
+      
+      // Show loading toast
+      const toastId = toastService.loading(MESSAGE_TEMPLATES.download.started)
+      
+      // Ensure session is valid before proceeding
+      await sessionManager.ensureSession()
+      
+      // Step 1: Get download token with retry
+      const tokenResult = await withRetry(
+        async () => this.getDownloadToken(jobId),
+        {
+          ...RETRY_STRATEGIES.DOWNLOAD,
+          ...retryConfig,
+          endpoint: `download/file/${jobId}`,
+          context: { action: 'downloadFile', jobId }
+        }
+      )
+      
+      if (!tokenResult.success || !tokenResult.token || !tokenResult.url) {
+        const error = new DownloadError(
+          tokenResult.error || 'Failed to get download token',
+          { jobId, tokenResult }
+        )
+        throw error
+      }
+      
+      // Step 2: Use the recommended approach - browser redirection
+      try {
+        const a = document.createElement('a')
+        a.href = tokenResult.url
+        a.download = '' // Let the server set the filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        
+        debugLog('Download initiated via browser redirection', { url: tokenResult.url })
+        
+        // Update toast
+        toastService.update(toastId, MESSAGE_TEMPLATES.download.complete, 'success')
+        
+        // Notify completion
+        if (onComplete) onComplete()
+        
+        return {
+          success: true,
+          token: tokenResult.token,
+          url: tokenResult.url
+        }
+      } catch (error) {
+        // Handle browser-specific download errors
+        const downloadError = new DownloadError(
+          'Failed to initiate download in browser',
+          { jobId, url: tokenResult.url, originalError: error }
+        )
+        throw downloadError
+      }
+    } catch (error) {
+      debugError('Download failed', error)
+      const result = await errorHandlingService.handleError(error, {
+        context: { action: 'downloadFile', jobId },
+        showToast: true,
+        endpoint: `download/file/${jobId}`,
+        severity: 'error'
+      })
+      
+      if (onError) onError(new Error(result.message))
+      
+      return {
+        success: false,
+        error: result.message
+      }
+    }
+  }
 }
 
-/**
- * Get download token for a job
- * This function is responsible for obtaining a valid download token
- */
-export async function getDownloadToken(jobId: string): Promise<DownloadResult> {
-	try {
-		// First ensure we have a valid session
-		const sessionValid = await sessionManager.ensureSession()
-		if (!sessionValid) {
-			throw new Error('Invalid session state')
-		}
+// Export singleton instance
+export const downloadService = DownloadService.getInstance()
 
-		// Try to get an existing token first
-		let token: string | undefined = getExistingToken(jobId) || undefined
-		
-		// If no existing token, get a new one
-		if (!token) {
-			debugLog('Fetching new download token for job:', jobId)
-			const response = await withRetry(
-				() => client.getDownloadToken(jobId),
-				RETRY_STRATEGIES.API_REQUEST
-			)
-
-			if (!response.success || !response.data?.download_token) {
-				const errorMessage = response.data?.error || 'Failed to get download token'
-				return {
-					success: false,
-					error: errorMessage
-				}
-			}
-
-			token = response.data.download_token
-			// Save token in job store
-			updateJob(jobId, { downloadToken: token })
-		}
-
-		if (!token) {
-			throw new Error('Failed to get valid download token')
-		}
-
-		const url = client.getDownloadUrl(token)
-
-		return {
-			success: true,
-			token,
-			url
-		}
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : 'Failed to get download token'
-		debugError('Download token error:', error)
-
-		return {
-			success: false,
-			error: errorMessage
-		}
-	}
-}
-
-/**
- * Initiate a file download using the proper approach from download_guide.md
- * This uses the <a> tag approach instead of ReadableStream
- */
-export async function initiateDownload(token: string, filename?: string): Promise<boolean> {
-	try {
-		if (!token) {
-			throw new Error('No download token provided')
-		}
-
-		// Get the download URL
-		const downloadUrl = client.getDownloadUrl(token)
-		
-		// Create an invisible <a> element and trigger click
-		const link = document.createElement('a')
-		link.href = downloadUrl
-		link.download = filename || '' // Not required, but improves behavior in some browsers
-		link.style.display = 'none'
-		document.body.appendChild(link)
-		link.click()
-		document.body.removeChild(link)
-		
-		return true
-	} catch (error) {
-		debugError('Download initiation error:', error)
-		const errorMessage = error instanceof Error ? error.message : 'Download failed'
-		showError(errorMessage)
-		return false
-	}
-}
-
-/**
- * Main download function that combines token retrieval and download initiation
- */
-export async function downloadFile(options: DownloadOptions): Promise<DownloadResult> {
-	const { jobId, autoDownload = true, onSuccess, onError, onProgress } = options
-
-	try {
-		// Get a download token
-		const tokenResult = await getDownloadToken(jobId)
-		
-		if (!tokenResult.success) {
-			if (onError) onError(tokenResult.error || 'Failed to get download token')
-			return tokenResult
-		}
-
-		// If autoDownload is true, start the download
-		if (autoDownload && tokenResult.token) {
-			const downloadSuccess = await initiateDownload(tokenResult.token)
-			
-			if (downloadSuccess) {
-				if (onSuccess) onSuccess()
-			} else {
-				if (onError) onError('Failed to initiate download')
-				return {
-					success: false,
-					token: tokenResult.token,
-					url: tokenResult.url,
-					error: 'Failed to initiate download'
-				}
-			}
-		}
-
-		return tokenResult
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : 'Download failed'
-		debugError('Download error:', error)
-		if (onError) onError(errorMessage)
-
-		return {
-			success: false,
-			error: errorMessage
-		}
-	}
-}
-
-/**
- * Check download status from the API
- * This is separate from job polling and only checks if a specific file is ready for download
- */
-export async function checkDownloadStatus(jobId: string): Promise<{
-	isReady: boolean
-	hasError: boolean
-	errorMessage?: string
-	progress: number
-}> {
-	try {
-		const response = await client.getConversionStatus(jobId)
-		
-		if (!response.success) {
-			return {
-				isReady: false,
-				hasError: true,
-				errorMessage: response.data?.message || 'Failed to check download status',
-				progress: 0
-			}
-		}
-		
-		const data = response.data
-		return {
-			isReady: data.status === 'completed',
-			hasError: data.status === 'failed',
-			errorMessage: data.error_message,
-			progress: data.progress || 0
-		}
-	} catch (error) {
-		debugError('Download status check error:', error)
-		return {
-			isReady: false,
-			hasError: true,
-			errorMessage: error instanceof Error ? error.message : 'Failed to check download status',
-			progress: 0
-		}
-	}
-}
-
-// Export as a service object for consistency
-const downloadService = {
-	downloadFile,
-	getExistingToken,
-	getDownloadToken,
-	initiateDownload,
-	checkDownloadStatus
-}
-
-export default downloadService
+// Export convenience function
+export const downloadFile = (jobId: string, options: DownloadOptions = {}): Promise<DownloadResult> =>
+  downloadService.downloadFile(jobId, options)

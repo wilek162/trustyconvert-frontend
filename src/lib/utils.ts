@@ -88,30 +88,8 @@ export function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/**
- * Retry a function with exponential backoff
- */
-export async function retry<T>(
-	fn: () => Promise<T>,
-	maxAttempts = 3,
-	baseDelay = 1000
-): Promise<T> {
-	let lastError: Error | null = null
-
-	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		try {
-			return await fn()
-		} catch (error) {
-			lastError = error as Error
-			if (attempt < maxAttempts - 1) {
-				await delay(baseDelay * Math.pow(2, attempt))
-				continue
-			}
-		}
-	}
-
-	throw lastError
-}
+// Re-export retry utilities from RetryService
+export { withRetry, createRetryable, RETRY_STRATEGIES } from './utils/RetryService'
 
 /**
  * Truncates a string if it exceeds the maximum length

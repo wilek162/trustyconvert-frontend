@@ -2,6 +2,8 @@ import React, { useEffect } from 'react'
 import { QueryProvider } from './QueryProvider'
 import { LanguageProvider } from './LanguageProvider'
 import ToastListener from './ToastListener'
+import { ToastProvider } from './ToastProvider'
+import { SessionProvider } from './SessionProvider'
 import { initializeMonitoring } from '@/lib/monitoring/init'
 import { initErrorHandling } from '@/lib/errors/initErrorHandling'
 import { debugLog } from '@/lib/utils/debug'
@@ -13,7 +15,11 @@ interface AppProvidersProps {
 /**
  * Application Providers
  * 
- * Centralizes all application providers and initializes services
+ * Centralizes all application providers and initializes services:
+ * - QueryProvider: Manages data fetching and caching
+ * - ToastProvider: Provides toast notification functionality
+ * - SessionProvider: Manages user session state
+ * - LanguageProvider: Handles internationalization
  */
 export default function AppProviders({ children }: AppProvidersProps) {
   // Initialize monitoring, error handling, and other services
@@ -35,12 +41,17 @@ export default function AppProviders({ children }: AppProvidersProps) {
     initialize()
   }, [])
   
+  // Make sure QueryProvider is the outermost provider
   return (
     <QueryProvider>
-      <LanguageProvider>
-        {children}
-        <ToastListener />
-      </LanguageProvider>
+      <ToastProvider>
+        <SessionProvider>
+          <LanguageProvider>
+            {children}
+            <ToastListener />
+          </LanguageProvider>
+        </SessionProvider>
+      </ToastProvider>
     </QueryProvider>
   )
 }

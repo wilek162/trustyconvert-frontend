@@ -1,3 +1,7 @@
+// Replace useErrorHandler with errorHandlingService
+// Remove duplicate implementations in useErrorHandler.ts
+// Update ErrorBoundary.tsx to use single errorHandlingService
+
 /**
  * Enhanced Error Handling Service
  *
@@ -7,8 +11,9 @@
  */
 
 import { reportError } from '@/lib/monitoring/init'
+import { debugLog, debugError } from '@/lib/utils/debug'
 import { toastService } from '@/lib/services/toastService'
-import { formatMessage, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { MESSAGE_TEMPLATES } from '@/lib/constants/messages'
 import {
   ApiError,
   ConversionError,
@@ -16,9 +21,12 @@ import {
   SessionError,
   ValidationError,
   RetryableError,
-  ClientError
+  ClientError,
+  DownloadError,
+  UploadError,
+  StorageError,
+  FormatError
 } from './error-types'
-import { debugLog, debugError } from '@/lib/utils/debug'
 
 // Error context interface
 export interface ErrorContext {
@@ -41,6 +49,8 @@ export interface ErrorHandlingResult {
   message: string
   errorCode?: string
   retryable: boolean
+  context?: ErrorContext
+  originalError?: Error
 }
 
 // Singleton error handling service
@@ -59,6 +69,7 @@ class ErrorHandlingService {
   
   private constructor() {
     this.initializeErrorClassifications()
+    this.initializeRecoveryStrategies()
   }
 
   /**
@@ -109,6 +120,80 @@ class ErrorHandlingService {
     this.classifyError('ValidationError', { 
       retryable: false, 
       userMessage: 'Please check your input and try again'
+    })
+
+    // Download errors
+    this.classifyError('DownloadError', {
+      retryable: true,
+      userMessage: MESSAGE_TEMPLATES.download.failed
+    })
+
+    // Upload errors
+    this.classifyError('UploadError', {
+      retryable: true,
+      userMessage: MESSAGE_TEMPLATES.upload.failed
+    })
+
+    // Storage errors
+    this.classifyError('StorageError', {
+      retryable: true,
+      userMessage: 'There was a problem with file storage. Please try again.'
+    })
+
+    // Format errors
+    this.classifyError('FormatError', {
+      retryable: false,
+      userMessage: 'The selected file format is not supported.'
+    })
+
+    // Client errors
+    this.classifyError('ClientError', {
+      retryable: false,
+      userMessage: MESSAGE_TEMPLATES.generic.clientError
+    })
+  }
+
+  /**
+   * Register default recovery strategies
+   */
+  private initializeRecoveryStrategies(): void {
+    // Session recovery strategy
+    this.registerRecoveryStrategy('SessionError', async (error, context) => {
+      try {
+        const sessionManager = (await import('@/lib/services/sessionManager')).default
+        await sessionManager.initSession(true)
+        return true
+      } catch {
+        return false
+      }
+    })
+
+    // Network recovery strategy
+    this.registerRecoveryStrategy('NetworkError', async (error, context) => {
+      // Wait briefly before retrying network operations
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      return true
+    })
+
+    // Rate limit recovery strategy
+    this.registerRecoveryStrategy('ApiError:429', async (error, context) => {
+      const retryAfter = parseInt(context.retryAfter || '5000')
+      await new Promise(resolve => setTimeout(resolve, retryAfter))
+      return true
+    })
+
+    // Download recovery strategy
+    this.registerRecoveryStrategy('DownloadError', async (error, context) => {
+      if (context.retryCount && context.retryCount > 2) return false
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      return true
+    })
+
+    // Upload recovery strategy
+    this.registerRecoveryStrategy('UploadError', async (error, context) => {
+      if (context.retryCount && context.retryCount > 2) return false
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      return true
     })
   }
 
@@ -166,7 +251,9 @@ class ErrorHandlingService {
       return {
         recovered: false,
         message: 'The service is temporarily unavailable. Please try again later.',
-        retryable: false
+        retryable: false,
+        context,
+        originalError: errorObj
       }
     }
     
@@ -201,26 +288,25 @@ class ErrorHandlingService {
       }
     }
 
-    // Update circuit breaker state for the endpoint if applicable
+    // Show user feedback if needed
+    if (showToast && this.shouldShowUserFeedback(errorObj)) {
+      const message = this.formatErrorForUser(errorObj)
+      this.showErrorMessage(message, options.severity || 'error')
+    }
+
+    // Record failure in circuit breaker if endpoint provided
     if (options.endpoint && !recovered) {
       this.recordFailure(options.endpoint)
     }
 
-    // Format user-friendly message
-    const userMessage = errorClassification.userMessage || this.formatErrorForUser(errorObj)
-    
-    // Show toast if requested
-    if (showToast) {
-      const severity = options.severity || (recovered ? 'info' : 'error')
-      const message = recovered 
-        ? 'Issue automatically resolved. Please continue.' 
-        : userMessage
-      
-      toastService.show(
-        message,
-        severity,
-        { duration: severity === 'error' ? 10000 : 5000 }
-      )
+    // Prepare result
+    const result: ErrorHandlingResult = {
+      recovered,
+      message: this.formatErrorForUser(errorObj),
+      errorCode: errorObj.name,
+      retryable: isRetryable,
+      context,
+      originalError: errorObj
     }
 
     // Rethrow if requested and not recovered
@@ -228,12 +314,7 @@ class ErrorHandlingService {
       throw errorObj
     }
 
-    return {
-      recovered,
-      message: userMessage,
-      errorCode: errorObj instanceof ApiError ? errorObj.code : errorObj.name,
-      retryable: isRetryable
-    }
+    return result
   }
   
   /**
@@ -370,6 +451,26 @@ class ErrorHandlingService {
       return error.message || MESSAGE_TEMPLATES.session.invalid
     }
 
+    if (error instanceof DownloadError) {
+      return error.message || MESSAGE_TEMPLATES.download.failed
+    }
+
+    if (error instanceof UploadError) {
+      return error.message || MESSAGE_TEMPLATES.upload.failed
+    }
+
+    if (error instanceof StorageError) {
+      return error.message || 'There was a problem with file storage. Please try again.'
+    }
+
+    if (error instanceof FormatError) {
+      return error.message || 'The selected file format is not supported.'
+    }
+
+    if (error instanceof ClientError) {
+      return error.message || MESSAGE_TEMPLATES.generic.clientError
+    }
+
     return error.message || MESSAGE_TEMPLATES.generic.error
   }
 
@@ -391,6 +492,13 @@ class ErrorHandlingService {
   }
 
   /**
+   * Show error message to user
+   */
+  private showErrorMessage(message: string, severity: 'error' | 'warning' | 'info' = 'error'): void {
+    toastService.show(message, severity)
+  }
+
+  /**
    * Normalize an unknown error into an Error object
    */
   private normalizeError(error: unknown): Error {
@@ -408,30 +516,50 @@ class ErrorHandlingService {
   /**
    * Create a function wrapper with error handling
    */
-  public withErrorHandling<T extends (...args: any[]) => Promise<any>>(
-    fn: T,
-    options: {
-      context?: ErrorContext
-      showToast?: boolean
-      rethrow?: boolean
-      severity?: 'error' | 'warning' | 'info'
-      endpoint?: string
-    } = {}
-  ): (...args: Parameters<T>) => Promise<ReturnType<T> | undefined> {
-    return async (...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
-      try {
-        return await fn(...args)
-      } catch (error) {
-        const { recovered, retryable } = await this.handleError(error, options)
-        
-        if (recovered) {
-          // Try once more if we recovered
-          return await fn(...args)
-        }
-        
-        return undefined
-      }
+  public initGlobalHandlers(): void {
+    if (typeof window === 'undefined') return;
+
+    window.addEventListener('error', (event) => {
+      this.handleGlobalError(event.error || new Error(event.message), {
+        type: 'uncaught-exception',
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+      });
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+      this.handleGlobalError(error, {
+        type: 'unhandled-rejection',
+      });
+    });
+
+    if (this.isDevelopment) {
+      console.log('Global error handlers initialized by ErrorHandlingService');
     }
+  }
+
+  private handleGlobalError(error: Error, context: Record<string, any>): void {
+    this.trackError(error, {
+      ...context,
+      globalHandler: true,
+      url: window.location.href,
+    });
+
+    if (!this.isDevelopment && this.shouldShowUserFeedback(error)) {
+      this.showErrorMessage(MESSAGE_TEMPLATES.generic.error)
+    }
+  }
+
+  private shouldShowUserFeedback(error: Error): boolean {
+    if (error.name === 'NetworkError' || error.message.includes('network') || error.message.includes('fetch')) {
+      return false;
+    }
+    if (error.message.includes('script') && error.message.includes('load')) {
+      return false;
+    }
+    return true;
   }
 }
 
@@ -464,5 +592,12 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
     endpoint?: string
   } = {}
 ): (...args: Parameters<T>) => Promise<ReturnType<T> | undefined> {
-  return errorHandlingService.withErrorHandling(fn, options)
+  return async (...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
+    try {
+      return await fn(...args)
+    } catch (error) {
+      await errorHandlingService.handleError(error, options)
+      return undefined
+    }
+  }
 }

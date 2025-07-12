@@ -67,31 +67,11 @@ const client = {
 	 */
 	initSession: async (forceNew = false): Promise<SessionInitResponse | null> => {
 		return withRetry(async () => {
-			try {
-				// Use sessionManager to initialize the session
-				const success = await sessionManager.initSession(forceNew)
-
-				if (success) {
-					// If successful, we can assume the _apiClient.initSession was called
-					// and returned a response, but we don't have access to it here.
-					// For API compatibility, return a minimal response object
-					return {} as SessionInitResponse
-				}
-
-				return null
-			} catch (error) {
-				const result = await handleError(error, {
-					context: { action: 'initSession' },
-					endpoint: 'session/init'
-				})
-				
-				if (!result.recovered) {
-					throw error
-				}
-				
-				// If error was recovered, try again
-				return await sessionManager.initSession(forceNew) ? {} as SessionInitResponse : null
+			const success = await sessionManager.initSession(forceNew)
+			if (success) {
+				return {} as SessionInitResponse
 			}
+			return null
 		}, {
 			...RETRY_STRATEGIES.API_REQUEST,
 			endpoint: 'session/init',
@@ -104,17 +84,7 @@ const client = {
 	 * This is a wrapper around sessionManager.ensureSession for API consistency
 	 */
 	ensureSession: async (): Promise<boolean> => {
-		return withRetry(async () => {
-			try {
-				return await sessionManager.ensureSession()
-			} catch (error) {
-				await handleError(error, {
-					context: { action: 'ensureSession' },
-					endpoint: 'session/ensure'
-				})
-				return false
-			}
-		}, {
+		return withRetry(() => sessionManager.ensureSession(), {
 			...RETRY_STRATEGIES.API_REQUEST,
 			endpoint: 'session/ensure',
 			context: { action: 'ensureSession' }
@@ -126,64 +96,28 @@ const client = {
 	 */
 	uploadFile: async (file: File, fileJobId?: string): Promise<StandardResponse> => {
 		return withRetry(async () => {
-			try {
-				// Check if we have a valid session
-				if (!sessionManager.hasCsrfToken()) {
-					// Only call ensureSession if we don't have a valid session
-					debugLog('No valid session for upload - initializing session')
-					await sessionManager.ensureSession()
-				} else {
-					debugLog('Using existing session for upload - no session API call needed')
-				}
+			await sessionManager.ensureSession()
+			const response = await _apiClient.uploadFile(file, fileJobId)
 
-				// Make the API call
-				const response = await _apiClient.uploadFile(file, fileJobId)
-
-				// Handle CSRF errors by refreshing the token and retrying
-				if (isCsrfError(response)) {
-					// Try to refresh the CSRF token without creating a new session
-					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.uploadFile(file, fileJobId)
-					return standardizeResponse(retryResponse.data)
-				}
-
-				// Special case for upload responses - if the API returned a status 200/OK,
-				// consider it a success even if the response format is unexpected
-				if (response.success === undefined && response.data) {
-					// Log the unexpected response format but treat it as success
-					debugLog('Upload succeeded with non-standard response format', { response })
-					return {
-						success: true,
-						data: response.data
-					}
-				}
-
-				// Handle case where success is false but response is 200 OK
-				// This might happen with some API implementations
-				if (response.success === false && !('error' in response.data)) {
-					debugLog('Upload API returned success:false but no error - treating as success')
-					return {
-						success: true,
-						data: response.data
-					}
-				}
-
-				return standardizeResponse(response.data)
-			} catch (error) {
-				const result = await handleError(error, {
-					context: { action: 'uploadFile', fileSize: file.size },
-					endpoint: 'files/upload'
-				})
-				
-				if (!result.recovered) {
-					throw error
-				}
-				
-				// If error was recovered, try the upload again
-				return await client.uploadFile(file, fileJobId)
+			if (isCsrfError(response)) {
+				await sessionManager.initSession(true)
+				const retryResponse = await _apiClient.uploadFile(file, fileJobId)
+				return standardizeResponse(retryResponse.data)
 			}
+
+			if (response.success === undefined && response.data) {
+				debugLog('Upload succeeded with non-standard response format', { response })
+				return { success: true, data: response.data }
+			}
+
+			if (response.success === false && !('error' in response.data)) {
+				debugLog('Upload API returned success:false but no error - treating as success')
+				return { success: true, data: response.data }
+			}
+
+			return standardizeResponse(response.data)
 		}, {
-			...RETRY_STRATEGIES.CRITICAL, // Use CRITICAL strategy for uploads
+			...RETRY_STRATEGIES.CRITICAL,
 			endpoint: 'files/upload',
 			context: { action: 'uploadFile', fileSize: file.size }
 		})
@@ -198,41 +132,16 @@ const client = {
 		sourceFormat?: string
 	): Promise<StandardResponse> => {
 		return withRetry(async () => {
-			try {
-				// Check if we have a valid session
-				if (!sessionManager.hasCsrfToken()) {
-					// Only call ensureSession if we don't have a valid session
-					debugLog('No valid session for conversion - initializing session')
-					await sessionManager.ensureSession()
-				} else {
-					debugLog('Using existing session for conversion - no session API call needed')
-				}
+			await sessionManager.ensureSession()
+			const response = await _apiClient.convertFile(jobId, targetFormat, sourceFormat)
 
-				// Make the API call
-				const response = await _apiClient.convertFile(jobId, targetFormat, sourceFormat)
-
-				// Handle CSRF errors by refreshing the token and retrying
-				if (isCsrfError(response)) {
-					// Try to refresh the CSRF token without creating a new session
-					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.convertFile(jobId, targetFormat, sourceFormat)
-					return standardizeResponse(retryResponse.data)
-				}
-
-				return standardizeResponse(response.data)
-			} catch (error) {
-				const result = await handleError(error, {
-					context: { action: 'convertFile', jobId, targetFormat, sourceFormat },
-					endpoint: 'conversion/start'
-				})
-				
-				if (!result.recovered) {
-					throw error
-				}
-				
-				// If error was recovered, try the conversion again
-				return await client.convertFile(jobId, targetFormat, sourceFormat)
+			if (isCsrfError(response)) {
+				await sessionManager.initSession(true)
+				const retryResponse = await _apiClient.convertFile(jobId, targetFormat, sourceFormat)
+				return standardizeResponse(retryResponse.data)
 			}
+
+			return standardizeResponse(response.data)
 		}, {
 			...RETRY_STRATEGIES.CRITICAL,
 			endpoint: 'conversion/start',
@@ -245,41 +154,16 @@ const client = {
 	 */
 	startConversion: async (file: File, targetFormat: string): Promise<StandardResponse> => {
 		return withRetry(async () => {
-			try {
-				// Check if we have a valid session
-				if (!sessionManager.hasCsrfToken()) {
-					// Only call ensureSession if we don't have a valid session
-					debugLog('No valid session for startConversion - initializing session')
-					await sessionManager.ensureSession()
-				} else {
-					debugLog('Using existing session for startConversion - no session API call needed')
-				}
+			await sessionManager.ensureSession()
+			const response = await _apiClient.startConversion(file, targetFormat)
 
-				// Make the API call
-				const response = await _apiClient.startConversion(file, targetFormat)
-
-				// Handle CSRF errors by refreshing the token and retrying
-				if (isCsrfError(response)) {
-					// Try to refresh the CSRF token without creating a new session
-					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.startConversion(file, targetFormat)
-					return standardizeResponse(retryResponse.data)
-				}
-
-				return standardizeResponse(response.data)
-			} catch (error) {
-				const result = await handleError(error, {
-					context: { action: 'startConversion', fileSize: file.size, targetFormat },
-					endpoint: 'conversion/direct'
-				})
-				
-				if (!result.recovered) {
-					throw error
-				}
-				
-				// If error was recovered, try the conversion again
-				return await client.startConversion(file, targetFormat)
+			if (isCsrfError(response)) {
+				await sessionManager.initSession(true)
+				const retryResponse = await _apiClient.startConversion(file, targetFormat)
+				return standardizeResponse(retryResponse.data)
 			}
+
+			return standardizeResponse(response.data)
 		}, {
 			...RETRY_STRATEGIES.CRITICAL,
 			endpoint: 'conversion/direct',
@@ -292,41 +176,16 @@ const client = {
 	 */
 	getDownloadToken: async (jobId: string): Promise<StandardResponse> => {
 		return withRetry(async () => {
-			try {
-				// Check if we have a valid session
-				if (!sessionManager.hasCsrfToken()) {
-					// Only call ensureSession if we don't have a valid session
-					debugLog('No valid session for download token - initializing session')
-					await sessionManager.ensureSession()
-				} else {
-					debugLog('Using existing session for download token - no session API call needed')
-				}
+			await sessionManager.ensureSession()
+			const response = await _apiClient.getDownloadToken(jobId)
 
-				// Make the API call
-				const response = await _apiClient.getDownloadToken(jobId)
-
-				// Handle CSRF errors by refreshing the token and retrying
-				if (isCsrfError(response)) {
-					// Try to refresh the CSRF token without creating a new session
-					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.getDownloadToken(jobId)
-					return standardizeResponse(retryResponse.data)
-				}
-
-				return standardizeResponse(response.data)
-			} catch (error) {
-				const result = await handleError(error, {
-					context: { action: 'getDownloadToken', jobId },
-					endpoint: 'conversion/download-token'
-				})
-				
-				if (!result.recovered) {
-					throw error
-				}
-				
-				// If error was recovered, try to get download token again
-				return await client.getDownloadToken(jobId)
+			if (isCsrfError(response)) {
+				await sessionManager.initSession(true)
+				const retryResponse = await _apiClient.getDownloadToken(jobId)
+				return standardizeResponse(retryResponse.data)
 			}
+
+			return standardizeResponse(response.data)
 		}, {
 			...RETRY_STRATEGIES.API_REQUEST,
 			endpoint: 'conversion/download-token',
@@ -339,39 +198,19 @@ const client = {
 	 */
 	getConversionStatus: async (jobId: string): Promise<StandardResponse> => {
 		return withRetry(async () => {
-			try {
-				// Make the API call
-				const response = await _apiClient.getJobStatus(jobId)
+			const response = await _apiClient.getJobStatus(jobId)
 
-				// Handle CSRF errors by refreshing the token and retrying
-				if (isCsrfError(response)) {
-					// Try to refresh the CSRF token without creating a new session
-					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.getJobStatus(jobId)
-					return standardizeResponse(retryResponse.data)
-				}
-
-				return standardizeResponse(response.data)
-			} catch (error) {
-				const result = await handleError(error, {
-					context: { action: 'getConversionStatus', jobId },
-					endpoint: 'conversion/status',
-					// Don't show toast for status checks to avoid spamming the user
-					showToast: false
-				})
-				
-				if (!result.recovered) {
-					throw error
-				}
-				
-				// If error was recovered, try again
-				return await client.getConversionStatus(jobId)
+			if (isCsrfError(response)) {
+				await sessionManager.initSession(true)
+				const retryResponse = await _apiClient.getJobStatus(jobId)
+				return standardizeResponse(retryResponse.data)
 			}
+
+			return standardizeResponse(response.data)
 		}, {
 			...RETRY_STRATEGIES.POLLING,
 			endpoint: 'conversion/status',
 			context: { action: 'getConversionStatus', jobId },
-			// Don't show toast on retry for polling operations
 			showToastOnRetry: false
 		})
 	},
@@ -381,19 +220,11 @@ const client = {
 	 */
 	closeSession: async (): Promise<StandardResponse> => {
 		return withRetry(async () => {
-			try {
-				// Make the API call
-				const response = await _apiClient.closeSession()
-				return standardizeResponse(response.data)
-			} catch (error) {
-				// For session closing, we don't care too much if it fails
-				// Just log it and return success anyway
-				debugError('Error closing session:', error)
-				return { success: true, data: { message: 'Session closed (client-side only)' } }
-			}
+			const response = await _apiClient.closeSession()
+			return standardizeResponse(response.data)
 		}, {
 			...RETRY_STRATEGIES.API_REQUEST,
-			maxRetries: 1, // Only retry once for session closing
+			maxRetries: 1,
 			endpoint: 'session/close',
 			context: { action: 'closeSession' }
 		})

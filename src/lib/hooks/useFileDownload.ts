@@ -1,18 +1,19 @@
 import { useState, useCallback } from 'react'
 import  client  from '@/lib/api/client'
 import { debugLog, debugError } from '@/lib/utils/debug'
-import { handleError } from '@/lib/utils/errorHandling'
+import { errorHandlingService } from '@/lib/errors/errorHandlingService'
 import sessionManager from '@/lib/services/sessionManager'
-import type { DownloadProgress } from '@/lib/types/api'
+import type { ProgressInfo, DownloadTokenResponse } from '@/lib/types/api'
+
 interface UseFileDownloadOptions {
 	onComplete?: () => void
 	onError?: (error: string) => void
-	onProgress?: (progress: DownloadProgress) => void
+	onProgress?: (progress: ProgressInfo) => void
 }
 
 interface DownloadState {
 	isDownloading: boolean
-	progress: DownloadProgress | null
+	progress: ProgressInfo | null
 	error: string | null
 }
 
@@ -44,11 +45,7 @@ export function useFileDownload({ onComplete, onError, onProgress }: UseFileDown
 				const response = await client.getDownloadToken(jobId)
 
 				// Extract the token from the response (handling different formats)
-				const downloadToken =
-					response.download_token ||
-					response.downloadToken ||
-					response.data?.download_token ||
-					response.data?.downloadToken
+				const downloadToken = response.data.download_token
 
 				if (!downloadToken) {
 					debugLog('Download token response:', response)
@@ -80,15 +77,16 @@ export function useFileDownload({ onComplete, onError, onProgress }: UseFileDown
 				}, 1000)
 			} catch (error) {
 				debugError('Download failed', error)
-				const errorMessage = handleError(error, {
-					context: { action: 'downloadFile', jobId }
+				const { message } = await errorHandlingService.handleError(error, {
+					context: { action: 'downloadFile', jobId },
+					showToast: true
 				})
 				setState((prev) => ({
 					...prev,
 					isDownloading: false,
-					error: errorMessage
+					error: message
 				}))
-				if (onError) onError(errorMessage)
+				if (onError) onError(message)
 			}
 		},
 		[onComplete, onError]

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import client from '@/lib/api/client'
-import { showSuccess, showError, MESSAGE_TEMPLATES } from '@/lib/utils/messageUtils'
+import { showSuccess, showError } from '@/lib/services/toastService'
+import { MESSAGE_TEMPLATES } from '@/lib/constants/messages'
 import { debugError } from '@/lib/utils/debug'
 
 interface CloseSessionProps {

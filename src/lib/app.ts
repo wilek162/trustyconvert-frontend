@@ -1,3 +1,5 @@
+// Update app.ts to properly initialize services
+
 /**
  * Application Initialization Module
  *
@@ -6,7 +8,7 @@
  */
 
 import { initializeMonitoring } from '@/lib/monitoring/init'
-import { initGlobalErrorHandlers } from '@/lib/errors/globalErrorHandler'
+import { initErrorHandling } from '@/lib/errors/initErrorHandling'
 import  client  from '@/lib/api/client'
 import { debugLog } from '@/lib/utils/debug' // Offline detection is temporarily disabled
 import { hasCsrfToken } from '@/lib/stores/session'
@@ -55,7 +57,7 @@ export async function initializeBrowser(): Promise<void> {
 
 	try {
 		// Initialize global error handlers
-		initGlobalErrorHandlers()
+		initErrorHandling()
 
 		// Initialize offline detection
 		// Offline detection is temporarily disabled
