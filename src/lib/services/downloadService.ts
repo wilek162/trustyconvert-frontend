@@ -195,6 +195,6 @@ class DownloadService {
 // Export singleton instance
 export const downloadService = DownloadService.getInstance()
 
-// Export convenience function
-export const downloadFile = (jobId: string, options: DownloadOptions = {}): Promise<DownloadResult> =>
-  downloadService.downloadFile(jobId, options)
+
+// Export as default for backward compatibility
+export default downloadService

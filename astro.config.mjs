@@ -77,6 +77,7 @@ export default defineConfig({
   ],
 
   vite: {
+    // @ts-ignore
     plugins: [
       ...[mkcertPlugin].filter(Boolean),
     ],

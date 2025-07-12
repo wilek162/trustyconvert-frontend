@@ -21,7 +21,7 @@ interface AppProvidersProps {
  * - SessionProvider: Manages user session state
  * - LanguageProvider: Handles internationalization
  */
-export default function AppProviders({ children }: AppProvidersProps) {
+export function AppProviders({ children }: AppProvidersProps) {
   // Initialize monitoring, error handling, and other services
   useEffect(() => {
     const initialize = async () => {
@@ -55,3 +55,6 @@ export default function AppProviders({ children }: AppProvidersProps) {
     </QueryProvider>
   )
 }
+
+// Export as both default and named export for backward compatibility
+export default AppProviders
