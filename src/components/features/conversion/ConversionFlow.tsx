@@ -11,7 +11,7 @@ import client from '@/lib/api/client'
 import { getFileExtension, formatFileSize } from '@/lib/utils/files'
 import { debugLog, debugError, debugSessionState } from '@/lib/utils/debug'
 import CloseSession from '../session/CloseSession'
-import { useSession } from '@/lib/providers/SessionContext'
+import { useSession } from '@/components/providers'
 import sessionManager from '@/lib/services/sessionManager'
 import downloadService from '@/lib/services/downloadService'
 

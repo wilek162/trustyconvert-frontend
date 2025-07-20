@@ -192,9 +192,11 @@ class DownloadService {
   }
 }
 
-// Export singleton instance
-export const downloadService = DownloadService.getInstance()
+// Create singleton instance
+const downloadService = DownloadService.getInstance()
 
+// Export singleton instance
+export { downloadService }
 
 // Export as default for backward compatibility
 export default downloadService

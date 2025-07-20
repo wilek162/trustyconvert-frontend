@@ -26,7 +26,7 @@ const SessionContext = createContext<SessionContextType>({
 export const useSession = () => useContext(SessionContext)
 
 // Session provider component
-export function SessionProvider({ children }: { children: React.ReactNode }) {
+function SessionProvider({ children }: { children: React.ReactNode }) {
 	const [isInitializing, setIsInitializing] = useState(false)
 	const [isSessionInitialized, setIsSessionInitialized] = useState(false)
 	const [sessionId, setSessionId] = useState<string | null>(null)
@@ -151,4 +151,5 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 	return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>
 }
 
+export { SessionProvider }
 export default SessionProvider 

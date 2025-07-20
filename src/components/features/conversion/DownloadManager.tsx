@@ -245,4 +245,5 @@ function DownloadManager({ jobId, initialToken, onDownloadComplete }: DownloadMa
 }
 
 export { DownloadManager }
+export default DownloadManager
 
