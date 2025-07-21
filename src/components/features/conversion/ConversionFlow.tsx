@@ -325,7 +325,7 @@ export function ConversionFlow({
 
 		try {
 			// Upload the file
-			const uploadResponse = await client.uploadFile(selectedFile, currentJobId)
+			const uploadResponse = await client.uploadFile(selectedFile, currentJobId, targetFormat)
 
 			// Enhanced error handling for upload responses
 			if (!uploadResponse || !uploadResponse.success) {
