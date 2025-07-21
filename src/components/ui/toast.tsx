@@ -59,7 +59,7 @@ export function ToastProvider({
 	children: React.ReactNode
 	position?: ToastPosition
 	maxToasts?: number
-}): JSX.Element {
+}): React.ReactElement {
 	const [toasts, setToasts] = useState<ToastItem[]>([])
 
 	// Add a new toast to the list
@@ -114,7 +114,7 @@ export function useToast(): ToastContextType {
 /**
  * Toast container component that renders all active toasts
  */
-function ToastContainer({ position = 'bottom-right' }: { position: ToastPosition }): JSX.Element {
+function ToastContainer({ position = 'bottom-right' }: { position: ToastPosition }): React.ReactElement {
 	const { toasts } = useToast()
 
 	const positionClasses = {
@@ -145,7 +145,7 @@ function ToastContainer({ position = 'bottom-right' }: { position: ToastPosition
 /**
  * Individual toast component
  */
-function Toast({ toast }: { toast: ToastItem }): JSX.Element {
+function Toast({ toast }: { toast: ToastItem }): React.ReactElement {
 	const { removeToast } = useToast()
 	const { id, message, type, duration, onClose } = toast
 
@@ -290,3 +290,5 @@ export function showToast(
 
 	window.dispatchEvent(event)
 }
+
+export default ToastProvider
