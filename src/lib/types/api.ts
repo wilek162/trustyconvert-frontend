@@ -283,7 +283,7 @@ export interface ConversionFormat {
  */
 export interface ApiClientInterface {
 	initSession(): Promise<ApiResponse<SessionInitResponse>>
-	uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>>
+	uploadFile(file: File, jobId?: string, targetFormat?: string): Promise<ApiResponse<UploadResponse>>
 	convertFile(
 		jobId: string,
 		targetFormat: string,

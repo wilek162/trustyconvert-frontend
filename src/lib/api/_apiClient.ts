@@ -615,9 +615,10 @@ async function initSession(): Promise<SessionInitResponse | null> {
  * Upload a file to the server
  * @param file File to upload
  * @param jobId Job ID for tracking
+ * @param targetFormat Optional target format for conversion
  * @returns Upload response
  */
-async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<UploadResponse>> {
+async function uploadFile(file: File, jobId?: string, targetFormat?: string): Promise<ApiResponse<UploadResponse>> {
 	try {
 		// Create form data
 		const formData = new FormData()
@@ -625,13 +626,18 @@ async function uploadFile(file: File, jobId?: string): Promise<ApiResponse<Uploa
 		if (jobId) {
 			formData.append('job_id', jobId)
 		}
+		
+		// Add target format if provided
+		if (targetFormat) {
+			formData.append('target_format', targetFormat)
+		}
 
 		// Add file size hint to help server prepare for large files
 		formData.append('file_size', file.size.toString())
 
 		// Make the request with adaptive timeout based on file size
 		// The timeout will be calculated in fetchWithTimeout based on file size
-		debugLog('API: Uploading file', { fileName: file.name, fileSize: file.size, jobId })
+		debugLog('API: Uploading file', { fileName: file.name, fileSize: file.size, jobId, targetFormat })
 
 		// For large files, use a more robust retry strategy
 		const isLargeFile = file.size > 20 * 1024 * 1024 // 20MB
@@ -860,7 +866,7 @@ async function startConversion(
 ): Promise<ApiResponse<ConvertResponse & { job_id: string }>> {
 	try {
 		// First upload the file
-		const uploadResp = await uploadFile(file)
+		const uploadResp = await uploadFile(file, undefined, targetFormat)
 
 		if (!uploadResp.success || !uploadResp.data.job_id) {
 			throw new Error('File upload failed')

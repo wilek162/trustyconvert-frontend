@@ -16,7 +16,7 @@ import type { SessionInitResponse } from '@/lib/types/api'
 interface ExtendedClient {
 	initSession(forceNew?: boolean): Promise<SessionInitResponse | null>
 	ensureSession(): Promise<boolean>
-	uploadFile(file: File, fileJobId?: string): Promise<StandardResponse>
+	uploadFile(file: File, fileJobId?: string, targetFormat?: string): Promise<StandardResponse>
 	convertFile(jobId: string, targetFormat: string, sourceFormat?: string): Promise<StandardResponse>
 	startConversion(file: File, targetFormat: string): Promise<StandardResponse>
 	getConversionStatus(jobId: string): Promise<StandardResponse>
@@ -107,7 +107,7 @@ const client = {
 	/**
 	 * Upload a file to the server
 	 */
-	uploadFile: async (file: File, fileJobId?: string): Promise<StandardResponse> => {
+	uploadFile: async (file: File, fileJobId?: string, targetFormat?: string): Promise<StandardResponse> => {
 		return withRetry(async () => {
 			try {
 				// Check if we have a valid session
@@ -120,13 +120,13 @@ const client = {
 				}
 
 				// Make the API call
-				const response = await _apiClient.uploadFile(file, fileJobId)
+				const response = await _apiClient.uploadFile(file, fileJobId, targetFormat)
 
 				// Handle CSRF errors by refreshing the token and retrying
 				if (isCsrfError(response)) {
 					// Try to refresh the CSRF token without creating a new session
 					await sessionManager.initSession(true)
-					const retryResponse = await _apiClient.uploadFile(file, fileJobId)
+					const retryResponse = await _apiClient.uploadFile(file, fileJobId, targetFormat)
 					return standardizeResponse(retryResponse.data)
 				}
 
@@ -154,7 +154,7 @@ const client = {
 				return standardizeResponse(response.data)
 			} catch (error) {
 				throw handleError(error, {
-					context: { action: 'uploadFile', fileSize: file.size }
+					context: { action: 'uploadFile', fileSize: file.size, targetFormat }
 				})
 			}
 		}, RETRY_CONFIG)
